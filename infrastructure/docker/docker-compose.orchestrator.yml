@@ -1,0 +1,25 @@
+# Stack Docker du LXC Master (Orchestrator + API Gateway).
+# STATUT : stub non testé — voir ROADMAP.md.
+services:
+  api:
+    build:
+      context: ../../src
+    env_file:
+      - ../../.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

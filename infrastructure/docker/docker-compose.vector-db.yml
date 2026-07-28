@@ -1,0 +1,13 @@
+# Stack Docker du LXC Vector DB.
+# STATUT : stub non testé — voir ROADMAP.md.
+services:
+  chromadb:
+    image: chromadb/chroma:latest
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+
+volumes:
+  chroma-data:
