@@ -5,11 +5,11 @@
 <rect x="30" y="20" width="1140" height="50" fill="rgba(249,250,251,1)" stroke="rgba(229,231,235,1)" stroke-width="1" rx="4"/>
 <text x="600" y="45" font-family="Inter, sans-serif" font-size="15" font-weight="600" fill="rgba(17,24,39,1)" text-anchor="middle" dominant-baseline="central">RESEAU - Topologie Reseau &amp; Securite - VLANs . Flux TCP . Backbone 10G MTU 9000</text>
 
-<!-- ROW 1: WAN (y=90..165) -->
+<!-- ROW 1: VLAN 20 WAN (BACKDROP FIRST - drawn BEFORE boxes to avoid crossing text) -->
 <rect x="30" y="90" width="1140" height="75" fill="rgba(255,251,235,1)" stroke="rgba(217,119,6,1)" stroke-width="1.5" stroke-dasharray="6 3" rx="4"/>
 <text x="50" y="103" font-family="Inter, sans-serif" font-size="11" font-weight="600" fill="rgba(146,64,14,1)" dominant-baseline="hanging">VLAN 20 . WAN - 192.168.1.0/24</text>
 
-<!-- Internet -->
+<!-- Internet box (drawn AFTER backdrop -> opaque fill hides dashed line) -->
 <rect x="50" y="117" width="170" height="38" fill="rgba(241,245,249,1)" stroke="rgba(156,163,175,1)" stroke-width="2" rx="3"/>
 <text x="135" y="136" font-family="Inter, sans-serif" font-size="11" font-weight="600" fill="rgba(55,65,81,1)" text-anchor="middle" dominant-baseline="central">[WAN] Internet</text>
 
@@ -23,26 +23,29 @@
 <text x="1000" y="127" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="rgba(30,64,175,1)" text-anchor="middle" dominant-baseline="central">[Client] Obsidian Vault</text>
 <text x="1000" y="145" font-family="Inter, sans-serif" font-size="8" fill="rgba(30,64,175,1)" text-anchor="middle" dominant-baseline="central">VLAN 40 . 192.168.10.0/24 . TCP 443</text>
 
-<!-- Arrow Internet->pfSense -->
+<!-- Arrow: pfSense -> Client (straight horizontal line, same y) -->
+<path d="M520 136L860 136" fill="none" stroke="rgba(37,99,235,1)" stroke-width="2" stroke-linecap="round"/>
+<polygon points="860,136 852,132 852,140" fill="rgba(37,99,235,1)"/>
+<rect x="555" y="126" width="70" height="12" fill="white" rx="2"/>
+<text x="590" y="135" font-family="Inter, sans-serif" font-size="8" fill="rgba(30,64,175,1)" text-anchor="middle">TCP 443</text>
+
+<!-- Arrow Internet -> pfSense -->
 <path d="M220 138L300 138" fill="none" stroke="rgba(217,119,6,1)" stroke-width="2" stroke-linecap="round"/>
 <polygon points="300,138 293,134 293,142" fill="rgba(217,119,6,1)"/>
 <rect x="235" y="126" width="58" height="12" fill="white" rx="2"/>
-<text x="264" y="135" font-family="Inter, sans-serif" font-size="8" fill="rgba(146,64,14,1)" text-anchor="middle">NAT out 80/443</text>
+<text x="264" y="135" font-family="Inter, sans-serif" font-size="8" fill="rgba(146,64,14,1)" text-anchor="middle">NAT out</text>
 
-<!-- Arrow pfSense->Client (via top) -->
-<path d="M520 136L640 136L640 75L860 75L860 115" fill="none" stroke="rgba(37,99,235,1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<polygon points="860,115 852,111 852,119" fill="rgba(37,99,235,1)"/>
-<rect x="555" y="66" width="110" height="12" fill="white" rx="2"/>
-<text x="610" y="75" font-family="Inter, sans-serif" font-size="8" fill="rgba(30,64,175,1)" text-anchor="middle">TCP 443 . DNAT -> LXC 102</text>
+<!-- Arrow pfSense -> M1: Port 1GbE (Management) -->
+<path d="M300 136L30 136L30 222L50 222" fill="none" stroke="rgba(107,114,128,1)" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="50,222 42,218 42,226" fill="rgba(107,114,128,1)"/>
+<rect x="10" y="175" width="52" height="12" fill="white" rx="2"/>
+<text x="36" y="184" font-family="Inter, sans-serif" font-size="7" fill="rgba(75,85,99,1)" text-anchor="middle">1GbE mgmt</text>
 
 <!-- ROW 2: Mgmt (y=185..240) -->
 <rect x="30" y="185" width="1140" height="55" fill="rgba(249,250,251,1)" stroke="rgba(107,114,128,1)" stroke-width="1.5" stroke-dasharray="6 3" rx="4"/>
 <text x="50" y="198" font-family="Inter, sans-serif" font-size="11" font-weight="600" fill="rgba(75,85,99,1)" dominant-baseline="hanging">VLAN 30 . Mgmt - 172.16.0.0/24 - Isole</text>
 <rect x="50" y="210" width="300" height="24" fill="rgba(243,244,246,1)" stroke="rgba(156,163,175,1)" stroke-width="1.5" rx="3"/>
 <text x="200" y="222" font-family="Inter, sans-serif" font-size="11" font-weight="500" fill="rgba(75,85,99,1)" text-anchor="middle" dominant-baseline="central">[Admin] IPMI . HTTPS/SSH . M1,M2,M3 isoles</text>
-<!-- Arrow Mgmt->pfSense -->
-<path d="M50 222L30 222L30 136L300 136" fill="none" stroke="rgba(107,114,128,1)" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round"/>
-<polygon points="300,136 293,132 293,140" fill="rgba(107,114,128,1)"/>
 
 <!-- ROW 3: VLAN 10 Cluster (y=260..645) -->
 <rect x="30" y="260" width="1140" height="385" fill="rgba(240,249,255,1)" stroke="rgba(14,165,233,1)" stroke-width="2" rx="4"/>
@@ -99,12 +102,14 @@
 <rect x="795" y="386" width="350" height="30" fill="rgba(254,215,170,1)" stroke="rgba(249,115,22,1)" stroke-width="1" stroke-dasharray="3 2" rx="3"/>
 <text x="970" y="401" font-family="Inter, sans-serif" font-size="9" font-weight="500" fill="rgba(124,45,18,1)" text-anchor="middle" dominant-baseline="central">[Lourd] Text-to-SQL . Vision . Fast-check</text>
 
-<!-- Arrows via gutters -->
-<!-- M1->M2: Qdrant at y=387, Ollama at y=419 (aligned with LXC rows) -->
+<!-- Arrows cluster (ALL STOP AT BOX EDGES, NEVER ENTER CONTENT) -->
+
+<!-- M1->M2: Port 1 10GbE Backbone. Labels centered in gutter with 10px padding -->
 <path d="M395 387L415 387" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-linecap="round"/>
 <polygon points="415,387 408,383 408,391" fill="rgba(14,165,233,1)"/>
 <rect x="370" y="379" width="42" height="12" fill="white" rx="2"/>
 <text x="391" y="388" font-family="Inter, sans-serif" font-size="7" fill="rgba(12,74,110,1)" text-anchor="middle">Qdrant</text>
+<text x="405" y="402" font-family="Inter, sans-serif" font-size="6" fill="rgba(12,74,110,1)" text-anchor="start">Port1 10GbE</text>
 
 <path d="M395 419L415 419" fill="none" stroke="rgba(34,197,94,1)" stroke-width="2" stroke-linecap="round"/>
 <polygon points="415,419 408,415 408,423" fill="rgba(34,197,94,1)"/>
@@ -113,33 +118,33 @@
 
 <path d="M395 515L415 515" fill="none" stroke="rgba(219,39,119,1)" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round"/>
 <polygon points="415,515 408,511 408,519" fill="rgba(219,39,119,1)"/>
-<rect x="368" y="507" width="50" height="12" fill="white" rx="2"/>
-<text x="393" y="516" font-family="Inter, sans-serif" font-size="7" fill="rgba(190,24,93,1)" text-anchor="middle">NFS relay</text>
+<rect x="368" y="507" width="44" height="12" fill="white" rx="2"/>
+<text x="390" y="516" font-family="Inter, sans-serif" font-size="7" fill="rgba(190,24,93,1)" text-anchor="middle">NFS</text>
 
-<!-- M1->M3: via bottom zone (stays inside blue frame, does not touch M3 title) -->
-<path d="M220 645L220 650L800 650L800 370" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round"/>
-<polygon points="800,370 796,362 804,362" fill="rgba(14,165,233,1)"/>
-<rect x="420" y="642" width="90" height="12" fill="white" rx="2"/>
-<text x="465" y="651" font-family="Inter, sans-serif" font-size="8" fill="rgba(12,74,110,1)" text-anchor="middle">M1 -> M3 1GbE</text>
+<!-- M1->M3: Port 2 10GbE Backbone. Stops at M3 left edge (x=785), shifted 15px up from VLAN 10 bottom -->
+<path d="M395 630L395 650L785 650L785 440" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="785,440 781,432 789,432" fill="rgba(14,165,233,1)"/>
+<rect x="440" y="642" width="80" height="12" fill="white" rx="2"/>
+<text x="480" y="651" font-family="Inter, sans-serif" font-size="8" fill="rgba(12,74,110,1)" text-anchor="middle">Port2 10GbE</text>
 
 <!-- ROW 4: Backup Cold -->
 <rect x="30" y="705" width="1140" height="85" fill="rgba(254,243,199,1)" stroke="rgba(217,119,6,1)" stroke-width="2" rx="4"/>
 <text x="600" y="722" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="rgba(146,64,14,1)" text-anchor="middle" dominant-baseline="central">[COLD BACKUP] Off-site . HDD 2 TB (LUKS, USB/SATA)</text>
 
 <rect x="50" y="738" width="540" height="38" fill="rgba(249,250,251,1)" stroke="rgba(217,119,6,1)" stroke-width="1" rx="3"/>
-<text x="320" y="757" font-family="Inter, sans-serif" font-size="10" fill="rgba(120,53,15,1)" text-anchor="middle" dominant-baseline="central">borg (dedup LZ4, chiffre) . rsync . qdrant snapshot . Retention 30j/12m/3y</text>
+<text x="320" y="757" font-family="Inter, sans-serif" font-size="10" fill="rgba(120,53,15,1)" text-anchor="middle" dominant-baseline="central">borg (dedup LZ4) . rsync . qdrant snapshot . Retention 30j/12m/3y</text>
 
 <!-- Legend -->
 <rect x="610" y="738" width="560" height="38" fill="rgba(249,250,251,1)" stroke="rgba(229,231,235,1)" stroke-width="1" rx="3"/>
 <text x="890" y="757" font-family="Inter, sans-serif" font-size="9" fill="rgba(75,85,99,1)" text-anchor="middle" dominant-baseline="central">[BLEU]Client [JAUNE]pfSense [CYAN]M1 [VERT]M2 [ORANGE]M3 [ROSE]NFS [BRUN]Backup</text>
 
-<!-- Arrow Backup -->
-<path d="M600 710L600 738" fill="none" stroke="rgba(217,119,6,1)" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round"/>
+<!-- Arrow Backup (Cold via OMV M1 - outside M3 frame) -->
+<path d="M600 720L600 738" fill="none" stroke="rgba(217,119,6,1)" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round"/>
 <polygon points="600,738 596,730 604,730" fill="rgba(217,119,6,1)"/>
-<rect x="586" y="700" width="56" height="12" fill="white" rx="2"/>
-<text x="614" y="709" font-family="Inter, sans-serif" font-size="8" fill="rgba(146,64,14,1)" text-anchor="middle">Borg push</text>
+<rect x="578" y="710" width="44" height="12" fill="white" rx="2"/>
+<text x="600" y="719" font-family="Inter, sans-serif" font-size="8" fill="rgba(146,64,14,1)" text-anchor="middle">Borg</text>
 
 <!-- Conventions -->
 <rect x="30" y="815" width="1140" height="35" fill="rgba(249,250,251,1)" stroke="rgba(229,231,235,1)" stroke-width="1" rx="4"/>
-<text x="600" y="832" font-family="Inter, sans-serif" font-size="9" fill="rgba(156,163,175,1)" text-anchor="middle">=> synchrone (API) . ~> asynchrone/backup . Fleches en angle droit, zero chevauchement</text>
+<text x="600" y="832" font-family="Inter, sans-serif" font-size="9" fill="rgba(156,163,175,1)" text-anchor="middle">=> synchrone . ~> async/backup . Fleches en angle droit, arretent aux boites</text>
 </svg>
