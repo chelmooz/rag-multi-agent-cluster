@@ -240,3 +240,92 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 3. Réduit la VRAM effective disponible pour le Generator 14B
 
 → **CPU BC250 (Zen 2 6c/12t) DOIT RESTER AU REPOS** pendant l'inférence GPU. Embedding = Machine 1 CPU (principal) / Machine 2 CPU (backup).
+
+---
+
+### 29/07/2026 — Plan Réseau Cluster (VLAN, NFS, pfSense) — **TRANCHÉ**
+
+**Topologie physique** :
+- Machine 1 : 2× 10GbE (backbone cluster) + 1× 1GbE (management/secours)
+- Machine 2 : 1× 10GbE (backbone) + 1× 1GbE (management)
+- Machine 3 : 1× 1GbE (backbone via switch 10G) — BC250 n'a pas de 10G natif
+- Client : 1× 1GbE (LAN)
+
+**VLAN / Sous-réseaux** :
+| VLAN | CIDR | Usage | Machines |
+|------|------|-------|----------|
+| 10 (Cluster) | `10.10.0.0/24` | Backbone 10G inter-nœuds (Qdrant, Ollama API, NFS) | M1(10.10.0.1), M2(10.10.0.2), M3(10.10.0.3) |
+| 20 (WAN) | `192.168.1.0/24` | pfSense → Internet (updates, modèles) | pfSense GW |
+| 30 (Mgmt) | `172.16.0.0/24` | Proxmox GUI, IPMI, SSH secours (1G) | M1, M2, M3 |
+| 40 (Client) | `192.168.10.0/24` | Obsidian client, web UI | Client, pfSense |
+
+**Passerelle** : pfSense (VM sur Proxmox M1 ou appliance dédiée) — routes inter-VLAN + NAT sortant.
+
+**NFS Relay (évaluation)** :
+- Export M1 : `/data/shared` → `10.10.0.0/24(rw,sync,no_subtree_check,no_root_squash)`
+- Mount M2 : `/data/shared` sur `10.10.0.1:/data/shared` (fstab, `_netdev`)
+- Fichier : `evaluation-relay.json` (verrou fichier atomique, TTL 300s)
+
+**Flux réseau autorisés (firewall pfSense)** :
+| Source | Dest | Proto/Port | Usage |
+|--------|------|------------|-------|
+| 10.10.0.0/24 | 10.10.0.0/24 | TCP 6333 | Qdrant (VectorDB) |
+| 10.10.0.0/24 | 10.10.0.0/24 | TCP 11434 | Ollama API (M2, M3) |
+| 10.10.0.0/24 | 10.10.0.0/24 | TCP 2049/NFS | Relay évaluation + vault wiki |
+| 10.10.0.2 | 10.10.0.1 | TCP 2049 | Mount NFS M1→M2 |
+| 192.168.10.0/24 | 10.10.0.1 | TCP 80/443 | Client → API Gateway (nginx LXC 102) |
+| 10.10.0.0/24 | 192.168.1.0/24 | TCP 80/443 | Sortie modèles/updates (via pfSense NAT) |
+| 172.16.0.0/24 | *any* | SSH/HTTPS | Admin Proxmox/IPMI (isolé) |
+
+**MTU** : 9000 (Jumbo frames) sur VLAN 10 pour NFS/Ollama/Qdrant — gain ~15% débit gros transferts.
+
+**Actions** :
+- [ ] Configurer switch 10G (VLAN 10 taggé, MTU 9000)
+- [ ] Déployer pfSense (VM M1 LXC 104 ou appliance) + règles firewall
+- [ ] Configurer NFS export M1 `/etc/exports` + mount M2 `/etc/fstab`
+- [ ] Tester iperf3 M1↔M2 10G > 9Gbps + MTU 9000
+- [ ] Documenter dans `infrastructure/network/plan-reseau.md`
+
+---
+
+## Avis DevOps — Cohérence Globale (29/07/2026)
+
+### ✅ Points forts (Architecture solide)
+
+| Domaine | Pourquoi c'est cohérent |
+|---------|------------------------|
+| **Séparation charge/GPU** | BC250 = Generator ONLY (Vulkan, pas de ROCm), RTX 4000 = Judge/Avocat/Reranker (CUDA natif), CPU Xeon = Embedding/Evaluator. Zéro surcharge. |
+| **Contrainte mémoire BC250 respectée** | Règle d'or "CPU serviteur GPU" appliquée — embedding déporté, BC250 CPU au repos. Évite contention bande passante + throttling thermique. |
+| **Pipeline séquentiel Juge→Avocat** | Résout le problème 2×7B > 8GB VRAM RTX 4000 sans hardware supplémentaire. Relay NFS = pattern connu (sidecar file). |
+| **Diversité familles modèles** | Judge (Qwen) ≠ Avocat (Mistral) → vrais biais différents → évaluation croisée efficace. |
+| **Pattern Karpathy (Wiki persistant)** | Frontend Obsidian = 0 code frontend à maintenir. Vault = source de vérité + graphe de connaissances. |
+| **Infrastructure as Code prête** | Proxmox LXC + Docker Compose + scripts bash = reproductible, versionnable. |
+| **Observabilité intégrée** | Prometheus/Grafana/Loki prévu dès Phase 7 — correlation ID depuis le début. |
+
+### ⚠️ Points de vigilance (Risques maîtrisés)
+
+| Risque | Impact | Mitigation |
+|--------|--------|------------|
+| **Single Point of Failure : Machine 1 (Master)** | Qdrant + API + Wiki + Evaluator + NFS = tout s'arrête si M1 tombe | → Backup Qdrant snapshot quotidien sur M2. NFS export read-only possible depuis M2. |
+| **NFS latency sur évaluation** | Relay file = point de synchronisation bloquant | → MTU 9000 + 10GbE = <1ms RTT. Timeout 120s Juge → Avocat. Acceptable. |
+| **BC250 baremetal = pas de snapshot/rollback** | Mise à jour noyau/BIOS risquée | → Tests sur VM simulée d'abord. Backup config `/etc` + BIOS P3.00 sur USB. |
+| **RTX 4000 8GB limite dure** | Pas de place pour modèle > 7B quantifié | → Choix validé : Judge/Avocat 7B max. Si besoin 14B → seul BC250 peut. |
+| **Modèles non verrouillés (tags Ollama)** | `qwen3.5:7b` pull = version mobile → reproductibilité | → Fixer digests SHA256 dans `.env` / `docker-compose`. `ollama pull qwen3.5:7b@sha256:...` |
+| **Obsidian vault lock concurrency** | Client + Cluster écrivent simultanément | → NFS `no_root_squash` + file locking (fcntl). Ou versioning git sidecar. |
+
+### 🔧 Recommandations immédiates (DevOps)
+
+1. **Lock les versions modèles** — Ajouter dans `.env` : `OLLAMA_MODEL_JUDGE=qwen3.5:7b@sha256:xxx` etc.
+2. **Health checks obligatoires** — `/health` sur chaque service (Ollama, Qdrant, API) → Prometheus scrape.
+3. **Secrets management** — Pas de tokens/API keys en dur. `sops` + `.env.encrypted` ou Vault (Phase 7).
+4. **Backup Qdrant** — `qdrant snapshot create` cron quotidien → stocké sur M2 (64GB dispo).
+5. **Test de charge pré-prod** — `hey` / `locust` sur `/api/v1/query` avec 10-50 RPS avant mise en prod.
+6. **Runbook incident** — Documenter : "BC250 ne boot plus", "RTX 4000 OOM", "NFS stale handle", "Qdrant corruption".
+
+### Verdict
+
+**Architecture cohérente, contrainte hardware respectée, pattern d'évaluation multi-agents viable.**
+
+Le cluster tient sur 3 machines hétérogène sans compromis majeur. Le seul "hack" assumé est le relay NFS séquentiel — mais c'est un pattern standard (sidecar file) qui évite d'acheter un 2e RTX 4000.
+
+Prêt pour Phase 0 (squelette + config + Docker Compose).
