@@ -51,92 +51,94 @@ graph TD
     %% ==========================================
     %% LEGENDE ET COULEURS
     %% ==========================================
-    %% Frontend: #2563eb (Bleu)
-    %% Backend: #16a34a (Vert)
-    %% Database: #ea580c (Orange)
-    %% Multi-agent: #db2777 (Rose)
-    %% API: #7c3aed (Violet)
-    %% Cluster Machine 1: #0ea5e9 (Cyan)
-    %% Cluster Machine 2: #22c55e (Green)
-    %% Cluster Machine 3: #f97316 (Orange)
+    %% Frontend: #2563eb (Bleu) · Backend: #16a34a (Vert)
+    %% Database: #ea580c (Orange) · Multi-agent: #db2777 (Rose)
+    %% API: #7c3aed (Violet) · Backup: #d97706 (Jaune)
+    %% Machine 1 (Master): #0ea5e9 (Cyan) · Machine 2 (GPU): #22c55e (Vert)
+    %% Machine 3 (BC250): #f97316 (Orange)
 
-    LLMWiki["LLM Wiki<br/>Interface Utilisateur<br/>(Tauri + React)"]
-    class LLMWiki frontend
+    subgraph Client
+        Obsidian["🧠 Obsidian Vault<br/>Interface Utilisateur"]
+    end
+    class Obsidian frontend
 
-    Documents["📄 Documents<br/>Sources brutes"]
-    Chunking["✂️ Chunking<br/>Chevauchement"]
-    Augmentation["🏷️ Augmentation<br/>Métadonnées, contexte"]
+    subgraph M1["Machine 1 — Master (Cyan)"]
+        direction TB
+        Chunking["✂️ Chunking + Augmentation<br/>CPU (cron offline)"]
+        EmbeddingM1["🔢 Embedding nomic-v2-moe<br/>Xeon 32c/64t — CPU"]
+        IndexLexical["📚 Index lexical BM25<br/>Qdrant sparse"]
+        VectorDB["💾 VectorDB Qdrant<br/>Index vectoriel"]
+        EvaluateurM1["✅ Évaluateur qwen3.5:3b<br/>Synthèse — CPU"]
+        OMV["💾 OMV Backup VM<br/>500 GB dédié / borg + rsync"]
+        Planificateur["🎯 Planificateur"]
+        Reecriture["✍️ Réécriture"]
+        Contexte["📦 Contexte"]
+    end
+    class Chunking,EmbeddingM1,EvaluateurM1,Planificateur,Reecriture,Contexte m1
+    class IndexLexical,VectorDB m1db
+    class OMV backup
 
-    IndexLexical["📚 Index lexical<br/>Recherche par mots-clés"]
-    Embedding["🔢 Embedding<br/>Vectorisation"]
-    VectorDB["💾 VectorDB<br/>Index vectoriel"]
+    subgraph M2["Machine 2 — GPU Worker (Vert)"]
+        Reranker["📊 Reranker bge-v2-m3<br/>RTX 4000 — CUDA"]
+        JugeLLM["⚖️ Juge qwen3.5:7b<br/>RTX 4000 — CUDA"]
+        AvocatDiable["😈 Avocat mistral-3.2:7b<br/>RTX 4000 — CUDA"]
+        Relay["📄 relay.json<br/>(NFS /data/shared)"]
+    end
+    class Reranker,JugeLLM,AvocatDiable m2
 
-    class Documents,IndexLexical,VectorDB database
-    class Chunking,Augmentation,Embedding backend
+    subgraph M3["Machine 3 — BC250 (Orange)"]
+        ModeleGeneratif["🤖 Generator qwen3.5:14b<br/>ou 35b-a3b MoE — Vulkan"]
+        Variantes["🔀 Variantes<br/>Text-to-SQL / Vision / Fast-check"]
+    end
+    class ModeleGeneratif,Variantes m3
 
-    Requete["💬 Requête<br/>Question posée"]
-    Planificateur["🎯 Planificateur<br/>Stratégie + outils"]
-    Reecriture["✍️ Réécriture<br/>Contexte conversationnel"]
+    subgraph Backup["Backup Cold (Jaune)"]
+        HDD["💾 HDD 2TB mécanique<br/>LUKS · borg push hebdo<br/>Rotation off-site"]
+    end
+    class HDD backup
 
-    RechercheLexicale["🔍 Recherche lexicale<br/>Candidats rapides"]
-    Vectorielle["📐 Vectorielle<br/>Similarité sémantique"]
-    Variantes["🔀 Variantes<br/>SQL, images, tables"]
+    Documents["📄 Documents / Sources brutes"]
+    Requete["💬 Requête"]
+    ReponseFinale["🎉 Réponse finale"]
+    class Documents,Requete,ReponseFinale frontend
 
-    class Requete frontend
-    class Planificateur,Reecriture,RechercheLexicale,Vectorielle backend
-    class Variantes api
-
-    Reranking["📊 Reranking<br/>Affine le classement"]
-
-    SavoirInterne["🧠 Savoir interne<br/>Entraînement"]
-    Contexte["📦 Contexte<br/>Assemblage enrichi"]
-    CourtTerme["⏱️ Court terme<br/>Fenêtre contextuelle"]
-
-    class Reranking,Contexte backend
-    class SavoirInterne,CourtTerme database
-
-    ModeleGeneratif["🤖 Modèle génératif<br/>Génère la réponse"]
-
-    JugeLLM["⚖️ Juge (LLM)<br/>Score qualité"]
-    AvocatDiable["😈 Avocat du diable<br/>Cherche les failles"]
-    Evaluateur["✅ Évaluateur<br/>Synthèse des avis"]
-
-    class ModeleGeneratif backend
-    class JugeLLM,AvocatDiable,Evaluateur multiagent
-
-    ReponseFinale["🎉 Réponse finale<br/>Retour à l'utilisateur"]
-    class ReponseFinale frontend
-
-    LLMWiki --> Requete
-    Documents --> Chunking --> Augmentation
-    Augmentation --> IndexLexical & Embedding
-    Embedding --> VectorDB
-
-    Requete --> Planificateur --> Reecriture
-    Reecriture --> RechercheLexicale & Vectorielle & Variantes
-
+    %% Flux ingestion
+    Documents --> Chunking --> EmbeddingM1
+    EmbeddingM1 --> IndexLexical & VectorDB
     IndexLexical -.-> RechercheLexicale
     VectorDB -.-> Vectorielle
 
+    %% Flux requête
+    Requete --> Planificateur --> Reecriture
+    Reecriture --> RechercheLexicale & Vectorielle & Variantes
     RechercheLexicale & Vectorielle & Variantes --> Reranking
     Reranking --> Contexte
-
-    SavoirInterne --> Contexte
-    CourtTerme --> Contexte
     Contexte --> ModeleGeneratif
 
-    ModeleGeneratif --> JugeLLM & AvocatDiable
-    JugeLLM & AvocatDiable --> Evaluateur
+    %% Flux séquentiel Juge → Avocat (pas parallèle)
+    ModeleGeneratif -- "réponse" --> Relay
+    Relay --> JugeLLM
+    JugeLLM -- "évaluation → relay.json → unload" --> Relay
+    Relay --> AvocatDiable
+    AvocatDiable -- "faille → relay.json → unload" --> Relay
+    Relay --> EvaluateurM1
 
-    Evaluateur --> ReponseFinale
-    ReponseFinale --> LLMWiki
-    Evaluateur -.->|Feedback| Planificateur
+    %% Flux retour
+    EvaluateurM1 --> ReponseFinale
+    ReponseFinale --> Obsidian
+    EvaluateurM1 -.->|Feedback| Planificateur
+
+    %% Backup
+    OMV -- "borg pull cron" --> M2
+    OMV -- "rsync pull ssh" --> M3
+    OMV -- "borg push hebdo" --> HDD
 
     classDef frontend fill:#2563eb,stroke:#1e40af,stroke-width:2px,color:#ffffff;
-    classDef backend fill:#16a34a,stroke:#15803d,stroke-width:2px,color:#ffffff;
-    classDef database fill:#ea580c,stroke:#c2410c,stroke-width:2px,color:#ffffff;
-    classDef multiagent fill:#db2777,stroke:#be185d,stroke-width:2px,color:#ffffff;
-    classDef api fill:#7c3aed,stroke:#6d28d9,stroke-width:2px,color:#ffffff;
+    classDef m1 fill:#f0f9ff,stroke:#0ea5e9,stroke-width:2px,color:#000000;
+    classDef m1db fill:#f0f9ff,stroke:#ea580c,stroke-width:2px,color:#000000;
+    classDef m2 fill:#f0fdf4,stroke:#22c55e,stroke-width:2px,color:#000000;
+    classDef m3 fill:#fff7ed,stroke:#f97316,stroke-width:2px,color:#000000;
+    classDef backup fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#000000;
 ```
 
 ### Flux de Données Détaillé
@@ -144,36 +146,56 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant User as 👤 Utilisateur
-    participant LLMWiki as 🖥️ LLM Wiki
+    participant LLMWiki as 🖥️ LLM Wiki (Obsidian)
     participant API as 🔌 API FastAPI
-    participant Orchestrator as 🎯 Orchestrator
-    participant VectorDB as 💾 VectorDB
-    participant GPU as 🎮 GPU Worker (RTX 4000)
-    participant BC250 as ⚡ BC250
-    participant Juge as ⚖️ Juge LLM
-    participant Avocat as 😈 Avocat du diable
-    participant Evaluateur as ✅ Évaluateur
+    participant Orchestrator as 🎯 Orchestrator (M1)
+    participant VectorDB as 💾 Qdrant VectorDB (M1)
+    participant M2 as 🎮 M2 GPU (RTX 4000)
+    participant M3 as ⚡ M3 BC250 (Vulkan)
+    participant Relay as 📄 relay.json (NFS M1↔M2)
+    participant Evaluateur as ✅ Évaluateur (M1 CPU)
 
     User->>LLMWiki: Pose une question
     LLMWiki->>API: POST /api/v1/query
     API->>Orchestrator: Requête reçue
-    Orchestrator->>Orchestrator: Analyse l'intention
-    Orchestrator->>VectorDB: Recherche sémantique
-    VectorDB-->>Orchestrator: Documents pertinents
-    Orchestrator->>GPU: Reranking des résultats
-    GPU-->>Orchestrator: Résultats triés
-    Orchestrator->>BC250: Génération de réponse (gros modèles)
-    BC250-->>Orchestrator: Réponse brute
-    Orchestrator->>Juge: Évaluation qualité
-    Orchestrator->>Avocat: Recherche de failles
-    Juge-->>Evaluateur: Score de qualité
-    Avocat-->>Evaluateur: Liste des failles
-    Evaluateur->>Evaluateur: Synthèse des avis
+    Orchestrator->>Orchestrator: Analyse l'intention + réécriture
+
+    %% Recherche + Reranking
+    Orchestrator->>VectorDB: Recherche BM25 + vectorielle
+    VectorDB-->>Orchestrator: Candidats
+    Orchestrator->>M2: Reranking bge-v2-m3 (CUDA)
+    M2-->>Orchestrator: Résultats triés
+    Orchestrator->>Orchestrator: Assemblage contexte
+
+    %% Génération sur BC250
+    Orchestrator->>M3: Génération qwen3.5:14b (Vulkan)
+    Note over M3: BC250 CPU AU REPOS — GPU uniquement
+    M3-->>Orchestrator: Réponse brute
+
+    %% Écriture relay (début évaluation)
+    Orchestrator->>Relay: Écrit réponse dans relay.json (NFS)
+
+    %% Phase 1: Juge (séquentiel, pas parallèle)
+    Relay-->>M2: Trigger inotify → charge Juge
+    Note over M2: Unload reranker → Load qwen3.5:7b (5GB)
+    M2->>M2: Juge évalue réponse (qualité, cohérence)
+    M2->>Relay: Écrit score + critique → **unload Juge**
+
+    %% Phase 2: Avocat (après unload Juge)
+    Relay-->>M2: Trigger inotify → charge Avocat
+    Note over M2: Unload Juge → Load mistral-3.2:7b (5GB)
+    M2->>M2: Avocat cherche failles (famille ≠ Juge)
+    M2->>Relay: Écrit failes + score → **unload Avocat**
+
+    %% Phase 3: Évaluateur
+    Relay-->>Evaluateur: Trigger → lit relay.json complet
+    Evaluateur->>Evaluateur: Synthèse Juge + Avocat + réponse
     Evaluateur-->>Orchestrator: Réponse validée
+
     Orchestrator-->>API: Réponse finale
     API-->>LLMWiki: JSON response
     LLMWiki->>User: Affiche la réponse
-    LLMWiki->>LLMWiki: Sauvegarde dans vault
+    LLMWiki->>LLMWiki: Compounding → archive dans vault wiki (pattern Karpathy)
 ```
 
 ---
