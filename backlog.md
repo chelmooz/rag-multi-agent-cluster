@@ -98,6 +98,142 @@
 
 ---
 
+## Machine 3 — BC250 Baremetal : Checklist Complète (29/07/2026)
+
+### Hardware & Firmware
+- [ ] Carte BC-250 reçue, inspectée (PCB, condensateurs, slot PCIe)
+- [ ] Alim 300W+ 12V 8-pin PCIe connectée
+- [ ] Refroidissement AIO / high-CFM fans monté (test thermal paste)
+- [ ] BIOS flashé P3.00+ community-patched (elektricM guide)
+- [ ] BIOS VRAM: Dynamic 512 MB configuré
+- [ ] Backup BIOS P3.00 sur USB (procédure recovery validée)
+
+### OS & Kernel
+- [ ] Debian Testing/Sid installé (netinst, `nomodeset` au boot install)
+- [ ] Kernel 6.18.18 LTS ou 6.19.x installé (pin apt pour éviter 6.15/6.17 buggés)
+- [ ] GRUB: `ttm.pages_limit=4194304 ttm.page_pool_size=4194304 amdgpu.sg_display=0`
+- [ ] `update-grub` + reboot + vérif `cat /proc/cmdline`
+- [ ] CPU governor: `performance` persistant (tmpfiles.d)
+
+### Mesa / Vulkan
+- [ ] Repo `experimental` ajouté + pin-priority 500 pour mesa-vulkan-drivers
+- [ ] `apt install -t experimental mesa-vulkan-drivers libgl1-mesa-dri mesa-utils vulkan-tools`
+- [ ] `vulkaninfo --summary` → "AMD BC-250 (RADV GFX1013)" + INTEGRATED_GPU
+- [ ] `glxinfo` → OpenGL 4.6+ Mesa 25.1.x
+
+### GPU Governor (Oberon)
+- [ ] `cyan-skillfish-governor-smu` .deb installé (Magnap/filippor release)
+- [ ] Config `/etc/cyan-skillfish-governor-smu/config.toml` → core_cap_mhz=1500, voltage_mv=900
+- [ ] `systemctl enable --now cyan-skillfish-governor-smu`
+- [ ] `journalctl -u cyan-skillfish-governor-smu` → OK
+
+### 40 CU Unlock (Optionnel — recommandé pour production)
+- [ ] `cu_map.sh` exécuté → harvest pattern contigu validé
+- [ ] Repo duggasco cloné, deps build installées (headers, build-essential, zstd)
+- [ ] `./scripts/bc250-enable-40cu.sh build` → module amdgpu patché
+- [ ] `./scripts/bc250-enable-40cu.sh enable` → modprobe + reboot
+- [ ] **Triple vérif post-reboot** :
+    - [ ] `cat /sys/module/amdgpu/parameters/bc250_cc_write_mode` → `3`
+    - [ ] `dmesg | grep active_cu_number` → `active_cu_number 40`
+    - [ ] `RADV_DEBUG=info vulkaninfo --summary | grep num_cu` → `40`
+- [ ] Bench A/B 24 vs 40 CU (4K ctx, 3 runs) → +32% gen median validé
+- [ ] Procédure rollback testée (`disable` → reboot → 24 CU)
+
+### Swap NVMe
+- [ ] `dd if=/dev/zero of=/swapfile bs=1M count=16384`
+- [ ] `chattr +C /swapfile` (btrfs CoW off)
+- [ ] `mkswap /swapfile && swapon -p 10 /swapfile`
+- [ ] `/swapfile none swap sw,pri=10 0 0` dans `/etc/fstab`
+- [ ] zram réduit à 2 GB max (`/etc/systemd/zram-generator.conf.d/small.conf`)
+
+### Ollama + Modèles (Digests SHA256 lockés dans .env)
+- [ ] Ollama installé (script officiel)
+- [ ] Override systemd créé avec 9 env vars Vulkan + OOMScoreAdjust=-1000
+- [ ] `systemctl daemon-reload && systemctl restart ollama`
+- [ ] `journalctl -u ollama` → "total=12.3 GiB available"
+- [ ] Modèles pullés avec digests :
+    - [ ] `qwen3.5:14b@sha256:...` (Q4_K_M, ~9 GB)
+    - [ ] `qwen3.5-35b-a3b@sha256:...` (IQ2_M, ~11 GB)
+    - [ ] `qwen3-coder-30b-a3b@sha256:...` (IQ2_M)
+    - [ ] `llava-next:13b@sha256:...` (Q4_K_M)
+    - [ ] `qwen2.5-vl@sha256:...` (Q4_K_M)
+    - [ ] `granite-4.0-h-tiny@sha256:...` (Q4_K_M)
+    - [ ] `nomic-embed-text-v2-moe@sha256:...`
+
+### Réseau & NFS (VLAN 10)
+- [ ] IP statique 10.10.0.3/24, MTU 9000 sur interface 1G
+- [ ] Route pfSense 10.10.0.254 → Internet (NAT)
+- [ ] NFS client: mount M1:/data/shared → /data/shared (_netdev, fstab)
+- [ ] NFS client: mount M1:/data/wiki → /data/wiki (_netdev, fstab)
+- [ ] Firewall: autoriser 11434 (Ollama), 2049 (NFS), 80/443 (WAN)
+- [ ] Test: `iperf3 -c 10.10.0.1` → >900 Mbps, MTU 9000 OK
+
+### Monitoring & Observabilité
+- [ ] `prometheus-node-exporter` installé + scrape config M1
+- [ ] GPU telemetry: oberon governor metrics (power, temp, clock) exposés
+- [ ] SMART NVMe: `nvme smart-log` cron + alertes usure
+- [ ] Logs: journald → Loki (correlation ID)
+- [ ] Healthcheck: `curl -f localhost:11434/api/tags` + `vulkaninfo` cron
+
+### Backup (Pull OMV M1)
+- [ ] Clé SSH OMV→BC250 configurée (pull-only)
+- [ ] Script rsync `/etc /var/lib/ollama /root/.ollama/models` → OMV
+- [ ] Cron quotidien OMV → borg repo → HDD 2TB cold (LUKS)
+
+### Runbooks & Maintenance
+- [ ] Runbook: "BC250 ne boot plus" (BIOS recovery, kernel params)
+- [ ] Runbook: "Ollama HTTP 500 14B+" (check ttm.pages_limit)
+- [ ] Runbook: "CU unlock lost" (rebuild patch post-kernel-update)
+- [ ] Runbook: "Thermal throttle" (governor config, nettoyage)
+- [ ] Runbook: "NVMe full" (prune modèles, check swap)
+- [ ] Checklist post-reboot obligatoire documentée + automatisée (script)
+
+### Intégration Cluster
+- [ ] Endpoint Ollama API accessible M1/M2 (10.10.0.3:11434)
+- [ ] Relay NFS: écriture relay.json depuis M1, lecture depuis M3 (si besoin)
+- [ ] Règle d'or validée: CPU BC250 idle pendant inférence (htop/watch -n1)
+- [ ] Test bout-en-bout: M1 → generate → relay.json → M2 Judge/Avocat → M1 Evaluator
+
+### Points de vigilance critiques (pièges documentés)
+
+| Piège | Symptôme | Solution |
+|-------|----------|----------|
+| **`systemd-tmpfiles` écrase `ttm.pages_limit`** | `cat /sys/module/ttm/parameters/pages_limit` → `3145728` (12 GiB) au lieu de `4194304` | Vérifier **après reboot**, pas après écriture. `tmpfiles.d` priorité finale gagne. Corriger `/etc/tmpfiles.d/gpu-ttm-memory.conf` |
+| **Kernel update casse 40 CU unlock** | `active_cu_number` retombe à 24 | Rebuild module patché + `dracut -f` + reboot **après chaque kernel upgrade** |
+| **Mesa dans Debian Stable trop vieux** | `vulkaninfo` → Mesa 24.x, pas de RADV GFX1013 | **OBLIGATOIRE** Debian Testing/Sid + repo experimental pin 500 |
+| **ROCm installé par erreur** | `rocblas_abort()`, compute queue hang | **Ne jamais installer ROCm**. Vulkan only. |
+| **CPU governor `schedutil`** | Spikes latence TTFT, instabilité | `performance` lock via tmpfiles.d |
+| **zram trop gros** | Concurrence RAM physique avec modèles | Max 2 GB (`zram-size = 2048`) |
+| **Modèles sans digest SHA256** | `ollama pull qwen3.5:14b` → version mobile différente | **Toujours** `@sha256:...` dans `.env` / scripts |
+
+### Dépendances croisées (ordre d'exécution)
+
+```
+1. Hardware/BIOS/OS/Kernel/GRUB → reboot → vérif cmdline + ttm.pages_limit
+      ↓
+2. Mesa experimental + vulkaninfo → OK
+      ↓
+3. GPU Governor (oberon) → systemctl enable → OK
+      ↓
+4. Swap NVMe + zram reduce + CPU governor performance
+      ↓
+5. Ollama install + systemd override → restart → journalctl check
+      ↓
+6. 40 CU unlock (si choisi) → cu_map.sh → build → enable → reboot → TRIPLE VERIF
+      ↓
+7. Modèles pull (digests lockés) → test generate 4K ctx
+      ↓
+8. Réseau VLAN 10 + NFS mounts + firewall pfSense
+      ↓
+9. Monitoring (node-exporter, oberon metrics, SMART, Loki)
+      ↓
+10. Backup pull OMV configuré + test restore partiel
+      ↓
+11. Runbooks écrits + test bout-en-bout cluster (M1→M3→M2→M1)
+```
+
+---
+
 ## Décisions d'architecture (à trancher)
 
 ### 29/07/2026 — Embedding sur CPU vs BC250 — **TRANCHÉ**
@@ -359,3 +495,137 @@ OMV (M1) ──borg pull──► M2 (256 GB) ──rsync pull──► BC250
 - [ ] Documenter restore procedure dans `infrastructure/backup/restore.md`
 
 Prêt pour Phase 0 (squelette + config + Docker Compose).
+
+---
+
+## 29/07/2026 — Architecture LXC 100 (Orchestrator + Wiki Agent) + Schema CLAUDE.md — **NOUVEAU**
+
+### 1. Spécifications LXC 100 — Master Orchestrator
+
+| Paramètre | Valeur |
+|-----------|--------|
+| **CTID** | 100 |
+| **Hostname** | `jarvis-master` |
+| **Template** | Debian 12 (bookworm) standard |
+| **CPU** | 8 vCPU (sur 44 threads M1) |
+| **RAM** | 8 GB (sur 32 GB ECC M1) |
+| **Swap** | 2 GB |
+| **Disque rootfs** | 50 GB (NVMe M1, local-lvm) |
+| **Network** | `eth0` → VLAN 10 (10.10.0.1/24, MTU 9000, bridge vmbr10) |
+| **Gateway** | 10.10.0.254 (pfSense) |
+| **Privileged** | Non (unprivileged LXC) |
+| **Nesting** | Oui (Docker inside LXC) |
+| **Onboot** | 1 |
+| **Start** | 1 |
+
+### 2. Mounts NFS (depuis OMV VM LXC 105 sur M1)
+
+| Mount Point (LXC 100) | Source NFS (10.10.0.1:/data/shared/...) | Usage | Mode |
+|----------------------|------------------------------------------|-------|------|
+| `/data/wiki` | `wiki` | Vault Obsidian (pages, index.md, log.md, CLAUDE.md) | RW |
+| `/data/raw` | `raw` | Sources brutes ingérées (immutable) | RW |
+| `/data/index` | `index` | Index/search auxiliaires | RW |
+| `/data/models` | `models` | Cache Ollama partagé (read-only pour LXC 100) | RO |
+
+**Config `/etc/pve/lxc/100.conf` (extraits)** :
+```bash
+mp0: /data/wiki,volume=data-shared/wiki,shared=1
+mp1: /data/raw,volume=data-shared/raw,shared=1
+mp2: /data/index,volume=data-shared/index,shared=1
+mp3: /data/models,volume=data-shared/models,shared=1,ro=1
+```
+
+### 3. Services dans LXC 100 (Docker Compose `orchestrator.yml`)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    LXC 100 - Orchestrator                   │
+├─────────────────────────────────────────────────────────────┤
+│  🐳 Docker Compose (orchestrator.yml)                      │
+│  ├── nginx:80/443            ← Reverse proxy + TLS local   │
+│  ├── fastapi-api:8000        ← API /api/v1 (ingest, query) │
+│  ├── langgraph-orchestrator  ← Workflow ingestion + query  │
+│  └── wiki-agent              ← LLM Wiki maintenance loop   │
+├─────────────────────────────────────────────────────────────┤
+│  🔧 Services système (hors Docker, systemd)                │
+│  ├── ollama-client           ← Client vers M1/M2/M3 Ollama │
+│  ├── inotifywait             ← Watch /data/wiki + /data/raw │
+│  ├── cron                    ← Ingestion planifiée, lint   │
+│  └── healthcheck             ← /health pour Prometheus     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 4. Flux d'appel LLM Local (via Ollama API)
+
+```
+Wiki Agent (LXC 100)
+    │
+    ├── Embedding → http://10.10.0.1:11434  (Ollama M1 CPU - RX 580 ROCm)
+    │       └── fallback → http://10.10.0.2:11434 (Ollama M2 CPU backup)
+    │
+    ├── Generation → http://10.10.0.3:11434 (Ollama M3 BC250 Vulkan)
+    │
+    ├── Rerank/Judge/Avocat → http://10.10.0.2:11434 (Ollama M2 RTX 4000 CUDA)
+    │
+    └── Evaluator → http://10.10.0.1:11434 (Ollama M1 CPU qwen3.5:3b)
+```
+
+### 5. Schema CLAUDE.md / AGENTS.md — Template pour `/data/wiki/CLAUDE.md`
+
+**Fichier à créer** : `docs/claude-md-template.md` → copié vers `/data/wiki/CLAUDE.md` au premier boot LXC 100.
+
+Contenu structuré (voir README.md section ajoutée) avec :
+- Architecture cluster pour le LLM (tableau M1/M2/M3 + modèles + endpoints)
+- Structure vault wiki (`/data/wiki` arborescence complète)
+- Format page standard (Frontmatter YAML avec `confidence`, `contradictions`, `supersedes`)
+- Workflows Wiki Agent : Ingest, Query, Lint (étapes détaillées)
+- Assignation modèles par tâche (tableau tâche → modèle → endpoint → params)
+- Configuration runtime (variables d'env LXC 100)
+- Règles maintenance (immuabilité sources/, cross-refs bidirectionnels, versioning, etc.)
+- Objectifs qualité wiki (couverture, fraîcheur, consistance, traçabilité, navigation)
+
+### 6. Scripts Proxmox à créer
+
+| Script | Emplacement | Description |
+|--------|-------------|-------------|
+| `create-lxc-wiki-agent.sh` | `infrastructure/proxmox/` | Création LXC 100 + config post-install |
+| `orchestrator.yml` | `infrastructure/docker/` | Docker Compose stack complète |
+| `nginx.conf` | `infrastructure/docker/` | Reverse proxy + TLS local |
+| `Dockerfile.api` | `infrastructure/docker/` | FastAPI + deps |
+| `Dockerfile.wiki-agent` | `infrastructure/docker/` | Wiki Agent (LangGraph + tools) |
+| `Dockerfile.langgraph` | `infrastructure/docker/` | Orchestrateur LangGraph |
+
+### 7. Variables d'environnement LXC 100 (`/etc/environment` ou `docker-compose.override.yml`)
+
+```bash
+OLLAMA_M1=http://10.10.0.1:11434
+OLLAMA_M2=http://10.10.0.2:11434
+OLLAMA_M3=http://10.10.0.3:11434
+WIKI_ROOT=/data/wiki
+RAW_ROOT=/data/raw
+QDRANT_URL=http://10.10.0.1:6333
+NFS_RELAY=/data/shared/evaluation-relay.json
+LOG_LEVEL=INFO
+```
+
+### 8. Actions à ajouter au backlog (Phase 0 étendue)
+
+- [ ] **0.6** Créer `infrastructure/proxmox/create-lxc-wiki-agent.sh` (LXC 100 complet)
+- [ ] **0.7** Créer `infrastructure/docker/orchestrator.yml` + `nginx.conf` + 3 Dockerfiles
+- [ ] **0.8** Créer `docs/claude-md-template.md` → template CLAUDE.md pour wiki
+- [ ] **0.9** Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback)
+- [ ] **0.10** Test d'ingestion bout-en-bout : source → embed M1 → index Qdrant → wiki pages → index.md/log.md
+- [ ] **0.11** Configurer mTLS pour API interne (certs auto-signés via pfSense CA)
+- [ ] **0.12** Prometheus exporter custom wiki-agent (metrics: `wiki_pages_total`, `ingest_duration`, `query_latency`)
+- [ ] **0.13** Git sidecar auto-commit dans LXC 100 (cron 1h) pour versioning wiki hors OMV
+
+### 9. Décisions d'architecture à trancher (complément)
+
+| Question | Options | Recommandation |
+|----------|---------|----------------|
+| **Template LXC** | Debian 12 vs Ubuntu 24.04 | **Debian 12** (plus léger, stable, pas de snap) |
+| **Orchestration conteneurs** | Docker Compose vs systemd-nspawn | **Docker Compose** (standard, portable, compose.yml lisible) |
+| **Wiki Agent implémentation** | Python script custom vs LangGraph nodes | **LangGraph** (déjà choisi stack, graphe d'état explicite) |
+| **Authentification API** | mTLS + client certs vs JWT vs none (LAN) | **mTLS** (certs auto-signés pfSense CA, zéro config client) |
+| **Monitoring Wiki Agent** | Prometheus exporter custom + Grafana | **Oui**, metrics: `wiki_pages_total`, `ingest_duration_seconds`, `query_latency_seconds`, `llm_calls_total` |
+| **Backup wiki (hors OMV)** | Git auto-commit sur push wiki | **Git sidecar** dans LXC 100 (cron 1h, push vers remote bare) |
