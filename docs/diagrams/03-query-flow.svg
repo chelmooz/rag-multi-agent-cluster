@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 10 880 920" width="880" height="920">
+<rect x="10" y="10" width="880" height="920" fill="#ffffff" />
+<rect x="50" y="50" width="800" height="60" fill="rgba(249,250,251,1)" stroke="rgba(229,231,235,1)" stroke-width="1"  rx="0" />
+<text x="70" y="80" font-family="Inter, sans-serif" font-size="12" fill="rgba(107,114,128,1)" text-anchor="start" dominant-baseline="central"><tspan x="70" dy="0">Conventions:  ──▶ Synchrone    ┄┄▶ Asynchrone / Feedback    ①②③ Étapes séquentielles évaluation</tspan></text>
+<rect x="50" y="150" width="220" height="60" fill="rgba(219,234,254,1)" stroke="rgba(37,99,235,1)" stroke-width="2"  rx="0" />
+<text x="160" y="180" font-family="Inter, sans-serif" font-size="14" fill="rgba(30,64,175,1)" text-anchor="middle" dominant-baseline="central"><tspan x="160" dy="0">💬 Requête utilisateur</tspan></text>
+<rect x="50" y="250" width="400" height="100" fill="rgba(240,249,255,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
+<text x="70" y="255" font-family="Inter, sans-serif" font-size="14" fill="rgba(12,74,110,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">PHASE 1 · Planification — M1 · CPU</tspan></text>
+<rect x="70" y="285" width="160" height="50" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
+<text x="150" y="309.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(12,74,110,1)" text-anchor="middle" dominant-baseline="central"><tspan x="150" dy="0">🎯 Planificateur</tspan><tspan x="150" dy="13.75">Analyse d'intention</tspan></text>
+<rect x="250" y="285" width="160" height="50" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
+<text x="330" y="309.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(12,74,110,1)" text-anchor="middle" dominant-baseline="central"><tspan x="330" dy="0">✍️ Réécriture</tspan><tspan x="330" dy="13.75">Contexte conversationnel</tspan></text>
+<rect x="50" y="380" width="800" height="120" fill="rgba(240,253,244,1)" stroke="rgba(34,197,94,1)" stroke-width="2"  rx="0" />
+<text x="70" y="385" font-family="Inter, sans-serif" font-size="14" fill="rgba(20,83,45,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">PHASE 2 · Recherche hybride + Reranking</tspan></text>
+<rect x="70" y="415" width="180" height="60" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
+<text x="160" y="444.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(12,74,110,1)" text-anchor="middle" dominant-baseline="central"><tspan x="160" dy="0">📚 BM25</tspan><tspan x="160" dy="13.75">Qdrant sparse · M1</tspan></text>
+<rect x="280" y="415" width="180" height="60" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
+<text x="370" y="444.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(12,74,110,1)" text-anchor="middle" dominant-baseline="central"><tspan x="370" dy="0">💾 Vectorielle</tspan><tspan x="370" dy="13.75">Qdrant dense · M1</tspan></text>
+<rect x="490" y="415" width="180" height="60" fill="rgba(255,247,237,1)" stroke="rgba(249,115,22,1)" stroke-width="2"  rx="0" />
+<text x="580" y="444.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(124,45,18,1)" text-anchor="middle" dominant-baseline="central"><tspan x="580" dy="0">🔀 Variantes</tspan><tspan x="580" dy="13.75">SQL · Vision · M3</tspan></text>
+<rect x="700" y="415" width="130" height="60" fill="rgba(220,252,231,1)" stroke="rgba(34,197,94,1)" stroke-width="2"  rx="0" />
+<text x="765" y="444.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(20,83,45,1)" text-anchor="middle" dominant-baseline="central"><tspan x="765" dy="0">📊 Reranker</tspan><tspan x="765" dy="13.75">bge-v2-m3 · M2</tspan></text>
+<rect x="50" y="530" width="800" height="100" fill="rgba(255,247,237,1)" stroke="rgba(249,115,22,1)" stroke-width="2"  rx="0" />
+<text x="70" y="535" font-family="Inter, sans-serif" font-size="14" fill="rgba(124,45,18,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">PHASE 3 · Génération — M3 · BC-250 · GPU Vulkan</tspan></text>
+<rect x="70" y="565" width="180" height="50" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
+<text x="160" y="589.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(12,74,110,1)" text-anchor="middle" dominant-baseline="central"><tspan x="160" dy="0">📦 Assemblage</tspan><tspan x="160" dy="13.75">contexte enrichi</tspan></text>
+<rect x="300" y="565" width="200" height="50" fill="rgba(254,215,170,1)" stroke="rgba(249,115,22,1)" stroke-width="2"  rx="0" />
+<text x="400" y="589.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(124,45,18,1)" text-anchor="middle" dominant-baseline="central"><tspan x="400" dy="0">🤖 Générateur qwen3.5:14b</tspan><tspan x="400" dy="13.75">M3 · Vulkan · CPU AU REPOS</tspan></text>
+<rect x="50" y="660" width="800" height="140" fill="rgba(253,242,248,1)" stroke="rgba(219,39,119,1)" stroke-width="2"  rx="0" />
+<text x="70" y="665" font-family="Inter, sans-serif" font-size="14" fill="rgba(131,24,67,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">PHASE 4 · Évaluation multi-agents — Séquentielle (1 modèle à la fois sur M2)</tspan></text>
+<rect x="70" y="695" width="150" height="50" fill="rgba(252,231,243,1)" stroke="rgba(219,39,119,1)" stroke-width="2"  rx="0" />
+<text x="145" y="719.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(131,24,67,1)" text-anchor="middle" dominant-baseline="central"><tspan x="145" dy="0">📄 relay.json</tspan><tspan x="145" dy="13.75">NFS M1↔M2</tspan></text>
+<rect x="250" y="695" width="150" height="50" fill="rgba(220,252,231,1)" stroke="rgba(34,197,94,1)" stroke-width="2"  rx="0" />
+<text x="325" y="719.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(20,83,45,1)" text-anchor="middle" dominant-baseline="central"><tspan x="325" dy="0">① ⚖️ Juge 7b — M2</tspan><tspan x="325" dy="13.75">Qualité + Cohérence</tspan></text>
+<rect x="430" y="695" width="150" height="50" fill="rgba(220,252,231,1)" stroke="rgba(34,197,94,1)" stroke-width="2"  rx="0" />
+<text x="505" y="719.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(20,83,45,1)" text-anchor="middle" dominant-baseline="central"><tspan x="505" dy="0">② 😈 Avocat 7b — M2</tspan><tspan x="505" dy="13.75">Failles + Hallucinations</tspan></text>
+<rect x="610" y="695" width="150" height="50" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
+<text x="685" y="719.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(12,74,110,1)" text-anchor="middle" dominant-baseline="central"><tspan x="685" dy="0">③ ✅ Évaluateur 3b — M1</tspan><tspan x="685" dy="13.75">Synthèse des deux avis</tspan></text>
+<rect x="50" y="830" width="220" height="60" fill="rgba(219,234,254,1)" stroke="rgba(37,99,235,1)" stroke-width="2"  rx="0" />
+<text x="160" y="860" font-family="Inter, sans-serif" font-size="12" fill="rgba(30,64,175,1)" text-anchor="middle" dominant-baseline="central"><tspan x="160" dy="0">🎉 Réponse validée + citations</tspan><tspan x="160" dy="15">Archivée vault (pattern Karpathy)</tspan></text>
+<path d="M160 210L160 250" fill="none" stroke="rgba(37,99,235,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="160,250 155,241.3397459621556 165,241.3397459621556" fill="rgba(37,99,235,1)" stroke="none" />
+<path d="M230 310L250 310" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="250,310 241.3397459621556,315 241.3397459621556,305" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M330 335L330 415" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="330,415 325,406.33974596215563 335,406.33974596215563" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M430 335L430 415" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="430,415 425,406.33974596215563 435,406.33974596215563" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M530 335L640 335L640 415" fill="none" stroke="rgba(249,115,22,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="640,415 635,406.33974596215563 645,406.33974596215563" fill="rgba(249,115,22,1)" stroke="none" />
+<path d="M250 475L700 475" fill="none" stroke="rgba(34,197,94,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="700,475 691.3397459621556,480 691.3397459621556,470" fill="rgba(34,197,94,1)" stroke="none" />
+<path d="M460 475L700 475" fill="none" stroke="rgba(34,197,94,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="700,475 691.3397459621556,480 691.3397459621556,470" fill="rgba(34,197,94,1)" stroke="none" />
+<path d="M670 475L700 475" fill="none" stroke="rgba(34,197,94,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="700,475 691.3397459621556,480 691.3397459621556,470" fill="rgba(34,197,94,1)" stroke="none" />
+<path d="M765 475L340 475L340 565" fill="none" stroke="rgba(34,197,94,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="340,565 335,556.3397459621556 345,556.3397459621556" fill="rgba(34,197,94,1)" stroke="none" />
+<path d="M250 615L300 615" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="300,615 291.33974596215563,620 291.33974596215563,610" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M450 615L450 695" fill="none" stroke="rgba(249,115,22,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="450,695 445,686.3397459621556 455,686.3397459621556" fill="rgba(249,115,22,1)" stroke="none" />
+<path d="M220 720L250 720" fill="none" stroke="rgba(219,39,119,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="250,720 241.3397459621556,725 241.3397459621556,715" fill="rgba(219,39,119,1)" stroke="none" />
+<path d="M400 720L430 720" fill="none" stroke="rgba(34,197,94,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="430,720 421.33974596215563,725 421.33974596215563,715" fill="rgba(34,197,94,1)" stroke="none" />
+<path d="M580 720L610 720" fill="none" stroke="rgba(34,197,94,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="610,720 601.3397459621556,725 601.3397459621556,715" fill="rgba(34,197,94,1)" stroke="none" />
+<path d="M610 745L220 745L220 830" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="220,830 215,821.3397459621556 225,821.3397459621556" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M610 745L140 745L140 330" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="140,330 145,338.66025403784437 135,338.66025403784437" fill="rgba(14,165,233,1)" stroke="none" />
+</svg>

@@ -62,17 +62,17 @@ Voir aussi le schéma complet dans [`docs/architecture.svg`](docs/architecture.s
 
 ### 🗺️ Vue d'ensemble du cluster
 
-![Architecture cluster](docs/diagrams/01-cluster-overview.excalidraw)
+![Architecture cluster](docs/diagrams/01-cluster-overview.svg)
 
 ### 📥 Flux d'ingestion (offline, asynchrone)
 
 L'ingestion n'est **jamais dans le chemin critique** d'une requête : chunking, embedding et indexation tournent en batch sur le CPU de M1.
 
-![Flux ingestion](docs/diagrams/02-ingestion-flow.excalidraw)
+![Flux ingestion](docs/diagrams/02-ingestion-flow.svg)
 
 ### 🔄 Flux de requête & évaluation multi-agents
 
-![Flux requête évaluation](docs/diagrams/03-query-flow.excalidraw)
+![Flux requête évaluation](docs/diagrams/03-query-flow.svg)
 
 ---
 
@@ -80,7 +80,7 @@ L'ingestion n'est **jamais dans le chemin critique** d'une requête : chunking, 
 
 ### Architecture
 
-![Backup 3-2-1](docs/diagrams/04-backup-321.excalidraw)
+![Backup 3-2-1](docs/diagrams/04-backup-321.svg)
 
 ### Règle 3-2-1
 
@@ -104,7 +104,7 @@ L'ingestion n'est **jamais dans le chemin critique** d'une requête : chunking, 
 
 ## 🌐 Topologie Réseau & Sécurité
 
-![Topologie réseau](docs/diagrams/05-network-topology.excalidraw)
+![Topologie réseau](docs/diagrams/05-network-topology.svg)
 
 ### VLAN / Sous-réseaux
 
@@ -251,7 +251,7 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 
 ### 🖥️ Topologie physique : machines, LXC & flux
 
-![Topologie physique](docs/diagrams/06-physical-topology.excalidraw)
+![Topologie physique](docs/diagrams/06-physical-topology.svg)
 
 ---
 
