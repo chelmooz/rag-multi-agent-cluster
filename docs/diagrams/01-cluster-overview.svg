@@ -1,60 +1,187 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 10 1370 910" width="1370" height="910">
-<rect x="10" y="10" width="1370" height="910" fill="#ffffff" />
-<rect x="50" y="50" width="800" height="120" fill="rgba(249,250,251,1)" stroke="rgba(229,231,235,1)" stroke-width="1"  rx="0" />
-<text x="70" y="60" font-family="Inter, sans-serif" font-size="18" fill="rgba(17,24,39,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">🎨 Légende des couleurs</tspan></text>
-<text x="70" y="90" font-family="Inter, sans-serif" font-size="12" fill="rgba(55,65,81,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">🔵 #2563eb Frontend/Client (Obsidian)    🩵 #0ea5e9 M1 Master (Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS)    🟢 #22c55e M2 GPU Worker (Reranker, Juge, Avocat, Backup Embedding)    🟠 #f97316 M3 BC-250 Baremetal (Générateur, Text-to-SQL, Vision, Fast-check)    🩷 #db2777 relay.json (NFS partagé M1↔M2)    🟡 #d97706 Backup Cold / Passerelle (Off-site, pfSense)</tspan></text>
-<text x="70" y="150" font-family="Inter, sans-serif" font-size="12" fill="rgba(107,114,128,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">Conventions:  ──▶ Flux synchrone    ┄┄▶ Asynchrone / Feedback / Backup</tspan></text>
-<rect x="50" y="220" width="280" height="100" fill="rgba(219,234,254,1)" stroke="rgba(37,99,235,1)" stroke-width="2"  rx="0" />
-<text x="190" y="270" font-family="Inter, sans-serif" font-size="14" fill="rgba(30,64,175,1)" text-anchor="middle" dominant-baseline="central"><tspan x="190" dy="0">🧠 Obsidian Vault</tspan><tspan x="190" dy="17.5">Frontend markdown local</tspan><tspan x="190" dy="17.5">HTTPS 443</tspan></text>
-<rect x="50" y="350" width="280" height="100" fill="rgba(254,243,199,1)" stroke="rgba(217,119,6,1)" stroke-width="3"  rx="0" />
-<text x="190" y="400" font-family="Inter, sans-serif" font-size="14" fill="rgba(120,53,15,1)" text-anchor="middle" dominant-baseline="central"><tspan x="190" dy="0">🛡️ pfSense GW</tspan><tspan x="190" dy="17.5">NAT · Firewall · Inter-VLAN</tspan><tspan x="190" dy="17.5">DNAT → 10.10.0.1:443</tspan></text>
-<rect x="400" y="220" width="450" height="450" fill="rgba(240,249,255,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
-<text x="420" y="230" font-family="Inter, sans-serif" font-size="13" fill="rgba(12,74,110,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="420" dy="0">🖥️ M1 — MASTER  |  2× Xeon E5-2699 v4  •  32 GB ECC  •  RX 580  •  2×10GbE + 1GbE</tspan></text>
-<rect x="420" y="270" width="190" height="70" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
-<text x="515" y="305" font-family="Inter, sans-serif" font-size="12" fill="rgba(12,74,110,1)" text-anchor="middle" dominant-baseline="central"><tspan x="515" dy="0">🎯 Orchestrateur</tspan><tspan x="515" dy="15">FastAPI · LangGraph</tspan><tspan x="515" dy="15">LXC 100</tspan></text>
-<rect x="630" y="270" width="190" height="70" fill="rgba(255,247,237,1)" stroke="rgba(234,88,12,1)" stroke-width="2"  rx="0" />
-<text x="725" y="305" font-family="Inter, sans-serif" font-size="12" fill="rgba(124,45,18,1)" text-anchor="middle" dominant-baseline="central"><tspan x="725" dy="0">💾 Qdrant VectorDB</tspan><tspan x="725" dy="15">BM25 + Vectoriel 768d</tspan><tspan x="725" dy="15">LXC 101</tspan></text>
-<rect x="420" y="360" width="190" height="70" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
-<text x="515" y="395" font-family="Inter, sans-serif" font-size="12" fill="rgba(12,74,110,1)" text-anchor="middle" dominant-baseline="central"><tspan x="515" dy="0">🔢 Embedding CPU</tspan><tspan x="515" dy="15">nomic-embed-text-v2-moe</tspan><tspan x="515" dy="15">768d · Xeon 32c/64t</tspan></text>
-<rect x="630" y="360" width="190" height="70" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
-<text x="725" y="395" font-family="Inter, sans-serif" font-size="12" fill="rgba(12,74,110,1)" text-anchor="middle" dominant-baseline="central"><tspan x="725" dy="0">✅ Évaluateur</tspan><tspan x="725" dy="15">qwen3.5:3b · CPU</tspan><tspan x="725" dy="15">Synthèse finale</tspan></text>
-<rect x="420" y="450" width="190" height="70" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
-<text x="515" y="485" font-family="Inter, sans-serif" font-size="12" fill="rgba(12,74,110,1)" text-anchor="middle" dominant-baseline="central"><tspan x="515" dy="0">📦 OMV Backup Live</tspan><tspan x="515" dy="15">500 GB virtio dédié</tspan><tspan x="515" dy="15">NFS/SMB · LXC 105</tspan></text>
-<rect x="630" y="450" width="190" height="70" fill="rgba(252,231,243,1)" stroke="rgba(219,39,119,1)" stroke-width="2"  rx="0" />
-<text x="725" y="485" font-family="Inter, sans-serif" font-size="12" fill="rgba(131,24,67,1)" text-anchor="middle" dominant-baseline="central"><tspan x="725" dy="0">📄 relay.json (NFS)</tspan><tspan x="725" dy="15">/data/shared</tspan><tspan x="725" dy="15">Évaluation séquentielle</tspan></text>
-<rect x="420" y="540" width="400" height="50" fill="rgba(254,243,199,1)" stroke="rgba(217,119,6,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
-<text x="620" y="565.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(120,53,15,1)" text-anchor="middle" dominant-baseline="central"><tspan x="620" dy="0">🌐 API Gateway (nginx LXC 102)  •  Monitoring (Prom/Grafana/Loki LXC 103)  •  pfSense optionnel (LXC 104)</tspan></text>
-<text x="940" y="230" font-family="Inter, sans-serif" font-size="13" fill="rgba(20,83,45,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="940" dy="0">🎮 M2 — GPU WORKER  |  Xeon E5-2698 v4  •  64 GB ECC  •  RTX 4000 8GB  •  10GbE + 1GbE</tspan></text>
-<rect x="940" y="270" width="190" height="70" fill="rgba(220,252,231,1)" stroke="rgba(34,197,94,1)" stroke-width="2"  rx="0" />
-<text x="1035" y="305" font-family="Inter, sans-serif" font-size="12" fill="rgba(20,83,45,1)" text-anchor="middle" dominant-baseline="central"><tspan x="1035" dy="0">📊 Reranker</tspan><tspan x="1035" dy="15">bge-reranker-v2-m3</tspan><tspan x="1035" dy="15">CUDA · LXC 200</tspan></text>
-<rect x="1150" y="270" width="190" height="70" fill="rgba(220,252,231,1)" stroke="rgba(34,197,94,1)" stroke-width="2"  rx="0" />
-<text x="1245" y="305" font-family="Inter, sans-serif" font-size="12" fill="rgba(20,83,45,1)" text-anchor="middle" dominant-baseline="central"><tspan x="1245" dy="0">⚖️ Juge ①</tspan><tspan x="1245" dy="15">qwen3.5:7b · CUDA</tspan><tspan x="1245" dy="15">Qualité + Cohérence</tspan></text>
-<rect x="940" y="360" width="190" height="70" fill="rgba(220,252,231,1)" stroke="rgba(34,197,94,1)" stroke-width="2"  rx="0" />
-<text x="1035" y="395" font-family="Inter, sans-serif" font-size="12" fill="rgba(20,83,45,1)" text-anchor="middle" dominant-baseline="central"><tspan x="1035" dy="0">😈 Avocat ②</tspan><tspan x="1035" dy="15">mistral:7b · CUDA</tspan><tspan x="1035" dy="15">Failles + Hallucinations</tspan></text>
-<rect x="1150" y="360" width="190" height="70" fill="rgba(220,252,231,1)" stroke="rgba(34,197,94,1)" stroke-width="2"  rx="0" />
-<text x="1245" y="395" font-family="Inter, sans-serif" font-size="12" fill="rgba(20,83,45,1)" text-anchor="middle" dominant-baseline="central"><tspan x="1245" dy="0">🔢 Backup Embedding</tspan><tspan x="1245" dy="15">nomic-v2-moe · CPU</tspan><tspan x="1245" dy="15">Xeon 20c/40t</tspan></text>
-<text x="1130" y="475" font-family="Inter, sans-serif" font-size="11" fill="rgba(22,101,52,1)" text-anchor="middle" dominant-baseline="central"><tspan x="1130" dy="0">⚡ Séquentiel sur RTX 4000 : 1 seul modèle chargé à la fois (unload → load ~5 GB)</tspan></text>
-<text x="420" y="710" font-family="Inter, sans-serif" font-size="13" fill="rgba(124,45,18,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="420" dy="0">⚡ M3 — BC-250 BAREMETAL  |  Zen 2 6c/12t  •  40 CU RDNA2 débloqués  •  16 GB GDDR6 unifiée  •  Vulkan-only  •  1GbE</tspan></text>
-<rect x="420" y="750" width="280" height="90" fill="rgba(254,215,170,1)" stroke="rgba(249,115,22,1)" stroke-width="2"  rx="0" />
-<text x="560" y="795" font-family="Inter, sans-serif" font-size="12" fill="rgba(124,45,18,1)" text-anchor="middle" dominant-baseline="central"><tspan x="560" dy="0">🤖 Générateur</tspan><tspan x="560" dy="15">qwen3.5:14b (Q4_K_M ~9GB)</tspan><tspan x="560" dy="15">ou 35b-a3b MoE (IQ2_M ~11GB)</tspan><tspan x="560" dy="15">Ollama Vulkan natif · CPU AU REPOS</tspan></text>
-<rect x="720" y="750" width="280" height="90" fill="rgba(254,215,170,1)" stroke="rgba(249,115,22,1)" stroke-width="2"  rx="0" />
-<text x="860" y="795" font-family="Inter, sans-serif" font-size="12" fill="rgba(124,45,18,1)" text-anchor="middle" dominant-baseline="central"><tspan x="860" dy="0">🔀 Variantes</tspan><tspan x="860" dy="15">Text-to-SQL (qwen3-coder-30b)</tspan><tspan x="860" dy="15">Vision (llava-next:13b / qwen2.5-vl)</tspan><tspan x="860" dy="15">Fast-check (granite-4.0-h-tiny)</tspan></text>
-<text x="1020" y="805" font-family="Inter, sans-serif" font-size="11" fill="rgba(124,45,18,1)" text-anchor="start" dominant-baseline="central"><tspan x="1020" dy="0">⚡ RÈGLE D'OR BC-250</tspan><tspan x="1020" dy="13.75">Le CPU est le serviteur du GPU.</tspan><tspan x="1020" dy="13.75">Toute charge CPU = vol de bande passante</tspan><tspan x="1020" dy="13.75">mémoire au Générateur 14B.</tspan><tspan x="1020" dy="13.75">Embedding = M1 CPU (principal) / M2 CPU (backup).</tspan></text>
-<rect x="920" y="620" width="420" height="60" fill="rgba(254,243,199,1)" stroke="rgba(217,119,6,1)" stroke-width="2"  rx="0" />
-<text x="1130" y="650" font-family="Inter, sans-serif" font-size="13" fill="rgba(120,53,15,1)" text-anchor="middle" dominant-baseline="central"><tspan x="1130" dy="0">🧊 COLD BACKUP  •  HDD 2 TB USB/SATA  •  LUKS  •  Dédupliqué LZ4  •  Rotation physique off-site</tspan></text>
-<path d="M180 320L180 350" fill="none" stroke="rgba(37,99,235,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="180,350 175,341.33974596215563 185,341.33974596215563" fill="rgba(37,99,235,1)" stroke="none" />
-<path d="M330 380L400 380" fill="none" stroke="rgba(37,99,235,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="400,380 391.33974596215563,385 391.33974596215563,375" fill="rgba(37,99,235,1)" stroke="none" />
-<path d="M610 305L630 305" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="630,305 621.3397459621556,310 621.3397459621556,300" fill="rgba(14,165,233,1)" stroke="none" />
-<path d="M515 360L515 270" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="515,270 520,278.66025403784437 510,278.66025403784437" fill="rgba(14,165,233,1)" stroke="none" />
-<path d="M850 305L940 305" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="940,305 931.3397459621556,310 931.3397459621556,300" fill="rgba(14,165,233,1)" stroke="none" />
-<path d="M515 305L550 305L550 750" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="550,750 545,741.3397459621556 555,741.3397459621556" fill="rgba(14,165,233,1)" stroke="none" />
-<path d="M560 840L560 770" fill="none" stroke="rgba(249,115,22,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="560,770 565,778.6602540378444 555,778.6602540378444" fill="rgba(249,115,22,1)" stroke="none" />
-<path d="M820 485L1150 485L1150 300" fill="none" stroke="rgba(219,39,119,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="1150,300 1155,308.66025403784437 1145,308.66025403784437" fill="rgba(219,39,119,1)" stroke="none" />
-<path d="M1150 340L1150 360" fill="none" stroke="rgba(34,197,94,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="1150,360 1145,351.33974596215563 1155,351.33974596215563" fill="rgba(34,197,94,1)" stroke="none" />
-<path d="M1155 430L630 430L630 370" fill="none" stroke="rgba(34,197,94,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="630,370 635,378.66025403784437 625,378.66025403784437" fill="rgba(34,197,94,1)" stroke="none" />
-<path d="M725 395L625 395L625 305" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="625,305 630,313.66025403784437 620,313.66025403784437" fill="rgba(14,165,233,1)" stroke="none" />
-<path d="M625 395L575 395L575 305" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="575,305 580,313.66025403784437 570,313.66025403784437" fill="rgba(14,165,233,1)" stroke="none" />
-<path d="M515 520L950 520L950 410" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="950,410 955,418.66025403784437 945,418.66025403784437" fill="rgba(14,165,233,1)" stroke="none" />
-<path d="M515 520L720 520L720 750" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="720,750 715,741.3397459621556 725,741.3397459621556" fill="rgba(14,165,233,1)" stroke="none" />
-<path d="M1130 620L1130 720" fill="none" stroke="rgba(217,119,6,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="1130,720 1125,711.3397459621556 1135,711.3397459621556" fill="rgba(217,119,6,1)" stroke="none" />
+<?xml version='1.0' encoding='utf-8'?>
+<svg width="1500" height="1150" viewBox="0 0 1500 1150" xmlns="http://www.w3.org/2000/svg">
+  <style>
+        .text { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; font-size: 13px; fill: #1f2937; }
+        .title { font-weight: bold; font-size: 15px; }
+        .header { font-weight: bold; font-size: 20px; fill: #111827; }
+        .rect { stroke-width: 2; }
+        .container-rect { fill: none; stroke-width: 2.5; stroke-dasharray: 6,4; }
+        .arrow { stroke: #2563eb; stroke-width: 2.5; fill: none; }
+        .arrow-async { stroke: #db2777; stroke-width: 2.5; fill: none; stroke-dasharray: 8,4; }
+        .arrow-m2 { stroke: #16a34a; stroke-width: 2.5; fill: none; stroke-dasharray: 8,4; }
+    </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb" />
+    </marker>
+    <marker id="arrowhead-async" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#db2777" />
+    </marker>
+    <marker id="arrowhead-m2" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16a34a" />
+    </marker>
+  </defs>
+  <text x="60" y="40" class="header" text-anchor="start">
+    <tspan x="60" dy="0em">🎨 Légende des couleurs</tspan>
+  </text>
+  <rect x="60" y="65" width="15" height="15" fill="#dbeafe" stroke="#9ca3af" />
+  <text x="85" y="77" class="text" text-anchor="start">
+    <tspan x="85" dy="0em">🔵 Frontend/Client (Obsidian)</tspan>
+  </text>
+  <rect x="60" y="90" width="15" height="15" fill="#e0f2fe" stroke="#9ca3af" />
+  <text x="85" y="102" class="text" text-anchor="start">
+    <tspan x="85" dy="0em">🩵 M1 Master (Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS)</tspan>
+  </text>
+  <rect x="60" y="115" width="15" height="15" fill="#dcfce7" stroke="#9ca3af" />
+  <text x="85" y="127" class="text" text-anchor="start">
+    <tspan x="85" dy="0em">🟢 M2 GPU Worker (Reranker, Juge, Avocat, Backup Embedding)</tspan>
+  </text>
+  <rect x="60" y="140" width="15" height="15" fill="#ffedd5" stroke="#9ca3af" />
+  <text x="85" y="152" class="text" text-anchor="start">
+    <tspan x="85" dy="0em">🟠 M3 BC-250 Baremetal (Générateur, Text-to-SQL, Vision, Fast-check)</tspan>
+  </text>
+  <rect x="60" y="165" width="15" height="15" fill="#fce7f3" stroke="#9ca3af" />
+  <text x="85" y="177" class="text" text-anchor="start">
+    <tspan x="85" dy="0em">🩷 relay.json (NFS partagé M1↔M2)</tspan>
+  </text>
+  <rect x="60" y="190" width="15" height="15" fill="#fef3c7" stroke="#9ca3af" />
+  <text x="85" y="202" class="text" text-anchor="start">
+    <tspan x="85" dy="0em">🟡 Backup Cold / Passerelle (Off-site, pfSense)</tspan>
+  </text>
+  <text x="860" y="77" class="title" text-anchor="start">
+    <tspan x="860" dy="0em">Conventions :</tspan>
+  </text>
+  <path d="M 960 73 L 1010 73" marker-end="url(#arrowhead)" class="arrow" />
+  <text x="1020" y="77" class="text" text-anchor="start">
+    <tspan x="1020" dy="0em">Flux synchrone</tspan>
+  </text>
+  <path d="M 1160 73 L 1210 73" marker-end="url(#arrowhead-async)" class="arrow-async" />
+  <text x="1220" y="77" class="text" text-anchor="start">
+    <tspan x="1220" dy="0em">Asynchrone / Feedback / Backup</tspan>
+  </text>
+  <rect x="60" y="250" width="240" height="100" rx="8" ry="8" fill="#dbeafe" stroke="#2563eb" class="rect" />
+  <text x="180" y="285" class="text title" text-anchor="middle" fill="#1e40af">
+    <tspan x="180" dy="0em">🧠 Obsidian Vault</tspan>
+    <tspan x="180" dy="1.3em">Frontend markdown local</tspan>
+    <tspan x="180" dy="1.3em">HTTPS 443</tspan>
+  </text>
+  <rect x="60" y="420" width="240" height="100" rx="8" ry="8" fill="#fef3c7" stroke="#d97706" class="rect" />
+  <text x="180" y="455" class="text title" text-anchor="middle" fill="#78350f">
+    <tspan x="180" dy="0em">🛡️ pfSense GW</tspan>
+    <tspan x="180" dy="1.3em">NAT · Firewall · Inter-VLAN</tspan>
+    <tspan x="180" dy="1.3em">DNAT → 10.10.0.1:443</tspan>
+  </text>
+  <rect x="380" y="220" width="520" height="450" rx="12" stroke="#0ea5e9" fill="rgba(240, 249, 255, 0.5)" class="container-rect" />
+  <text x="395" y="245" class="text title" text-anchor="start" fill="#0c4a6e">
+    <tspan x="395" dy="0em">🖥️ M1 — MASTER | 2× Xeon E5-2699 v4 • 32 GB ECC • RX 580 • 2×10GbE + 1GbE</tspan>
+  </text>
+  <rect x="410" y="280" width="210" height="90" rx="8" ry="8" fill="#e0f2fe" stroke="#0ea5e9" class="rect" />
+  <text x="515" y="310" class="text" text-anchor="middle" fill="#0c4a6e">
+    <tspan x="515" dy="0em">🎯 Orchestrateur</tspan>
+    <tspan x="515" dy="1.3em">FastAPI · LangGraph</tspan>
+    <tspan x="515" dy="1.3em">LXC 100</tspan>
+  </text>
+  <rect x="660" y="280" width="210" height="90" rx="8" ry="8" fill="#fff7ed" stroke="#ea580c" class="rect" />
+  <text x="765" y="310" class="text" text-anchor="middle" fill="#7c2d12">
+    <tspan x="765" dy="0em">💾 Qdrant VectorDB</tspan>
+    <tspan x="765" dy="1.3em">BM25 + Vectoriel 768d</tspan>
+    <tspan x="765" dy="1.3em">LXC 101</tspan>
+  </text>
+  <rect x="410" y="400" width="210" height="90" rx="8" ry="8" fill="#e0f2fe" stroke="#0ea5e9" class="rect" />
+  <text x="515" y="430" class="text" text-anchor="middle" fill="#0c4a6e">
+    <tspan x="515" dy="0em">🔢 Embedding CPU</tspan>
+    <tspan x="515" dy="1.3em">nomic-embed-text-v2-moe</tspan>
+    <tspan x="515" dy="1.3em">768d · Xeon 32c/64t</tspan>
+  </text>
+  <rect x="660" y="400" width="210" height="90" rx="8" ry="8" fill="#e0f2fe" stroke="#0ea5e9" class="rect" />
+  <text x="765" y="430" class="text" text-anchor="middle" fill="#0c4a6e">
+    <tspan x="765" dy="0em">✅ Évaluateur</tspan>
+    <tspan x="765" dy="1.3em">qwen3.5:3b · CPU</tspan>
+    <tspan x="765" dy="1.3em">Synthèse finale</tspan>
+  </text>
+  <rect x="410" y="520" width="210" height="90" rx="8" ry="8" fill="#e0f2fe" stroke="#0ea5e9" class="rect" />
+  <text x="515" y="550" class="text" text-anchor="middle" fill="#0c4a6e">
+    <tspan x="515" dy="0em">📦 OMV Backup Live</tspan>
+    <tspan x="515" dy="1.3em">500 GB virtio dédié</tspan>
+    <tspan x="515" dy="1.3em">NFS/SMB · LXC 105</tspan>
+  </text>
+  <rect x="660" y="520" width="210" height="90" rx="8" ry="8" fill="#fce7f3" stroke="#db2777" class="rect" />
+  <text x="765" y="550" class="text" text-anchor="middle" fill="#831843">
+    <tspan x="765" dy="0em">📄 relay.json (NFS)</tspan>
+    <tspan x="765" dy="1.3em">/data/shared</tspan>
+    <tspan x="765" dy="1.3em">Évaluation séquentielle</tspan>
+  </text>
+  <rect x="410" y="620" width="460" height="40" rx="5" ry="5" fill="#fef3c7" stroke="#d97706" class="rect" />
+  <text x="640" y="645" class="text" text-anchor="middle" fill="#78350f">
+    <tspan x="640" dy="0em">🌐 API Gateway (nginx LXC 102) • Monitoring (Prom/Grafana/Loki LXC 103) • pfSense optionnel (LXC 104)</tspan>
+  </text>
+  <rect x="960" y="220" width="520" height="450" rx="12" stroke="#22c55e" fill="rgba(240, 253, 244, 0.5)" class="container-rect" />
+  <text x="975" y="245" class="text title" text-anchor="start" fill="#14532d">
+    <tspan x="975" dy="0em">🎮 M2 — GPU WORKER | Xeon E5-2698 v4 • 64 GB ECC • RTX 4000 8GB • 10GbE + 1GbE</tspan>
+  </text>
+  <rect x="990" y="280" width="210" height="90" rx="8" ry="8" fill="#dcfce7" stroke="#22c55e" class="rect" />
+  <text x="1095" y="310" class="text" text-anchor="middle" fill="#14532d">
+    <tspan x="1095" dy="0em">📊 Reranker</tspan>
+    <tspan x="1095" dy="1.3em">bge-reranker-v2-m3</tspan>
+    <tspan x="1095" dy="1.3em">CUDA · LXC 200</tspan>
+  </text>
+  <rect x="1240" y="280" width="210" height="90" rx="8" ry="8" fill="#dcfce7" stroke="#22c55e" class="rect" />
+  <text x="1345" y="310" class="text" text-anchor="middle" fill="#14532d">
+    <tspan x="1345" dy="0em">⚖️ Juge ①</tspan>
+    <tspan x="1345" dy="1.3em">qwen3.5:7b · CUDA</tspan>
+    <tspan x="1345" dy="1.3em">Qualité + Cohérence</tspan>
+  </text>
+  <rect x="990" y="400" width="210" height="90" rx="8" ry="8" fill="#dcfce7" stroke="#22c55e" class="rect" />
+  <text x="1095" y="430" class="text" text-anchor="middle" fill="#14532d">
+    <tspan x="1095" dy="0em">😈 Avocat ②</tspan>
+    <tspan x="1095" dy="1.3em">mistral:7b · CUDA</tspan>
+    <tspan x="1095" dy="1.3em">Failles + Hallucinations</tspan>
+  </text>
+  <rect x="1240" y="400" width="210" height="90" rx="8" ry="8" fill="#dcfce7" stroke="#22c55e" class="rect" />
+  <text x="1345" y="430" class="text" text-anchor="middle" fill="#14532d">
+    <tspan x="1345" dy="0em">🔢 Backup Embedding</tspan>
+    <tspan x="1345" dy="1.3em">nomic-v2-moe · CPU</tspan>
+    <tspan x="1345" dy="1.3em">Xeon 20c/40t</tspan>
+  </text>
+  <text x="990" y="540" class="text" text-anchor="start" fill="#166534">
+    <tspan x="990" dy="0em">⚡ Séquentiel sur RTX 4000 : 1 seul modèle chargé à la fois</tspan>
+    <tspan x="990" dy="1.3em">(unload → load ~5 GB)</tspan>
+  </text>
+  <path d="M 180 350 L 180 420" marker-end="url(#arrowhead)" class="arrow" />
+  <path d="M 300 470 L 380 470" marker-end="url(#arrowhead)" class="arrow" />
+  <path d="M 900 320 L 960 320" marker-end="url(#arrowhead)" class="arrow" />
+  <path d="M 1095 370 L 1095 565 L 870 565" marker-end="url(#arrowhead-m2)" class="arrow-m2" />
+  <path d="M 900 550 L 960 330 L 960 300" marker-end="url(#arrowhead-async)" class="arrow-async" />
+  <rect x="1000" y="720" width="440" height="70" rx="8" ry="8" fill="#fef3c7" stroke="#d97706" class="rect" />
+  <text x="1220" y="755" class="text title" text-anchor="middle" fill="#78350f">
+    <tspan x="1220" dy="0em">🧊 COLD BACKUP • HDD 2 TB USB/SATA • LUKS</tspan>
+    <tspan x="1220" dy="1.3em">Dédupliqué LZ4 • Rotation physique off-site</tspan>
+  </text>
+  <rect x="380" y="800" width="1100" height="320" rx="12" stroke="#f97316" fill="rgba(255, 247, 237, 0.5)" class="container-rect" />
+  <text x="395" y="825" class="text title" text-anchor="start" fill="#7c2d12">
+    <tspan x="395" dy="0em">⚡ M3 — BC-250 BAREMETAL | Zen 2 6c/12t • 40 CU RDNA2 débloqués • 16 GB GDDR6 unifiée • Vulkan-only • 1GbE</tspan>
+  </text>
+  <rect x="410" y="870" width="380" height="150" rx="8" ry="8" fill="#ffedd5" stroke="#f97316" class="rect" />
+  <text x="600" y="915" class="text" text-anchor="middle" fill="#7c2d12">
+    <tspan x="600" dy="0em">🤖 Générateur</tspan>
+    <tspan x="600" dy="1.3em">qwen3.5:14b (Q4_K_M ~9GB)</tspan>
+    <tspan x="600" dy="1.3em">ou 35b-a3b MoE (IQ2_M ~11GB)</tspan>
+    <tspan x="600" dy="1.3em">Ollama Vulkan natif · CPU AU REPOS</tspan>
+  </text>
+  <rect x="820" y="870" width="320" height="150" rx="8" ry="8" fill="#ffedd5" stroke="#f97316" class="rect" />
+  <text x="980" y="915" class="text" text-anchor="middle" fill="#7c2d12">
+    <tspan x="980" dy="0em">🔀 Variantes</tspan>
+    <tspan x="980" dy="1.3em">Text-to-SQL (qwen3-coder-30b)</tspan>
+    <tspan x="980" dy="1.3em">Vision (llava-next:13b / qwen2.5-vl)</tspan>
+    <tspan x="980" dy="1.3em">Fast-check (granite-4.0-h-tiny)</tspan>
+  </text>
+  <text x="1160" y="900" class="text" text-anchor="start" fill="#7c2d12">
+    <tspan x="1160" dy="0em">⚡ RÈGLE D'OR BC-250</tspan>
+    <tspan x="1160" dy="1.3em">Le CPU est le serviteur du GPU.</tspan>
+    <tspan x="1160" dy="1.3em">Toute charge CPU = vol de bande passante</tspan>
+    <tspan x="1160" dy="1.3em">mémoire au Générateur 14B.</tspan>
+    <tspan x="1160" dy="1.3em">Embedding = M1 CPU (principal) / M2 CPU (backup).</tspan>
+  </text>
+  <path d="M 515 670 L 515 800" marker-end="url(#arrowhead)" class="arrow" />
+  <path d="M 1220 790 L 1220 800" marker-end="url(#arrowhead-async)" class="arrow-async" />
 </svg>
