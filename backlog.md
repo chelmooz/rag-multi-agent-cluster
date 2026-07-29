@@ -326,6 +326,36 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 
 **Architecture cohérente, contrainte hardware respectée, pattern d'évaluation multi-agents viable.**
 
-Le cluster tient sur 3 machines hétérogène sans compromis majeur. Le seul "hack" assumé est le relay NFS séquentiel — mais c'est un pattern standard (sidecar file) qui évite d'acheter un 2e RTX 4000.
+Le cluster tient sur 3 machines hétérogènes sans compromis majeur. Le seul "hack" assumé est le relay NFS séquentiel — mais c'est un pattern standard (sidecar file) qui évite d'acheter un 2e RTX 4000.
+
+---
+
+### 29/07/2026 — Plan Backup 3-2-1 (OMV + HDD 2TB cold) — **TRANCHÉ**
+
+**Topologie stockage** :
+| Niveau | Support | Contenu | Fréquence | Outil |
+|--------|---------|---------|-----------|-------|
+| **Prod (NVMe)** | M1: 1 TB | Proxmox, LXCs, Qdrant, Wiki, **OMV VM** | — | — |
+| | M2: 256 GB | Proxmox, LXCs, Ollama cache BC250 | — | — |
+| | BC250: 475 GB | OS Debian, Modèles (9-11 GB) | — | — |
+| **Backup Live (NVMe)** | OMV VM sur M1 (disque 500 GB dans 1 TB) | Qdrant snapshots, Wiki rsync, Configs M1/M2/BC250, Ollama models cache | Quotidien (cron) | borg/kopia pull |
+| **Tier 3 Cold (HDD)** | HDD mécanique 2 TB (USB/SATA, LUKS) | Archive dédupliquée, rétention 30j/12m/3y | Hebdo | borg push depuis OMV |
+
+**Règle 3-2-1** : 3 copies (Prod + OMV + HDD) · 2 médias (NVMe + HDD) · 1 off-site (rotation HDD)
+
+**Flux backup** :
+```
+OMV (M1) ──borg pull──► M2 (256 GB) ──rsync pull──► BC250
+    │
+    └──► HDD 2TB (borg create --compression lz4, LUKS)
+```
+
+**Actions** :
+- [ ] Ajouter disque virtio 500 GB à la config Proxmox M1 pour OMV VM
+- [ ] Déployer OMV VM (Debian + OMV) sur M1
+- [ ] Configurer borg/kopia repo sur HDD 2TB (LUKS + clé hors cluster)
+- [ ] Cron quotidien : Qdrant snapshot → OMV → borg create
+- [ ] Cron hebdo : borg push HDD 2TB + rotation physique
+- [ ] Documenter restore procedure dans `infrastructure/backup/restore.md`
 
 Prêt pour Phase 0 (squelette + config + Docker Compose).

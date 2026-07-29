@@ -230,14 +230,71 @@ Le frontend est un vault **Obsidian** standard — le cluster écrit et met à j
 | **Machine 3** | **BC250 Baremetal** (Gros modèles, variantes, embedding) | Carte minage BIOS modifiée · Puce PS5 (BC-250, Zen 2, 6c/12t) · **40 CU débloquées** | **16 GB GDDR6 unifiée** CPU+GPU · 12 GB dispo pour IA (512 MB carve-out dynamique) | Debian Testing/Sid (baremetal) |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
-**Réseau** : Machine 1 dispose de 2 ports 10 Gb/s + 1 port 1 Gb/s (carte familiale) — backbone 10 Gb/s inter-nœuds recommandé.
+**Stockage** :
+| Machine | Disque | Usage |
+|---------|--------|-------|
+| **M1 (Master)** | 1 TB NVMe | Proxmox + LXCs + Qdrant + Wiki + **OMV VM** (500 GB dédié backup live) |
+| **M2 (GPU Worker)** | 256 GB NVMe | Proxmox + LXCs + Ollama cache BC250 |
+| **BC250 (Baremetal)** | 475 GB NVMe | OS Debian + Modèles |
+| **Backup Cold** | 2 TB HDD mécanique (USB/SATA, LUKS) | Archive dédupliquée, rétention 30j/12m/3y |
+
+**Réseau** :
+- 2× 10GbE backbone cluster (M1→M2, M1→BC250 via switch)
+- 1× 1GbE WAN (pfSense VM sur M1 → Internet)
+- 1× 1GbE management/secours
+- MTU 9000 jumbo frames sur VLAN 10 cluster
+
+**Règle d'or BC250** : CPU = serviteur du GPU. Aucune charge CPU sur le BC250 pendant l'inférence Vulkan — embedding déporté sur M1/M2 CPU.
 
 **Répartition LXC prévue** :
-- Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `102` API Gateway (Nginx), `103` Monitoring (Prometheus/Grafana/Loki)
-- Machine 2 : `200` Inference GPU (passthrough RTX 4000), `201` Workers Agents (reranker, judge, advocate)
+- Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `102` API Gateway (Nginx), `103` Monitoring (Prometheus/Grafana/Loki), `105` OMV (backup)
+- Machine 2 : `200` Inference GPU (passthrough RTX 4000), `201` Workers Agents (Juge, Avocat, backup embedding)
 - Machine 3 : Ollama Vulkan natif (pas de LXC)
 
 ---
+
+## 🔐 Plan de Backup (3-2-1)
+
+### Architecture
+
+```
+PROD (NVMe)                              BACKUP LIVE (NVMe)               COLD (HDD)
+┌─────────────────┐    borg pull cron     ┌─────────────────┐   borg push   ┌─────────────┐
+│ M1: 1TB         │◄──────────────────────│ OMV VM (M1)     │──────────────►│ HDD 2TB     │
+│ Qdrant + Wiki   │                       │ 500 GB dédié    │    hebdo      │ (LUKS,      │
+│ + Configs       │                       │ snapshots Qdrant│               │  rotation)  │
+├─────────────────┤                       │ rsync Wiki      │               └─────────────┘
+│ M2: 256GB       │───borg pull ssh──────►│ backup M2       │
+│ Ollama cache    │                       │ backup BC250    │
+├─────────────────┤                       │ configs OMV     │
+│ BC250: 475GB    │───rsync pull ssh─────►│                 │
+│ OS + Models     │                       └─────────────────┘
+└─────────────────┘
+```
+
+### Règle 3-2-1
+- **3 copies** : Prod + OMV Live + HDD Cold
+- **2 médias** : NVMe + HDD mécanique
+- **1 off-site** : Rotation physique HDD 2TB
+
+### Outils
+| Outil | Usage |
+|-------|-------|
+| **borg** | Sauvegarde dédupliquée, chiffrée, compression LZ4 |
+| **rsync** | Sync configs Ollama, wiki, scripts |
+| **qdrant snapshot** | Backup atomique VectorDB (cron quotidien) |
+| **LUKS** | Chiffrement HDD (clés hors cluster) |
+| **OMV (OpenMediaVault)** | Interface NFS/SMB, scheduling cron |
+
+### Rétention
+- Quotidien : 7 jours
+- Hebdo : 4 semaines
+- Mensuel : 12 mois
+- Annuel : 3 ans
+
+---
+
+
 
 ## 🛠️ Stack Technique
 
