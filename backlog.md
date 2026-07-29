@@ -23,9 +23,9 @@
 
 ## Phase 3 — Génération + Évaluation Multi-Agents
 - [ ] 3.1 Generator (qwen3.5:14b Q4_K_M ou qwen3.5-35b-a3b IQ2_M sur BC250 Vulkan)
-- [ ] 3.2 Judge (qwen3.5:7b Q4_K_M sur RTX 4000 - Machine 2 LXC 200)
-- [ ] 3.3 Devil's Advocate (mistral-small-3.2:7b Q4_K_M sur RTX 4000 - Machine 2 LXC 201)
-- [ ] 3.4 Evaluator (qwen3.5:3b / granite-3.2:2b Q4_K_M sur Machine 1 CPU)
+- [ ] 3.2 Judge (qwen3.5:7b Q4_K_M sur RTX 4000 - Machine 2 LXC 200) — **séquentiel, unload après écriture relay**
+- [ ] 3.3 Devil's Advocate (mistral-small-3.2:7b Q4_K_M sur RTX 4000 - Machine 2 LXC 201) — **séquentiel après Judge, lit relay**
+- [ ] 3.4 Evaluator (qwen3.5:3b / granite-3.2:2b Q4_K_M sur Machine 1 CPU) — **lit relay.json complet, synthèse finale**
 
 ## Phase 4 — Wiki Persistant (Pattern Karpathy)
 - [ ] 4.1 WikiTools (read/write/append/index/log via vault Obsidian)
@@ -54,9 +54,19 @@
 
 | Nœud | Rôle | CPU / RAM | GPU / Accélérateur | Virtualisation |
 | :--- | :--- | :--- | :--- | :--- |
-| **Machine 1** | **Master** (Orchestration, API, VectorDB, Monitoring, Evaluator) | 2× Xeon E5-2699 v4 / **32 GB ECC** | **AMD Radeon RX 580** (8 GB) | Proxmox VE 9.3 (LXC 100, 101, 102, 103) |
-| **Machine 2** | **GPU Worker** (Reranker, Judge, Avocat, Embedding batch CPU) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM) | Proxmox VE 9.3 (LXC 200 privilégié GPU, 201) |
+| **Machine 1** | **Master** (Orchestration, API, VectorDB, Monitoring, Evaluator, Embedding CPU, **Relay NFS**) | 2× Xeon E5-2699 v4 / **32 GB ECC** | **AMD Radeon RX 580** (8 GB) | Proxmox VE 9.3 (LXC 100, 101, 102, 103) |
+| **Machine 2** | **GPU Worker** (Reranker, Judge, Avocat, Backup Embedding CPU) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM) | Proxmox VE 9.3 (LXC 200 privilégié GPU, 201) |
 | **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Granite fast-check) | Zen 2 6c/12t / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU unlocked) | Debian Testing/Sid baremetal (Ollama Vulkan natif) |
+| **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
+
+**Réseau** : Machine 1 dispose de 2 ports 10 Gb/s + 1 port 1 Gb/s (carte familiale) — backbone 10 Gb/s inter-nœuds recommandé.
+
+**NFS Relay** : Machine 1 exporte `/data/shared` → monté sur Machine 2 `/data/shared` (fichier `evaluation-relay.json` partagé pour pipeline Juge→Avocat→Evaluateur).
+
+**Répartition LXC prévue** :
+- Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `102` API Gateway (Nginx), `103` Monitoring (Prometheus/Grafana/Loki)
+- Machine 2 : `200` Inference GPU (passthrough RTX 4000), `201` Workers Agents (Juge, Avocat, backup embedding)
+- Machine 3 : Ollama Vulkan natif (pas de LXC)
 
 ## Modèles Recommandés par Machine (29/07/2026 - validé échange)
 
@@ -158,3 +168,75 @@ Le Master LXC 100 a **2 × Xeon 2699** (16c/32t chacun, 32GB ECC) contre 6c/12t 
 - [ ] Phase 3.2/3.3 : préciser Judge sur LXC 200, Avocat sur LXC 201 (même RTX 4000, VRAM partagée 2×5GB OK)
 - [ ] Phase 5.1 : préciser qwen3-coder-30b-a3b IQ2_M sur BC250
 - [ ] Phase 5.2 : déplacer Vision sur BC250 (pas RTX 4000)
+
+---
+
+### 29/07/2026 — Pipeline Séquentiel Juge → Avocat sur Machine 2 (RTX 4000 8GB) — **TRANCHÉ**
+
+**Problème** : Judge (qwen3.5:7b ~5GB) + Avocat (mistral-small-3.2:7b ~5GB) = **~10GB VRAM** > **8GB RTX 4000**. Impossible de les faire tourner en parallèle.
+
+**Solution** : Exécution **séquentielle** sur le même GPU (LXC 200/201 partagé) avec **unload explicite** du modèle précédent avant chargement du suivant.
+
+**Flux** :
+```
+Generator (BC250 M3) → réponse écrite dans relay.json
+  ↓
+Juge (M2 RTX 4000) → charge qwen3.5:7b → évalue → écrit relay.json → **unload modèle**
+  ↓
+Avocat (M2 RTX 4000) → charge mistral-3.2:7b → lit relay + réponse → évalue → écrit relay → **unload**
+  ↓
+Évaluateur (M1 CPU) → lit relay complet → synthèse → réponse utilisateur
+```
+
+**Mécanisme de relais (relay.json)** :
+Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Machine 1 et Machine 2), écrasé à chaque session :
+
+```json
+{
+  "session_id": "uuid",
+  "query": "...",
+  "response": "...",
+  "context": [...],
+  "judge": {
+    "status": "done",
+    "score": 0.85,
+    "critique": "...",
+    "timestamp": "2026-07-29T..."
+  },
+  "avocat": {
+    "status": "done",
+    "score": 0.65,
+    "faille": "...",
+    "timestamp": "2026-07-29T..."
+  }
+}
+```
+
+**Points techniques** :
+- **NFS mount** Machine 1 (`/data/shared`) ↔ Machine 2 (`/data/shared`) — unique source de vérité
+- **Watch fichier (inotify)** sur M2 pour déclencher auto : Juge terminé → lance Avocat
+- **Timeout** : si Juge > 120s sans écrire → Avocat prend la main avec `judge.status: "timeout"`
+- **Archivage** : relay.json copié dans `log.md` du wiki après synthèse Evaluateur (pattern Karpathy compounding)
+
+**Actions** :
+- [ ] Ajouter NFS export sur Machine 1 `/data/shared` + mount sur Machine 2
+- [ ] Créer `services/relay.py` : client relay (read/write JSON atomique, file locking)
+- [ ] Modifier Phase 3.2/3.3 : séquentiel explicite + unload entre modèles
+- [ ] Modifier Orchestrator (Phase 2.1) : attendre relay complet avant passer à Evaluateur
+- [ ] Ajouter `RELAY_PATH=/data/shared/evaluation-relay.json` dans `settings.py`
+- [ ] Phase 3.4 : Evaluateur lit relay, pas appel HTTP direct
+
+---
+
+### 29/07/2026 — Règle d'or BC250 confirmée : CPU = serviteur du GPU — **TRANCHÉ**
+
+**Documentation communautaire** :
+- [AMD BC250 Docs](https://elektricm.github.io/amd-bc250-docs/) — Unified Memory Architecture, Vulkan-only, 40 CU unlock
+- [akandr/bc250](https://github.com/akandr/bc250) — Ollama + Vulkan benchmarks, GFX1013 specifics, roofline analysis
+
+**Preuve** : Le BC250 a 16GB GDDR6 **unifiée** (CPU+GPU même pool, même bande passante). Toute charge CPU (embedding, batch, compilation) :
+1. Vole de la bande passante mémoire au GPU Vulkan
+2. Crée de la contention thermique (235W TDP max dans format compact)
+3. Réduit la VRAM effective disponible pour le Generator 14B
+
+→ **CPU BC250 (Zen 2 6c/12t) DOIT RESTER AU REPOS** pendant l'inférence GPU. Embedding = Machine 1 CPU (principal) / Machine 2 CPU (backup).
