@@ -51,12 +51,12 @@ Voir aussi le schéma complet dans [`docs/architecture.svg`](docs/architecture.s
 
 | Couleur | Rôle | Machine |
 |---|---|---|
-| 🔵 `#2563eb` | Frontend / Entrées-Sorties | Client (Obsidian) |
-| 🩵 `#0ea5e9` | Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS | **M1** Master |
-| 🟢 `#22c55e` | Reranker, Juge, Avocat, Backup Embedding CPU | **M2** GPU Worker |
-| 🟠 `#f97316` | Générateur, Text-to-SQL, Vision, Fast-check | **M3** BC-250 Baremetal |
-| 🩷 `#db2777` | `relay.json` (NFS partagé M1↔M2) | Évaluation séquentielle |
-| 🟡 `#d97706` | Backup Cold / Passerelle | Off-site, pfSense |
+| 🔵 | Frontend / Entrées-Sorties | Client (Obsidian) |
+| 🩵 | Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS | **M1** Master |
+| 🟢 | Reranker, Juge, Avocat, Backup Embedding CPU | **M2** GPU Worker |
+| 🟠 | Générateur, Text-to-SQL, Vision, Fast-check | **M3** BC-250 Baremetal |
+| 🩷 | `relay.json` (NFS partagé M1↔M2) | Évaluation séquentielle |
+| 🟡 | Backup Cold / Passerelle | Off-site, pfSense |
 
 **Conventions de flèches** : `──▶` flux synchrone · `┄┄▶` asynchrone, feedback ou backup.
 
