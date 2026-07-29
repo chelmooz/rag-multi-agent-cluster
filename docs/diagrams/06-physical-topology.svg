@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" width="1400" height="900">
 <rect width="1400" height="900" fill="#ffffff"/>
 
-<Title>
 <rect x="30" y="15" width="1200" height="45" fill="rgba(249,250,251,1)" stroke="rgba(229,231,235,1)" stroke-width="1" rx="4"/>
 <text x="50" y="40" font-family="Inter, sans-serif" font-size="15" fill="rgba(17,24,39,1)" font-weight="600" dominant-baseline="central">Topologie physique - Machines . LXC/VM . pfSense . Flux backbone 10G . NFS Relay . Backup Cold</text>
 
