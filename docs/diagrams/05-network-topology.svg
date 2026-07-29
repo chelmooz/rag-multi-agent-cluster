@@ -1,129 +1,52 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 940" width="1180" height="940">
-<rect x="0" y="0" width="1180" height="940" fill="#ffffff" />
-
-<!-- Titre -->
-<rect x="20" y="20" width="900" height="60" fill="rgba(249,250,251,1)" stroke="rgba(229,231,235,1)" stroke-width="1" rx="0" />
-<text x="40" y="50" font-family="Inter, sans-serif" font-size="16" fill="rgba(17,24,39,1)" text-anchor="start" dominant-baseline="central"><tspan x="40" dy="0">RESEAU — Topologie Réseau &amp; Sécurité — Cluster RAG Multi-Agents 100% Offline</tspan></text>
-
-<!-- ===== ROW 1 : pfSense + WAN (y=100..240) ===== -->
-
-<!-- Internet -->
-<rect x="20" y="100" width="200" height="100" fill="rgba(241,245,249,1)" stroke="rgba(100,116,139,1)" stroke-width="2" rx="0" />
-<text x="120" y="150" font-family="Inter, sans-serif" font-size="14" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="120" dy="0">🌐 WAN / Internet</tspan><tspan x="120" dy="17.5">VLAN 20</tspan><tspan x="120" dy="17.5">Updates · Pull modèles</tspan></text>
-
-<!-- pfSense -->
-<rect x="330" y="100" width="300" height="100" fill="rgba(254,243,199,1)" stroke="rgba(217,119,6,1)" stroke-width="3" rx="0" />
-<text x="480" y="150" font-family="Inter, sans-serif" font-size="12" fill="rgba(120,53,15,1)" text-anchor="middle" dominant-baseline="central"><tspan x="480" dy="0">🛡️ pfSense GW</tspan><tspan x="480" dy="15">M1 LXC 104 ou appliance dédiée</tspan><tspan x="480" dy="15">NAT + Firewall + Inter-VLAN</tspan><tspan x="480" dy="15">192.168.1.1 / 10.10.0.254</tspan></text>
-
-<!-- Flèche Internet → pfSense (NAT) -->
-<path d="M220 150L330 150" fill="none" stroke="rgba(217,119,6,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="330,150 324,145 324,155" fill="rgba(217,119,6,1)" stroke="none" />
-<text x="250" y="135" font-family="Inter, sans-serif" font-size="10" fill="rgba(120,53,15,1)" text-anchor="middle">Internet</text>
-
-<!-- Client Obsidian (VLAN 40) -->
-<rect x="740" y="100" width="420" height="100" fill="rgba(219,234,254,1)" stroke="rgba(37,99,235,1)" stroke-width="2" rx="0" />
-<text x="760" y="130" font-family="Inter, sans-serif" font-size="14" fill="rgba(30,64,175,1)" text-anchor="start" dominant-baseline="central"><tspan x="760" dy="0">🧠 CLIENT — VLAN 40 · 192.168.10.0/24</tspan></text>
-<text x="760" y="170" font-family="Inter, sans-serif" font-size="11" fill="rgba(30,64,175,1)" text-anchor="start" dominant-baseline="central"><tspan x="760" dy="0">📝 Obsidian Vault · Web Clipper · Graph View · TCP 443 → pfSense DNAT → LXC 102 (nginx TLS)</tspan></text>
-
-<!-- Admin / Mgmt (VLAN 30) -->
-<rect x="20" y="240" width="200" height="120" fill="rgba(241,245,249,1)" stroke="rgba(107,114,128,1)" stroke-width="2" rx="0" />
-<text x="120" y="300" font-family="Inter, sans-serif" font-size="14" fill="rgba(55,65,81,1)" text-anchor="middle" dominant-baseline="central"><tspan x="120" dy="0">🖥️ Admin / IPMI</tspan><tspan x="120" dy="17.5">VLAN 30 172.16.0.0/24</tspan><tspan x="120" dy="17.5">SSH/HTTPS isolé M1,M2,M3</tspan></text>
-
-<!-- ===== ROW 2 : M1 & M2 (VLAN 10 Cluster) ===== -->
-
-<!-- M1 Master -->
-<rect x="20" y="340" width="560" height="310" fill="rgba(240,249,255,1)" stroke="rgba(14,165,233,1)" stroke-width="2" rx="0" />
-<text x="40" y="345" font-family="Inter, sans-serif" font-size="14" fill="rgba(12,74,110,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="40" dy="0">🖥️ M1 — MASTER · 10.10.0.1  •  VLAN 10 · Backbone 10G · MTU 9000</tspan></text>
-<text x="40" y="365" font-family="Inter, sans-serif" font-size="11" fill="rgba(71,85,105,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="40" dy="0">2× Xeon E5-2699 v4 · 32 GB ECC · RX 580 (fallback) · 2×10GbE + 1GbE mgmt</tspan></text>
-
-<!-- LXC sub-blocks M1 -->
-<rect x="40" y="390" width="170" height="65" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
-<text x="125" y="412" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="125" dy="0">🎯 LXC 100</tspan><tspan x="125" dy="13.75">Orchestrator + Wiki</tspan><tspan x="125" dy="13.75">(LangGraph + FastAPI)</tspan></text>
-
-<rect x="250" y="385" width="150" height="50" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
-<text x="325" y="408" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="325" dy="0">💾 LXC 101</tspan><tspan x="325" dy="13.75">Qdrant DB · 6333</tspan><tspan x="325" dy="13.75">BM25 + Vecteur 768d</tspan></text>
-
-<rect x="410" y="385" width="150" height="50" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
-<text x="485" y="408" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="485" dy="0">🌐 LXC 102</tspan><tspan x="485" dy="13.75">API Gateway</tspan><tspan x="485" dy="13.75">nginx + TLS 443</tspan></text>
-
-<rect x="40" y="450" width="200" height="50" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
-<text x="140" y="468" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="140" dy="0">📊 LXC 103</tspan><tspan x="140" dy="13.75">Monitoring</tspan><tspan x="140" dy="13.75">Prom + Grafana + Loki</tspan></text>
-
-<rect x="250" y="450" width="150" height="50" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
-<text x="325" y="468" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="325" dy="0">💾 LXC 105</tspan><tspan x="325" dy="13.75">OMV Backup Live</tspan><tspan x="325" dy="13.75">500 GB virtio NFS/SMB</tspan></text>
-
-<rect x="410" y="450" width="150" height="50" fill="rgba(254,243,199,1)" stroke="rgba(217,119,6,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
-<text x="485" y="468" font-family="Inter, sans-serif" font-size="11" fill="rgba(120,53,15,1)" text-anchor="middle" dominant-baseline="central"><tspan x="485" dy="0">🛡️ LXC 104</tspan><tspan x="485" dy="13.75">pfSense VM</tspan><tspan x="485" dy="13.75">(option)</tspan></text>
-
-<!-- NFS + relay.json ligne M1 -->
-<text x="40" y="530" font-family="Inter, sans-serif" font-size="11" fill="rgba(12,74,110,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="40" dy="0">📄 Export NFS /data/shared · relay.json (TTL 300s) — Évaluation séquentielle</tspan></text>
-
-<!-- M2 GPU Worker -->
-<rect x="610" y="340" width="550" height="310" fill="rgba(240,253,244,1)" stroke="rgba(34,197,94,1)" stroke-width="2" rx="0" />
-<text x="630" y="345" font-family="Inter, sans-serif" font-size="14" fill="rgba(20,83,45,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="630" dy="0">🎮 M2 — GPU WORKER · 10.10.0.2  •  Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8 GB · 10GbE</tspan></text>
-
-<rect x="630" y="395" width="240" height="65" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
-<text x="750" y="418" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="750" dy="0">⚡ LXC 200 (GPU passthrough)</tspan><tspan x="750" dy="13.75">Reranker bge-v2-m3 · Juge qwen3.5:7b</tspan><tspan x="750" dy="13.75">CUDA · Ollama 11434</tspan></text>
-
-<rect x="880" y="395" width="260" height="65" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
-<text x="1010" y="418" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="1010" dy="0">🤖 LXC 201 Workers Agents</tspan><tspan x="1010" dy="13.75">Avocat mistral:7b</tspan><tspan x="1010" dy="13.75">+ Backup Embedding CPU</tspan></text>
-
-<text x="630" y="510" font-family="Inter, sans-serif" font-size="11" fill="rgba(20,83,45,1)" text-anchor="start" dominant-baseline="central"><tspan x="630" dy="0">Mount NFS 10.10.0.1:/data/shared · relay.json fcntl · _netdev</tspan></text>
-
-<!-- ===== ROW 3 : M3 + Backup Cold ===== -->
-
-<rect x="20" y="670" width="600" height="240" fill="rgba(255,247,237,1)" stroke="rgba(249,115,22,1)" stroke-width="2" rx="0" />
-<text x="40" y="675" font-family="Inter, sans-serif" font-size="14" fill="rgba(124,45,18,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="40" dy="0">⚡ M3 — BC-250 BAREMETAL · 10.10.0.3  •  Zen 2 6c/12t · 40 CU débloqués · 16 GB GDDR6 unifiée · Vulkan-only · 1GbE</tspan></text>
-
-<rect x="40" y="710" width="555" height="170" fill="rgba(254,215,170,1)" stroke="rgba(249,115,22,1)" stroke-width="2" rx="0" />
-<text x="50" y="780" font-family="Inter, sans-serif" font-size="11" fill="rgba(124,45,18,1)" text-anchor="start" dominant-baseline="central"><tspan x="50" dy="0">🤖 Ollama Vulkan natif · OLLAMA_VULKAN=1 · port 11434 · Pas de LXC / Pas de Proxmox · BIOS P3.00+</tspan><tspan x="50" dy="13.75">Générateur qwen3.5:14b/35b MoE  •  Text-to-SQL qwen3-coder-30b  •  Vision llava-next:13b  •  Fast-check granite-4.0-h-tiny</tspan><tspan x="50" dy="13.75">VRAM dynamique 512 MB carve-out · CPU AU REPOS pendant inférence · +14t via 10.10.0.1 (Qdrant 6333 / Ollama 11434)</tspan></text>
-
-<!-- Cold Backup + Legend -->
-<rect x="630" y="670" width="530" height="240" fill="rgba(254,243,199,1)" stroke="rgba(217,119,6,1)" stroke-width="2" rx="0" />
-<text x="650" y="690" font-family="Inter, sans-serif" font-size="14" fill="rgba(120,53,15,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="650" dy="0">🧊 COLD BACKUP — Off-site · HDD 2 TB (LUKS, USB/SATA)</tspan></text>
-
-<rect x="650" y="730" width="490" height="70" fill="rgba(249,250,251,1)" stroke="rgba(148,163,184,1)" stroke-width="1" rx="0" />
-<text x="670" y="765" font-family="Inter, sans-serif" font-size="11" fill="rgba(120,53,15,1)" text-anchor="start" dominant-baseline="central"><tspan x="670" dy="0">💾 borg (dédup, LZ4, chiffré) · rsync config + wiki · qdrant snapshot (cron quotidien depuis OMV LXC 105)</tspan><tspan x="670" dy="15">Rotation physique off-site — rétention 30j / 12m / 3y</tspan></text>
-
-<!-- Legend -->
-<rect x="650" y="820" width="490" height="70" fill="rgba(249,250,251,1)" stroke="rgba(229,231,235,1)" stroke-width="1" rx="0" />
-<text x="660" y="845" font-family="Inter, sans-serif" font-size="11" fill="rgba(55,65,81,1)" text-anchor="start"><tspan x="660" dy="0">🔵 VLAN 40 Client · 🩵 M1 Cluster · 🟢 M2 GPU · 🟠 M3 BC-250 · 🩷 NFS relay.json · 🟡 Backup/pfSense</tspan></text>
-
-<!-- ===== FLÈCHES (toutes en dehors des boîtes, gouttières gauche/droite) ===== -->
-
-<!-- Client → pfSense (routé par la droite via gouttière haute) -->
-<path d="M950 160L680 160L680 120L630 120" fill="none" stroke="rgba(37,99,235,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="630,120 637,116 637,124" fill="rgba(37,99,235,1)" stroke="none" />
-<text x="800" y="152" font-family="Inter, sans-serif" font-size="10" fill="rgba(30,64,175,1)" text-anchor="start">TCP 80/443 (HTTPS + Obsidian Clipper)</text>
-
-<!-- Client → pfSense NAT vers OUT -->
-<path d="M740,120L630,120L630,150" fill="none" stroke="rgba(37,99,235,1)" stroke-width="2" stroke-dasharray="4 2" stroke-linejoin="round" stroke-linecap="round" /><polygon points="630,150 626,143 634,143" fill="rgba(37,99,235,1)" stroke="none" />
-<text x="660" y="115" font-family="Inter, sans-serif" font-size="9" fill="rgba(30,64,175,1)">NAT DNAT 80/443/11434</text>
-
-<!-- Admin ↔ pfSense -->
-<path d="M120,180 L120,130 L330,130" fill="none" stroke="rgba(107,114,128,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="330,130 322,126 322,134" fill="rgba(107,114,128,1)" stroke="none" />
-<text x="150" y="125" font-family="Inter, sans-serif" font-size="10" fill="rgba(55,65,81,1)">HTTPS/SSH (Mgmt)</text>
-
-<!-- Qdrant M1 LXC 101 → M2 (gouttière droite de M1) -->
-<path d="M165,420 L200,420 L200,440" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="200,440 196,432 204,432" fill="rgba(14,165,233,1)" stroke="none" />
-<text x="165" y="415" font-family="Inter, sans-serif" font-size="9" fill="rgba(12,74,110,1)">Qdrant 6333 ↔ M2</text>
-
-<path d="M200,440 L200,500 L220,500 L220,740 L250,740 L250,500 L560,500 L560,420 L610,420" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="610,420 604,414 604,426" fill="rgba(14,165,233,1)" stroke="none" />
-
-<!-- NFS relay M1 ↔ M2 -->
-<path d="M220,540 L260,540 L260,520 L610,520 L610,540" fill="none" stroke="rgba(219,39,119,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="610,540 604,536 604,544" fill="rgba(219,39,119,1)" stroke="none" />
-<text x="400" y="530" font-family="Inter, sans-serif" font-size="10" fill="rgba(219,39,119,1)" text-anchor="middle">NFS TCP 2049 · relay.json M1↔M2</text>
-
-<!-- M1 → M3 (Ollama / Qdrant API) -->
-<path d="M200,550 L200,670" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="200,670 196,662 204,662" fill="rgba(14,165,233,1)" stroke="none" />
-<text x="180" y="610" font-family="Inter, sans-serif" font-size="10" fill="rgba(12,74,110,1)">Qdrant 6333 · Ollama 11434</text>
-
-<!-- M2 → M3 (backup) -->
-<path d="M160,720 L160,80 L170,80 L170,720" fill="none" stroke="rgba(249,115,22,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="170,720 174,722 166,722" fill="rgba(249,115,22,1)" stroke="none" />
-<text x="200" y="600" font-family="Inter, sans-serif" font-size="10" fill="rgba(124,45,18,1)">Qdrant 6333 / Ollama 11434 ←</text>
-
-<!-- M3 → Backup Cold -->
-<path d="M640,780 L1100,780 L1100,110 L400,150" fill="none" stroke="rgba(217,119,6,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="400,150 392,146 392,154" fill="rgba(217,119,6,1)" stroke="none" />
-<text x="800" y="770" font-family="Inter, sans-serif" font-size="10" fill="rgba(120,53,15,1)">borg push/rsync depuis OMV (cron hebdo)</text>
-
-<!-- ===== Conventions flèches ===== -->
-<text x="20" y="920" font-family="Inter, sans-serif" font-size="11" fill="rgba(107,114,128,1)" text-anchor="start"><tspan x="20" dy="0" tspan from="120" text-anchor="middle">──▶ synchrone (API DD / NFS)　┄┄▶ asynchrone/feedback (backup / relay) </tspan></text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 10 1230 840" width="1230" height="840">
+<rect x="10" y="10" width="1230" height="840" fill="#ffffff" />
+<rect x="50" y="50" width="800" height="60" fill="rgba(249,250,251,1)" stroke="rgba(229,231,235,1)" stroke-width="1"  rx="0" />
+<text x="70" y="80" font-family="Inter, sans-serif" font-size="16" fill="rgba(17,24,39,1)" text-anchor="start" dominant-baseline="central"><tspan x="70" dy="0">🖥️ Topologie physique — Machines · LXC/VM · pfSense · Flux backbone 10G · NFS Relay · Backup Cold</tspan></text>
+<rect x="50" y="150" width="280" height="80" fill="rgba(241,245,249,1)" stroke="rgba(100,116,139,1)" stroke-width="2"  rx="0" />
+<text x="190" y="190" font-family="Inter, sans-serif" font-size="14" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="190" dy="0">🌐 WAN / Internet</tspan><tspan x="190" dy="17.5">VLAN 20 · 192.168.1.0/24</tspan><tspan x="190" dy="17.5">Updates · Pull modèles</tspan></text>
+<rect x="400" y="150" width="300" height="100" fill="rgba(254,243,199,1)" stroke="rgba(217,119,6,1)" stroke-width="3"  rx="0" />
+<text x="550" y="200" font-family="Inter, sans-serif" font-size="12" fill="rgba(120,53,15,1)" text-anchor="middle" dominant-baseline="central"><tspan x="550" dy="0">🛡️ pfSense GW</tspan><tspan x="550" dy="15">VM M1 LXC 104 ou appliance dédiée</tspan><tspan x="550" dy="15">NAT + Firewall + Inter-VLAN</tspan><tspan x="550" dy="15">192.168.1.1 / 10.10.0.254</tspan></text>
+<rect x="50" y="300" width="650" height="320" fill="rgba(240,249,255,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
+<text x="70" y="305" font-family="Inter, sans-serif" font-size="14" fill="rgba(12,74,110,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">🖥️ M1 — MASTER  •  2× Xeon E5-2699 v4  •  32 GB ECC  •  2×10GbE + 1GbE mgmt</tspan></text>
+<rect x="90" y="345" width="200" height="70" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
+<text x="190" y="379.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="190" dy="0">🎯 LXC 100</tspan><tspan x="190" dy="13.75">Orchestrator + Wiki Agent</tspan><tspan x="190" dy="13.75">LangGraph + FastAPI</tspan></text>
+<rect x="320" y="345" width="200" height="70" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
+<text x="420" y="379.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="420" dy="0">💾 LXC 101</tspan><tspan x="420" dy="13.75">Qdrant VectorDB</tspan><tspan x="420" dy="13.75">BM25 + Vectoriel 768d</tspan></text>
+<rect x="550" y="345" width="120" height="70" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
+<text x="610" y="379.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="610" dy="0">🌐 LXC 102</tspan><tspan x="610" dy="13.75">API Gateway</tspan><tspan x="610" dy="13.75">nginx + TLS</tspan></text>
+<rect x="90" y="430" width="200" height="70" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
+<text x="190" y="464.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="190" dy="0">📊 LXC 103</tspan><tspan x="190" dy="13.75">Monitoring</tspan><tspan x="190" dy="13.75">Prometheus + Grafana + Loki</tspan></text>
+<rect x="320" y="430" width="200" height="70" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
+<text x="420" y="464.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="420" dy="0">💾 LXC 105</tspan><tspan x="420" dy="13.75">OMV Backup Live</tspan><tspan x="420" dy="13.75">500 GB virtio · NFS/SMB</tspan></text>
+<rect x="550" y="430" width="120" height="70" fill="rgba(254,243,199,1)" stroke="rgba(217,119,6,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
+<text x="610" y="464.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(120,53,15,1)" text-anchor="middle" dominant-baseline="central"><tspan x="610" dy="0">🛡️ LXC 104</tspan><tspan x="610" dy="13.75">pfSense VM</tspan><tspan x="610" dy="13.75">(option)</tspan></text>
+<rect x="750" y="300" width="450" height="260" fill="rgba(240,253,244,1)" stroke="rgba(34,197,94,1)" stroke-width="2"  rx="0" />
+<text x="770" y="305" font-family="Inter, sans-serif" font-size="14" fill="rgba(20,83,45,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="770" dy="0">🎮 M2 — GPU WORKER  •  Xeon E5-2698 v4  •  64 GB ECC  •  RTX 4000 8GB  •  10GbE + 1GbE mgmt</tspan></text>
+<rect x="790" y="345" width="200" height="70" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
+<text x="890" y="379.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="890" dy="0">⚡ LXC 200 (GPU passthrough)</tspan><tspan x="890" dy="13.75">Reranker bge-v2-m3 + Juge qwen3.5:7b</tspan><tspan x="890" dy="13.75">CUDA · RTX 4000</tspan></text>
+<rect x="1020" y="345" width="150" height="70" fill="rgba(248,250,252,1)" stroke="rgba(148,163,184,1)" stroke-width="1" stroke-dasharray="4 2" rx="0" />
+<text x="1095" y="379.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(51,65,85,1)" text-anchor="middle" dominant-baseline="central"><tspan x="1095" dy="0">🤖 LXC 201</tspan><tspan x="1095" dy="13.75">Avocat mistral:7b</tspan><tspan x="1095" dy="13.75">+ Backup Embedding CPU</tspan></text>
+<rect x="50" y="650" width="1150" height="160" fill="rgba(255,247,237,1)" stroke="rgba(249,115,22,1)" stroke-width="2"  rx="0" />
+<text x="70" y="655" font-family="Inter, sans-serif" font-size="14" fill="rgba(124,45,18,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">⚡ M3 — BC-250 BAREMETAL  •  Zen 2 6c/12t  •  40 CU RDNA2 débloqués  •  16 GB GDDR6 unifiée  •  Vulkan-only  •  1GbE</tspan></text>
+<rect x="70" y="695" width="500" height="90" fill="rgba(254,215,170,1)" stroke="rgba(249,115,22,1)" stroke-width="2"  rx="0" />
+<text x="75" y="739.5" font-family="Inter, sans-serif" font-size="11" fill="rgba(124,45,18,1)" text-anchor="start" dominant-baseline="central"><tspan x="75" dy="0">🤖 Ollama Vulkan natif</tspan><tspan x="75" dy="13.75">Générateur qwen3.5:14b/35b MoE  •  Text-to-SQL (qwen3-coder-30b)  •  Vision (llava-next:13b)  •  Fast-check (granite-4.0-h-tiny)</tspan><tspan x="75" dy="13.75">Pas de LXC / Pas de Proxmox  •  BIOS P3.00+ patché  •  VRAM dynamique 512 MB  •  CPU AU REPOS pendant inférence</tspan></text>
+<rect x="650" y="695" width="520" height="90" fill="rgba(254,243,199,1)" stroke="rgba(217,119,6,1)" stroke-width="2"  rx="0" />
+<text x="910" y="739.5" font-family="Inter, sans-serif" font-size="12" fill="rgba(120,53,15,1)" text-anchor="middle" dominant-baseline="central"><tspan x="910" dy="0">🧊 COLD BACKUP</tspan><tspan x="910" dy="15">HDD 2 TB USB/SATA · LUKS · Dédupliqué LZ4</tspan><tspan x="910" dy="15">Rotation physique off-site</tspan><tspan x="910" dy="15">Borg push hebdo depuis OMV (M1 LXC 105)</tspan></text>
+<rect x="750" y="150" width="450" height="100" fill="rgba(219,234,254,1)" stroke="rgba(37,99,235,1)" stroke-width="2"  rx="0" />
+<text x="770" y="155" font-family="Inter, sans-serif" font-size="14" fill="rgba(30,64,175,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="770" dy="0">🧠 CLIENT  •  Obsidian Vault  •  VLAN 40 · 192.168.10.0/24</tspan></text>
+<text x="770" y="215" font-family="Inter, sans-serif" font-size="11" fill="rgba(30,64,175,1)" text-anchor="start" dominant-baseline="central"><tspan x="770" dy="0">📝 Obsidian · Frontend markdown local · Graph View · HTTPS 443 → pfSense DNAT → LXC 102</tspan></text>
+<path d="M955 250L680 250L680 150" fill="none" stroke="rgba(37,99,235,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="680,150 685,158.6602540378444 675,158.6602540378444" fill="rgba(37,99,235,1)" stroke="none" />
+<path d="M700 200L350 200L350 150" fill="none" stroke="rgba(217,119,6,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="350,150 355,158.6602540378444 345,158.6602540378444" fill="rgba(217,119,6,1)" stroke="none" />
+<path d="M290 380L320 380" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="320,380 311.33974596215563,385 311.33974596215563,375" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M290 380L790 380L790 345" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="790,345 795,353.66025403784437 785,353.66025403784437" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M290 380L70 380L70 695" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="70,695 65,686.3397459621556 75,686.3397459621556" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M520 380L790 380L790 345" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="790,345 795,353.66025403784437 785,353.66025403784437" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M520 465L1020 465L1020 345" fill="none" stroke="rgba(219,39,119,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="1020,345 1025,353.66025403784437 1015,353.66025403784437" fill="rgba(219,39,119,1)" stroke="none" />
+<path d="M520 465L70 465L70 695" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="70,695 65,686.3397459621556 75,686.3397459621556" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M290 380L400 380L400 150" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="400,150 405,158.6602540378444 395,158.6602540378444" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M990 380L700 380L700 150" fill="none" stroke="rgba(34,197,94,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="700,150 705,158.6602540378444 695,158.6602540378444" fill="rgba(34,197,94,1)" stroke="none" />
+<path d="M270 695L400 695L400 150" fill="none" stroke="rgba(249,115,22,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="400,150 405,158.6602540378444 395,158.6602540378444" fill="rgba(249,115,22,1)" stroke="none" />
+<path d="M520 465L400 465L400 150" fill="none" stroke="rgba(14,165,233,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="400,150 405,158.6602540378444 395,158.6602540378444" fill="rgba(14,165,233,1)" stroke="none" />
+<path d="M550 250L550 345" fill="none" stroke="rgba(217,119,6,1)" stroke-width="3"  stroke-linejoin="round" stroke-linecap="round" /><polygon points="550,345 544,334.60769515458674 556,334.60769515458674" fill="rgba(217,119,6,1)" stroke="none" />
+<path d="M910 740L910 695" fill="none" stroke="rgba(217,119,6,1)" stroke-width="2" stroke-dasharray="8 4" stroke-linejoin="round" stroke-linecap="round" /><polygon points="910,695 915,703.6602540378444 905,703.6602540378444" fill="rgba(217,119,6,1)" stroke="none" />
 </svg>
