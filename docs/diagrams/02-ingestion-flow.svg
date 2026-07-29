@@ -2,7 +2,7 @@
 <rect x="10" y="10" width="880" height="520" fill="#ffffff" />
 <rect x="50" y="50" width="800" height="80" fill="rgba(249,250,251,1)" stroke="rgba(229,231,235,1)" stroke-width="1"  rx="0" />
 <text x="70" y="60" font-family="Inter, sans-serif" font-size="16" fill="rgba(17,24,39,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">📥 Flux d'ingestion (offline, asynchrone) — Jamais dans le chemin critique requête</tspan></text>
-<text x="70" y="90" font-family="Inter, sans-serif" font-size="12" fill="rgba(107,114,128,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">🔵 #2563eb Sources    🩵 #0ea5e9 Traitement CPU M1    🟠 #f97316 Stockage Qdrant M1    🟣 #8b5cf6 Wiki Obsidian</tspan></text>
+<text x="70" y="90" font-family="Inter, sans-serif" font-size="12" fill="rgba(107,114,128,1)" text-anchor="start" dominant-baseline="hanging"><tspan x="70" dy="0">🔵  Sources    🩵  Traitement CPU M1    🟠  Stockage Qdrant M1    🟣  Wiki Obsidian</tspan></text>
 <rect x="50" y="180" width="220" height="90" fill="rgba(219,234,254,1)" stroke="rgba(37,99,235,1)" stroke-width="2"  rx="0" />
 <text x="160" y="225" font-family="Inter, sans-serif" font-size="13" fill="rgba(30,64,175,1)" text-anchor="middle" dominant-baseline="central"><tspan x="160" dy="0">📄 Sources brutes</tspan><tspan x="160" dy="16.25">Fichiers · Web Clipper</tspan><tspan x="160" dy="16.25">POST /api/v1/ingest</tspan></text>
 <rect x="320" y="180" width="220" height="90" fill="rgba(224,242,254,1)" stroke="rgba(14,165,233,1)" stroke-width="2"  rx="0" />
