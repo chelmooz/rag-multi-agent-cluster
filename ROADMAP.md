@@ -3,7 +3,7 @@
 État réel au 29/07/2026 : phase de conception documentaire terminée. Aucun code n'existe encore dans ce dépôt. Les cases cochées ci-dessous concernent uniquement la documentation, pas l'implémentation.
 
 ## Documentation
-- [x] README consolidé (architecture, infra, stack, guide d'installation, intégration LLM Wiki)
+- [x] README consolidé (architecture, infra, stack, guide d'installation, intégration Obsidian Vault)
 - [x] Schéma d'architecture (`docs/architecture.svg`)
 - [ ] Documentation API (OpenAPI/Swagger)
 - [ ] Tutoriel d'installation pas-à-pas testé de bout en bout
@@ -25,12 +25,14 @@
 - [ ] Choix orchestrateur d'agents : CrewAI vs LangGraph
 - [ ] Agents Juge / Avocat du diable / Évaluateur
 - [ ] Endpoint `/api/v1/query`
-- [ ] Format de réponse compatible OpenAI (pour LLM Wiki)
+- [ ] Actions WikiTools (read_page, write_page, append_log, update_index, lint)
 
-## Intégration LLM Wiki
-- [ ] Reverse proxy Nginx compatible OpenAI
-- [ ] Test de bout en bout LLM Wiki → cluster
-- [ ] Sync Obsidian
+## Intégration Obsidian Vault (pattern Karpathy)
+- [ ] Bind mount vault partagé (NFS/SMB entre LXC 100 et client)
+- [ ] Structure vault : index.md, log.md, entities/, concepts/, sources/, synthesis/
+- [ ] Workflow ingestion : source → pages wiki (avec évaluation multi-agents)
+- [ ] Workflow query : question → recherche wiki → synthèse avec citations
+- [ ] Workflow lint : détection contradictions, orphelins, gaps
 
 ## Fonctionnalités futures
 - [ ] Text-to-SQL sur le nœud BC250

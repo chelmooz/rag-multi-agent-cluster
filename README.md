@@ -1,16 +1,16 @@
-# 🧠 Cluster RAG Multi-Agents 100% Offline (Proxmox + AMD BC250 + LLM Wiki)
+# 🧠 Cluster RAG Multi-Agents 100% Offline (Proxmox + AMD BC250 + Obsidian Vault)
 
 ![Status](https://img.shields.io/badge/Status-En_conception-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Privacy](https://img.shields.io/badge/Privacy-100%25_Offline-blue)
-![Hardware](https://img.shields.io/badge/Hardware-Proxmox%20%7C%20AMD%20BC250%20%7C%20RTX4000-purple)
-![Frontend](https://img.shields.io/badge/Frontend-LLM_Wiki-7c3aed)
+![Hardware](https://img.shields.io/badge/Hardware-Proxmox%20%7C%20AMD%20BC250%20%7C%20RTX4000%20%7C%20RTX580-purple)
+![Frontend](https://img.shields.io/badge/Frontend-Obsidian_Vault-7c3aed)
 
 > ⚠️ **Statut réel (voir [ROADMAP.md](ROADMAP.md))** : ce dépôt est au stade de conception documentaire. Aucun composant listé ci-dessous n'est encore implémenté. Ce README décrit la cible, pas l'existant.
 >
 > ⚠️ **Correction hardware (29/07/2026)** : le BC-250 tourne sous **Vulkan (Mesa/RADV)**, pas ROCm — AMD ne fournit pas de bibliothèques rocBLAS pour ce GPU (GFX1013). Sa mémoire est **16 GB GDDR6 unifiée** partagée CPU/GPU (pas 12 GB dédiés). Voir [docs communautaires BC-250](https://elektricm.github.io/amd-bc250-docs/) et le [guide AI akandr/bc250](https://github.com/akandr/bc250).
 
-Un système de **Retrieval-Augmented Generation (RAG)** souverain, résilient et entièrement hors ligne. Ce projet vise une architecture de **multi-agents avec évaluation croisée** (Juge LLM & Avocat du diable) pour minimiser les hallucinations, déployée sur un cluster Proxmox 3 nœuds incluant un nœud baremetal AMD BC250, et conçu pour s'intégrer avec [LLM Wiki](https://github.com/nashsu/llm_wiki) comme interface utilisateur.
+Un système de **Retrieval-Augmented Generation (RAG)** souverain, résilient et entièrement hors ligne. Ce projet vise une architecture de **multi-agents avec évaluation croisée** (Juge LLM & Avocat du diable) pour minimiser les hallucinations, déployée sur un cluster Proxmox 3 nœuds incluant un nœud baremetal AMD BC250. Le frontend est un vault **Obsidian** maintenu par un agent LLM dédié (pattern Karpathy) — le cluster écrit et met à jour en continu un wiki de pages markdown interreliées, consultable via le graphe de connaissances Obsidian.
 
 ---
 
@@ -18,7 +18,7 @@ Un système de **Retrieval-Augmented Generation (RAG)** souverain, résilient et
 
 - [Vue d'ensemble](#-vue-densemble)
 - [Architecture du Système](#️-architecture-du-système)
-- [Intégration avec LLM Wiki](#-intégration-avec-llm-wiki)
+- [Intégration avec Obsidian (pattern Karpathy)](#-intégration-avec-obsidian-pattern-karpathy)
 - [Fonctionnalités Clés](#-fonctionnalités-clés)
 - [Infrastructure Matérielle](#️-infrastructure-matérielle)
 - [Stack Technique](#️-stack-technique)
@@ -36,7 +36,7 @@ Dans un contexte où la confidentialité des données et la souveraineté numér
 
 Contrairement aux RAG classiques qui se contentent de générer une réponse, ce système intègre une **couche d'évaluation multi-agents** inspirée des processus de révision humains. Après la génération, un "Juge" évalue la qualité, tandis qu'un "Avocat du diable" cherche activement les failles logiques ou les hallucinations. Un "Évaluateur" final synthétise ces avis avant de retourner la réponse à l'utilisateur.
 
-**Frontend cible** : ce backend est conçu pour alimenter [LLM Wiki](https://github.com/nashsu/llm_wiki), une application desktop (Tauri + React) qui transforme le cluster en un "second cerveau" local, avec gestion de graphe de connaissances, sync Obsidian et web clipper.
+**Frontend cible** : un vault **Obsidian** maintenu par le cluster — l'orchestrateur écrit et met à jour des pages markdown interreliées (`index.md`, `log.md`, entités, concepts, synthèses) directement dans un dossier vault. L'utilisateur consulte le graphe de connaissances, les pages, et les liens via l'interface Obsidian. Aucune app Tauri/React à maintenir.
 
 ---
 
@@ -148,7 +148,7 @@ sequenceDiagram
     participant API as 🔌 API FastAPI
     participant Orchestrator as 🎯 Orchestrator
     participant VectorDB as 💾 VectorDB
-    participant GPU as 🎮 GPU Worker
+    participant GPU as 🎮 GPU Worker (RTX 4000)
     participant BC250 as ⚡ BC250
     participant Juge as ⚖️ Juge LLM
     participant Avocat as 😈 Avocat du diable
@@ -162,7 +162,7 @@ sequenceDiagram
     VectorDB-->>Orchestrator: Documents pertinents
     Orchestrator->>GPU: Reranking des résultats
     GPU-->>Orchestrator: Résultats triés
-    Orchestrator->>BC250: Génération de réponse
+    Orchestrator->>BC250: Génération de réponse (gros modèles)
     BC250-->>Orchestrator: Réponse brute
     Orchestrator->>Juge: Évaluation qualité
     Orchestrator->>Avocat: Recherche de failles
@@ -178,34 +178,34 @@ sequenceDiagram
 
 ---
 
-## 🔗 Intégration avec LLM Wiki
+## 🔗 Intégration avec Obsidian (pattern Karpathy)
 
-1. **Installer LLM Wiki** :
+Le frontend est un vault **Obsidian** standard — le cluster écrit et met à jour des pages markdown structurées. L'utilisateur ouvre Obsidian, pointe vers le dossier vault, et navigue via le graphe de connaissances.
+
+1. **Créer un vault Obsidian** (ou utiliser un existant) sur le poste client :
    ```bash
-   git clone https://github.com/nashsu/llm_wiki.git
-   cd llm_wiki
-   # Suivre les instructions d'installation du repo officiel
+   mkdir -p ~/rag-wiki-vault
    ```
 
-2. **Configurer le backend** dans LLM Wiki pour pointer vers le cluster : remplacer l'URL Ollama locale par l'URL de l'API du cluster (voir `.env.example` — ne jamais coder une IP en dur, utiliser `CLUSTER_API_URL`), ou configurer un reverse proxy Nginx sur le LXC Master pour exposer une API compatible OpenAI.
-
-3. **Format de réponse attendu** (compatible OpenAI) — à implémenter côté FastAPI :
-   ```json
-   {
-     "id": "chatcmpl-123",
-     "object": "chat.completion",
-     "choices": [{
-       "message": {
-         "role": "assistant",
-         "content": "Réponse validée par l'évaluateur..."
-       }
-     }]
-   }
+2. **Monter le vault** sur le LXC Master pour que le cluster y écrive :
+   ```bash
+   # Sur le LXC 100 (Orchestrator), mount NFS/SMB vers le vault client
+   # Ou bind mount local /data/wiki si le vault est sur le même réseau
    ```
 
-4. **Sync Obsidian (optionnel)** : configurer le vault Obsidian pour pointer vers le dossier `data/` de LLM Wiki.
+3. **Configurer le schéma** : le fichier `AGENTS.md` à la racine du projet définit :
+   - Structure du vault : `entities/`, `concepts/`, `sources/`, `synthesis/`, `logs/`
+   - Conventions de nommage et frontmatter YAML (tags, sources, dates)
+   - Workflows d'ingestion, requête et lint
 
-**Ressources** : [repo officiel](https://github.com/nashsu/llm_wiki) · licence GPL v3 · stack Tauri (Rust) + React + TypeScript.
+4. **Endpoints API** mis à disposition par le cluster :
+   - `POST /api/v1/ingest` — envoie une source (fichier, URL, texte) → le cluster crée/MAJ les pages wiki
+   - `POST /api/v1/query` — pose une question → réponse synthétisée depuis le wiki + citations
+   - `GET /api/v1/lint` — health check du wiki : pages orphelines, contradictions, gaps
+
+5. **Obsidian Web Clipper** (extension navigateur) : convertit des articles web en markdown → injectable via `/api/v1/ingest`.
+
+**Ressources** : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](https://github.com/karpathy/LLMWiki) (inspiration).
 
 ---
 
@@ -216,7 +216,7 @@ sequenceDiagram
 - 🔍 **Recherche Hybride** : lexicale (BM25) + vectorielle (sémantique) + variantes (SQL, tables).
 - ⚡ **Orchestration Distribuée** : séparation orchestration / inférence GPU / stockage.
 - 🛠️ **Hardware Atypique** : exploitation de la puce AMD BC250 (jusqu'à 40 CUs après unlock) via Vulkan/Mesa.
-- 🧠 **Frontend LLM Wiki** : graphe de connaissances, sync Obsidian, web clipper.
+- 🧠 **Frontend Obsidian Vault** : graphe de connaissances, web clipper, pages markdown maintenues par le cluster en continu.
 - 🔄 **Boucle de Feedback** : l'évaluateur peut renvoyer de l'information au planificateur.
 
 ---
@@ -225,24 +225,31 @@ sequenceDiagram
 
 | Nœud | Rôle | CPU / RAM | GPU / Accélérateur | Virtualisation |
 | :--- | :--- | :--- | :--- | :--- |
-| **Machine 1** | **Master** (Orchestration, API, VectorDB, Monitoring) | Xeon 2699 / 32GB ECC | – | Proxmox (LXC) |
-| **Machine 2** | **GPU Worker** (Inference, Reranking) | Xeon 2698 / 64GB ECC | NVIDIA Quadro RTX 4000 (8GB) | Proxmox (LXC privilégié) |
-| **Machine 3** | **BC250 Baremetal** (Gros modèles, variantes) | AMD BC250 (Zen 2, 6c/12t) | 16 GB GDDR6 **unifiée** CPU+GPU · 24 CU stock / 40 CU après unlock communautaire | Debian Testing/Sid (baremetal) |
-| **Client** | LLM Wiki (interface) | Poste de travail | – | Native (Tauri) |
+| **Machine 1** | **Master** (Orchestration, API, VectorDB, Monitoring) | 2× Xeon E5-2699 v4 / 32 GB ECC | **AMD Radeon RX 580** (8 GB) | Proxmox VE 9.3 (LXC) |
+| **Machine 2** | **GPU Worker** (Inference, Reranking) | 1× Xeon E5-2698 v4 / 64 GB ECC | **NVIDIA Quadro RTX 4000** (8 GB VRAM) | Proxmox VE 9.3 (LXC privilégié ou VM pour GPU passthrough) |
+| **Machine 3** | **BC250 Baremetal** (Gros modèles, variantes, embedding) | Carte minage BIOS modifiée · Puce PS5 (BC-250, Zen 2, 6c/12t) · **40 CU débloquées** | **16 GB GDDR6 unifiée** CPU+GPU · 12 GB dispo pour IA (512 MB carve-out dynamique) | Debian Testing/Sid (baremetal) |
+| **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
-Répartition prévue des LXC sur la Machine 1 : `100` Orchestrator, `101` Vector DB, `102` API Gateway, `103` Monitoring. Sur la Machine 2 : `200` Inference GPU (passthrough), `201` Workers Agents.
+**Réseau** : Machine 1 dispose de 2 ports 10 Gb/s + 1 port 1 Gb/s (carte familiale) — backbone 10 Gb/s inter-nœuds recommandé.
+
+**Répartition LXC prévue** :
+- Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `102` API Gateway (Nginx), `103` Monitoring (Prometheus/Grafana/Loki)
+- Machine 2 : `200` Inference GPU (passthrough RTX 4000), `201` Workers Agents (reranker, judge, advocate)
+- Machine 3 : Ollama Vulkan natif (pas de LXC)
 
 ---
 
 ## 🛠️ Stack Technique
 
-- **Infrastructure** : Proxmox VE 8.x, LXC, Docker, Docker Compose
+- **Infrastructure** : Proxmox VE 9.3, LXC, Docker, Docker Compose
 - **IA & LLM (Machine 2, RTX 4000)** : Ollama, vLLM, CUDA, modèles open-weight (Qwen2.5, Llama 3.1, Mistral)
 - **IA & LLM (Machine 3, BC-250)** : Ollama + backend **Vulkan** (`OLLAMA_VULKAN=1`), Mesa/RADV 25.1+ — **pas ROCm** (non supporté sur GFX1013)
-- **Orchestration Agents** : CrewAI ou LangGraph (choix à trancher, voir [ROADMAP.md](ROADMAP.md))
-- **Vector Store & DB** : ChromaDB, PostgreSQL, Redis
-- **API & Backend** : FastAPI, Nginx
-- **Frontend** : [LLM Wiki](https://github.com/nashsu/llm_wiki) (Tauri + React + TypeScript)
+- **IA & LLM (Machine 1, RX 580)** : Ollama + ROCm/OpenCL pour embedding léger ou modèles de secours
+- **Orchestration Agents** : **LangGraph** (choix tranché — graphe d'état explicite, parallélisme natif, checkpointing)
+- **Vector Store & DB** : **Qdrant** (hybrid search natif), PostgreSQL, Redis
+- **API & Backend** : FastAPI, Nginx (reverse proxy LXC 102)
+- **Frontend** : **Obsidian Vault** (pattern Karpathy) — pages markdown maintenues par le cluster, visualisation via Obsidian (Electron)
+- **Observabilité** : Prometheus, Grafana, Loki
 
 ---
 
@@ -251,8 +258,8 @@ Répartition prévue des LXC sur la Machine 1 : `100` Orchestrator, `101` Vector
 > Les scripts référencés ci-dessous sont des stubs à compléter — voir [ROADMAP.md](ROADMAP.md) pour l'état d'avancement de chacun.
 
 ### 1. Prérequis
-- Cluster Proxmox VE 8.x configuré
-- Machine baremetal Debian 12 avec puce AMD BC250
+- Cluster Proxmox VE 9.3 configuré
+- Machine baremetal Debian Testing/Sid avec puce AMD BC250
 - Accès root à toutes les machines
 - (Optionnel) poste client pour LLM Wiki
 
@@ -299,22 +306,31 @@ cd infrastructure/docker
 docker compose -f docker-compose.orchestrator.yml up -d
 ```
 
-### 5. Installation de LLM Wiki (client)
+### 5. Configuration du vault Obsidian (client)
 
 ```bash
-git clone https://github.com/nashsu/llm_wiki.git
-cd llm_wiki
-# Suivre les instructions d'installation du repo officiel
-# Configurer l'URL du backend pour pointer vers le cluster
+mkdir -p ~/rag-wiki-vault
+# Monter le vault sur le LXC Master (NFS/SMB) pour que le cluster y écrive
+# Ouvrir Obsidian → "Open folder as vault" → sélectionner ~/rag-wiki-vault
 ```
 
 ### 6. Téléchargement des modèles
 
 ```bash
-ollama pull qwen2.5:7b
+# Sur Machine 2 (RTX 4000)
 ollama pull qwen2.5:14b
-ollama pull llama3.1:8b
+ollama pull qwen2.5:7b
 ollama pull mistral:7b
+ollama pull bge-reranker-v2-m3
+
+# Sur Machine 3 (BC250)
+ollama pull qwen2.5-coder:14b
+ollama pull nomic-embed-text-v2-moe
+ollama pull llama3.1:8b
+
+# Sur Machine 1 (RX 580 - secours/embedding léger)
+ollama pull nomic-embed-text
+ollama pull qwen2.5:3b
 ```
 
 ---
@@ -334,13 +350,14 @@ curl -X POST "${CLUSTER_API_URL}/api/v1/query" \
 
 `CLUSTER_API_URL` est défini dans `.env` (voir `.env.example`) — ne jamais coder l'IP du cluster en dur dans les exemples ou les scripts commités.
 
-### Via LLM Wiki
+### Via Obsidian
 
-1. Lancer LLM Wiki sur le poste client
-2. Configurer l'URL du backend via `CLUSTER_API_URL`
-3. Poser la question dans l'interface
-4. La réponse validée par le multi-agent s'affiche
-5. Possibilité de review et d'ajout au vault Obsidian
+1. Ouvrir le vault Obsidian sur le poste client (vault partagé avec le cluster)
+2. Naviguer dans les pages wiki (`index.md`, `entities/`, `concepts/`, `sources/`)
+3. Utiliser le **graphe de connaissances** (Obsidian Graph View) pour explorer les liens
+4. Les pages sont mises à jour automatiquement par le cluster via les endpoints API
+5. Pour ajouter une source : `curl -X POST ${CLUSTER_API_URL}/api/v1/ingest -F "file=@article.md"`
+6. Pour poser une question : `curl -X POST ${CLUSTER_API_URL}/api/v1/query -d '{"question":"..."}'`
 
 ---
 
@@ -364,16 +381,14 @@ Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rie
 
 Ce projet est distribué sous licence MIT — voir [LICENSE](LICENSE).
 
-**Note** : LLM Wiki est distribué sous licence GPL v3, voir https://github.com/nashsu/llm_wiki pour les détails.
-
 ---
 
 ## 🙏 Remerciements
 
-- [nashsu](https://github.com/nashsu) pour [LLM Wiki](https://github.com/nashsu/llm_wiki), qui inspire l'interface
+- [karpathy](https://github.com/karpathy) pour le pattern [LLM Wiki](https://github.com/karpathy/LLMWiki), qui inspire l'architecture frontend
 - La communauté Proxmox et la communauté BC-250 ([elektricM/amd-bc250-docs](https://github.com/elektricM/amd-bc250-docs), [akandr/bc250](https://github.com/akandr/bc250), [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock)) pour le support hardware atypique
 - La communauté open-source IA pour les modèles open-weight
 
 ---
 
-*Développé pour l'IA souveraine, le hardware open-source et les seconds cerveaux locaux.*
+*Développé pour l'IA souveraine, le hardware open-source et les seconds cerveaux locaux (Obsidian + LLM).*

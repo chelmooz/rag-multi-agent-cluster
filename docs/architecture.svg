@@ -1,6 +1,6 @@
 <svg width="100%" viewBox="0 0 880 1560" role="img" xmlns="http://www.w3.org/2000/svg">
-  <title>Architecture RAG avec couche multi-agents, mapping Cluster et Frontend LLM Wiki</title>
-  <desc>Après génération, deux agents (juge LLM et avocat du diable) évaluent la réponse en parallèle avant synthèse par l'évaluateur. Le tout est piloté par une interface LLM Wiki (Tauri/React) connectée au cluster Proxmox + BC250.</desc>
+  <title>Architecture RAG avec couche multi-agents, mapping Cluster et Frontend Obsidian (pattern Karpathy)</title>
+  <desc>Après génération, deux agents (juge LLM et avocat du diable) évaluent la réponse en parallèle avant synthèse par l'évaluateur. Le tout est piloté par un Vault Obsidian (pattern Karpathy) connecté au cluster Proxmox + BC250.</desc>
   
   <defs>
     <!-- Flèche originale -->
@@ -20,12 +20,12 @@
   </defs>
 
   <!-- ========================================== -->
-  <!-- NOUVEAU : Frontend LLM Wiki                -->
+  <!-- Frontend : Obsidian Vault (pattern Karpathy) -->
   <!-- ========================================== -->
-  <g id="frontend-llm-wiki">
+  <g id="frontend-obsidian">
     <rect x="260" y="320" width="160" height="60" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="2.5"/>
-    <text x="340" y="346" text-anchor="middle" font-size="14" font-weight="bold" fill="#000000" font-family="system-ui, sans-serif">LLM Wiki</text>
-    <text x="340" y="366" text-anchor="middle" font-size="12" fill="#000000" font-family="system-ui, sans-serif">Interface Utilisateur</text>
+    <text x="340" y="346" text-anchor="middle" font-size="14" font-weight="bold" fill="#000000" font-family="system-ui, sans-serif">Obsidian</text>
+    <text x="340" y="366" text-anchor="middle" font-size="12" fill="#000000" font-family="system-ui, sans-serif">Vault Markdown</text>
     
     <!-- Liaison vers la Requête -->
     <line x1="340" y1="380" x2="340" y2="400" stroke="#666666" stroke-width="1.5" marker-end="url(#arrow)"/>
