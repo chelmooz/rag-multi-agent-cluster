@@ -19,6 +19,9 @@ venv/
 *.bin
 models/
 
+# Archives (ne jamais committer les archives zip du projet)
+archive_*.zip
+
 # OS / éditeurs
 .DS_Store
 .vscode/

@@ -6,12 +6,13 @@ Architecture :
 - Health/Readiness probes pour Prometheus/K8s
 """
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.core.settings import get_settings
-
 
 settings = get_settings()
 
@@ -46,13 +47,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="rag-multi-agent-cluster",
-    description="Cluster RAG 100% Offline avec évaluation multi-agents (Juge + Avocat du diable + Évaluateur)",
+    description=(
+        "Cluster RAG 100% Offline avec évaluation multi-agents "
+        "(Juge + Avocat du diable + Évaluateur)"
+    ),
     version="0.1.0-dev",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
+# Convertir les NotImplementedError en 500 JSON (les stubs de phase 0)
+@app.exception_handler(NotImplementedError)
+async def not_implemented_handler(request: Request, exc: NotImplementedError):
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 # CORS pour Obsidian / clients locaux
 app.add_middleware(

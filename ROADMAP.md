@@ -1,6 +1,6 @@
 # Roadmap
 
-État réel au 30/07/2026 : phase de conception documentaire terminée. Aucun code n'existe encore dans ce dépôt. Les cases cochées ci-dessous concernent uniquement la documentation, pas l'implémentation.
+État réel au 30/07/2026 : squelette FastAPI fonctionnel (6 agents stubés, config Pydantic, tests unitaires verts, 38 commits). Les cases cochées ci-dessous concernent la documentation et l'infrastructure existante.
 
 **Alignement OKF v0.2** : Frontmatter wiki migré vers format OKF v0.2 (type obligatoire, verified/trust tier, status/stale_after, sources enrichis). CLI `okf` + plugin Obsidian `okf-enforcer` identifiés pour lint futur — pas de dépendance dure tant que pré-1.0.
 
@@ -88,3 +88,4 @@
 - [ ] 0.21 **Backup Qdrant** : `qdrant snapshot create` cron quotidien → stocké sur M2 (64GB dispo)
 - [ ] 0.22 **Runbooks incidents** : "BC250 ne boot plus", "RTX 4000 OOM", "NFS stale handle", "Qdrant corruption"
 - [ ] 0.23 **Kernel upgrade hook BC250** : script `rebuild-cu-unlock.sh` déclenché par `apt` hook `kernel-postinst` + `dracut -f`
+- [x] 0.24 **BC250 config centralisée** : 15 variables dans `settings.py` + `.env.example` (CU count, core unlock, TTM, governor, GRUB triplet, Mesa, kernel, scripts paths)

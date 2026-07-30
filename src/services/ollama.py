@@ -40,12 +40,13 @@ class OllamaClient:
         """Vérification disponibilité du nœud via /api/tags."""
         try:
             resp = await self._client.get("/api/tags")
-            return resp.status_code == 200
         except Exception:
             return False
+        else:
+            return resp.status_code == 200
 
     async def unload_model(self, model: str) -> bool:
-        """Décharge un modèle de la mémoire GPU (essentiel pour pipeline séquentiel Judge→Avocat)."""
+        """Décharge un modèle de la mémoire GPU (essentiel pour pipeline Judge→Avocat)."""
         # Ollama : POST /api/generate avec keep_alive=0 ou "" pour libérer la VRAM
         raise NotImplementedError
 

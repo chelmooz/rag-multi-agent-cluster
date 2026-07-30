@@ -12,7 +12,6 @@ Scénarios prévus :
 6. Vision (upload image)
 7. Moniteurs (statut, responsive, raccourcis)
 """
-import pytest
 
 
 class TestSmokeFrontendAPI:

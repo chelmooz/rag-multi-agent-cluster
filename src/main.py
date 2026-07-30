@@ -4,10 +4,10 @@ Usage:
     python -m src.api.main          # Lance le serveur FastAPI (dev)
     python -m src.core.settings     # Affiche la config résolue
 """
-from src.api.main import app
 
 if __name__ == "__main__":
     import uvicorn
+
     from src.core.settings import get_settings
 
     settings = get_settings()

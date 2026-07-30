@@ -13,7 +13,9 @@ Pipeline : séquentiel après Judge.
 class AdvocateAgent:
     """Avocat du diable : cherche failles/hallucinations dans la réponse."""
 
-    async def challenge(self, query: str, response: str, context: list[dict], judge_critique: dict) -> dict:
+    async def challenge(
+        self, query: str, response: str, context: list[dict], judge_critique: dict
+    ) -> dict:
         raise NotImplementedError
 
     async def unload(self) -> None:

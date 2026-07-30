@@ -8,8 +8,15 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, HttpUrl
+from pydantic import Field, HttpUrl, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class InsecurePasswordConfigError(ValueError):
+    def __init__(self) -> None:
+        super().__init__(
+            "postgres_password='CHANGE_ME' interdit avec environment='production'"
+        )
 
 
 class Settings(BaseSettings):
@@ -20,6 +27,14 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+    )
+
+    # ──────────────────────────────────────────────
+    # Environnement d'exécution
+    # ──────────────────────────────────────────────
+    environment: Literal["development", "staging", "production"] = Field(
+        default="development",
+        validation_alias="ENVIRONMENT",
     )
 
     # ──────────────────────────────────────────────
@@ -75,7 +90,10 @@ class Settings(BaseSettings):
 
     ollama_m3_url: HttpUrl = Field(
         default="http://10.10.0.3:11434",
-        description="Ollama Machine 3 (BC-250 Baremetal) — Generator 14B/MoE, Text-to-SQL, Vision, Vulkan ONLY",
+        description=(
+            "Ollama Machine 3 (BC-250 Baremetal) — "
+            "Generator 14B/MoE, Text-to-SQL, Vision, Vulkan ONLY"
+        ),
         validation_alias="OLLAMA_M3_URL",
     )
 
@@ -224,6 +242,12 @@ class Settings(BaseSettings):
         validation_alias="POSTGRES_PASSWORD",
     )
 
+    @model_validator(mode="after")
+    def _forbid_default_password_in_production(self) -> Settings:
+        if self.environment == "production" and self.postgres_password == "CHANGE_ME":
+            raise InsecurePasswordConfigError
+        return self
+
     # ──────────────────────────────────────────────
     # Redis (cache, queue orchestrateur, sessions)
     # ──────────────────────────────────────────────
@@ -237,7 +261,10 @@ class Settings(BaseSettings):
     # ──────────────────────────────────────────────
     nfs_relay_path: Path = Field(
         default=Path("/data/shared/evaluation-relay.json"),
-        description="Fichier relay partagé M1↔M2 via NFS (/data/shared exporté par M1, monté sur M2)",
+        description=(
+            "Fichier relay partagé M1↔M2 via NFS "
+            "(/data/shared exporté par M1, monté sur M2)"
+        ),
         validation_alias="NFS_RELAY_PATH",
     )
     relay_ttl_seconds: int = Field(

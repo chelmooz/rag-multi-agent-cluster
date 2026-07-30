@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--validate", action="store_true", help="Valider le frontmatter OKF")
     parser.add_argument("--fix", action="store_true", help="Corriger automatiquement")
     parser.add_argument("--wiki-path", default="/data/wiki", help="Chemin du vault wiki")
-    args = parser.parse_args()
+    parser.parse_args()
 
     raise NotImplementedError("OKF lint pas encore implémenté — voir backlog Phase 0.7")
 

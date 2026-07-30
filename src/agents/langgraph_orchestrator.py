@@ -20,7 +20,7 @@ def build_graph():
 
 def main():
     """Point d'entrée pour le conteneur Docker langgraph-orchestrator."""
-    graph = build_graph()
+    build_graph()
     # TODO: lancer le serveur de workflow
 
 
