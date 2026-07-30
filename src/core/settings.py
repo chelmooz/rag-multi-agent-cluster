@@ -300,6 +300,80 @@ class Settings(BaseSettings):
     similarity_threshold: float = Field(default=0.7, validation_alias="SIMILARITY_THRESHOLD")
 
     # ──────────────────────────────────────────────
+    # BC-250 Baremetal (Machine 3 — Vulkan ONLY)
+    # ──────────────────────────────────────────────
+    bc250_enabled: bool = Field(
+        default=True,
+        description="BC-250 présent et configuré dans le cluster",
+        validation_alias="BC250_ENABLED",
+    )
+    bc250_cu_count: int = Field(
+        default=24, ge=24, le=40,
+        description="Compute Units actifs (24 stock, 40 via unlock patch duggasco)",
+        validation_alias="BC250_CU_COUNT",
+    )
+    bc250_cpu_cores_unlocked: bool = Field(
+        default=False,
+        description="CPU core unlock appliqué (6c/12t → 8c/16t via SMU msg 0x98 rw-r-r-0644)",
+        validation_alias="BC250_CPU_CORES_UNLOCKED",
+    )
+    bc250_vram_gib: int = Field(
+        default=16, ge=8,
+        description="VRAM GDDR6 unifiée en GiB (cpu+gpu même pool)",
+        validation_alias="BC250_VRAM_GIB",
+    )
+    bc250_tdp_watts: int = Field(
+        default=235,
+        description="TDP max watts (cpu+gpu combiné, format compact)",
+        validation_alias="BC250_TDP_WATTS",
+    )
+    bc250_vulkan_mesa_version: str = Field(
+        default="25.1.3",
+        description="Version minimum Mesa/RADV (Debian Experimental, pin-priority 500)",
+        validation_alias="BC250_VULKAN_MESA_VERSION",
+    )
+    bc250_kernel_version: str = Field(
+        default="6.18.18",
+        description="Version noyau cible (pin apt-mark hold, éviter 6.15/6.17 buggés)",
+        validation_alias="BC250_KERNEL_VERSION",
+    )
+    bc250_grub_cmdline: str = Field(
+        default="amdgpu.gttsize=14750 ttm.pages_limit=3959290 ttm.page_pool_size=3959290",
+        description="Paramètres GRUB obligatoires (triplet VRAM — jamais amd_iommu=on)",
+        validation_alias="BC250_GRUB_CMDLINE",
+    )
+    bc250_ttm_pages_limit: int = Field(
+        default=3959290,
+        description="ttm.pages_limit sysfs (plafond mémoire GPU, ~15 GiB)",
+        validation_alias="BC250_TTM_PAGES_LIMIT",
+    )
+    bc250_ttm_page_pool_size: int = Field(
+        default=3959290,
+        description="ttm.page_pool_size (identique à pages_limit)",
+        validation_alias="BC250_TTM_PAGE_POOL_SIZE",
+    )
+    bc250_gov_freq_mhz: int = Field(
+        default=1500,
+        description="Fréquence GPU max MHz (safe-point governor pour usage soutenu)",
+        validation_alias="BC250_GOV_FREQ_MHZ",
+    )
+    bc250_gov_voltage_mv: int = Field(
+        default=900,
+        description="Voltage GPU mV (safe-point governor)",
+        validation_alias="BC250_GOV_VOLTAGE_MV",
+    )
+    bc250_gov_config_path: str = Field(
+        default="/etc/cyan-skillfish-governor-smu/config.toml",
+        description="Chemin absolu config cyan-skillfish-governor-smu",
+        validation_alias="BC250_GOV_CONFIG_PATH",
+    )
+    bc250_setup_dir: str = Field(
+        default="infrastructure/bc250",
+        description="Chemin relatif (depuis racine projet) vers scripts BC-250",
+        validation_alias="BC250_SETUP_DIR",
+    )
+
+    # ──────────────────────────────────────────────
     # OKF (Open Knowledge Format) v0.2
     # ──────────────────────────────────────────────
     okf_stale_after_days: int = Field(
@@ -348,6 +422,54 @@ class Settings(BaseSettings):
     @property
     def postgres_dsn(self) -> str:
         return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+
+    # ── BC-250 helpers ────────────────────────────
+    @property
+    def bc250_cu_unlock_script(self) -> str:
+        return f"{self.bc250_setup_dir}/enable-40cu-unlock.sh"
+
+    @property
+    def bc250_core_unlock_script(self) -> str:
+        return f"{self.bc250_setup_dir}/enable-cpu-core-unlock.sh"
+
+    @property
+    def bc250_vulkan_setup_script(self) -> str:
+        return f"{self.bc250_setup_dir}/setup-vulkan-stack.sh"
+
+    @property
+    def bc250_grub_cmdline_inject(self) -> str:
+        """Triplet GRUB prêt pour GRUB_CMDLINE_LINUX_DEFAULT."""
+        return self.bc250_grub_cmdline
+
+    @property
+    def bc250_ollama_systemd_override(self) -> dict[str, str]:
+        """Envs Vulkan pour systemd override Ollama (Service/Environment)."""
+        return {
+            "HSA_OVERRIDE_GFX_VERSION": "10.3.0",
+            "AMD_VULKAN_ICD": "RADV",
+            "RADV_FORCE_VRS": "false",
+            "OLLAMA_USE_VULKAN": "1",
+            "OLLAMA_INTEL_GPU": "false",
+            "OLLAMA_CUDA": "false",
+            "OLLAMA_HIP_VISIBLE_DEVICES": "",
+            "OLLAMA_LLM_LIBRARY": "llama.cpp",
+            "GGML_VULKAN_DEVICE": "0",
+        }
+
+    def bc250_healthcheck_cmds(self) -> list[str]:
+        """Commandes de vérification post-reboot BC-250."""
+        cmds = []
+        if self.bc250_cu_count > 24:
+            cmds.append("sudo dmesg | grep active_cu_number")
+            cmds.append("RADV_DEBUG=info vulkaninfo --summary 2>&1 | grep num_cu")
+        if self.bc250_cpu_cores_unlocked:
+            cmds.append("lscpu | grep -E 'CPU\\(s\\)|Core\\(s\\) per socket'")
+            cmds.append("sudo dmesg | grep -E 'smp|lapic' | tail -5")
+        cmds.extend([
+            f"cat /sys/module/ttm/parameters/pages_limit  # expect {self.bc250_ttm_pages_limit}",
+            "vulkaninfo --summary 2>&1 | grep deviceName",
+        ])
+        return cmds
 
 
 @lru_cache(maxsize=1)
