@@ -267,6 +267,15 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 | | `201` | Workers Agents — Avocat + Backup Embedding CPU |
 | Machine 3 | — | Ollama Vulkan natif (pas de LXC) |
 
+### Résumé machines M1 & M2
+
+| Machine | IP (VLAN 10) | Rôle | Hardware | Services |
+|---------|-------------|------|----------|----------|
+| **M1** (Master) | `10.10.0.1` | Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS | 2× Xeon E5-2699 v4 32c/64t, 32 GB ECC, 1 TB NVMe | Qdrant (LXC 101 :6333), Ollama CPU (embedding nomic), nginx API Gateway (LXC 102 :80/443), pfSense (LXC 104), OMV Backup (LXC 105) |
+| **M2** (GPU Worker) | `10.10.0.2` | Reranker, Juge, Avocat, Backup Embedding CPU | Xeon 20c/40t, 256 GB NVMe, RTX 4000 (CUDA) | Ollama GPU — Judge qwen3.5:7b / Avocat mistral-3.2:7b (LXC 200-201 :11434), NFS mount depuis M1 |
+
+**Endpoints :** Ollama M1 = `http://10.10.0.1:11434`, Ollama M2 = `http://10.10.0.2:11434`, Qdrant = `http://10.10.0.1:6333`, Gateway = `10.10.0.1:80/443`
+
 ### 🖥️ Topologie physique : machines, LXC & flux
 
 ![Topologie physique](docs/diagrams/06-physical-topology.svg)
