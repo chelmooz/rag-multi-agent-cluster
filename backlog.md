@@ -25,6 +25,27 @@
 - [ ] 0.22 **Runbooks incidents** : "BC250 ne boot plus", "RTX 4000 OOM", "NFS stale handle", "Qdrant corruption"
 - [ ] 0.23 **Kernel upgrade hook BC250** : script `rebuild-cu-unlock.sh` déclenché par `apt` hook `kernel-postinst` + `dracut -f`
 
+## Analyse post-audit (30/07/2026)
+
+### Priorités d'exécution recommandées
+1. **0.3** Corriger docker-compose VectorDB → Qdrant (remplacer Chroma)
+2. **0.10** Dockerfiles + nginx.conf + orchestrator.yml (infra Docker)
+3. **0.17** Health checks réels sur chaque service (/ready)
+4. **0.18** Implémenter smoke_test_frontend_api.py (32 scénarios)
+5. **0.4** Docker Compose Orchestrator complet
+6. **0.5** Scripts Proxmox LXC (master + GPU passthrough)
+7. **0.1** Implémenter les corps d'agents manquants (Judge, Avocat, Evaluator, Generator, Wiki)
+8. **0.16** Secrets management (sops / Vault)
+9. **0.13** mTLS interne (bloquant prod)
+10. **0.19** Forcer API versioning dans le routeur FastAPI
+
+### Incohérences à corriger
+| Fichier | Problème | Correctif |
+|---------|----------|-----------|
+| `infrastructure/docker/docker-compose.vector-db.yml` | Référence Chroma | Remplacer par Qdrant (hybrid search natif dense+sparse) |
+| `src/api/main.py` | `/ready` retourne `{"checks": "TODO"}` | Implémenter checks Qdrant/Ollama/PostgreSQL/Redis |
+| `src/core/settings.py` | `postgres_password = "CHANGE_ME"` en dur | Pointer vers variable d'env obligatoire, lever si absente |
+
 ## Phase 1 — Pipeline RAG Core (Master LXC 100-101)
 - [ ] 1.1 Ingestion Service (chunking, augmentation, embedding sur Machine 1 CPU)
 - [ ] 1.2 VectorService (Qdrant client, hybrid search)
@@ -663,6 +684,116 @@ LOG_LEVEL=INFO
 | **Authentification API** | mTLS + client certs vs JWT vs none (LAN) | **mTLS** (certs auto-signés pfSense CA, zéro config client) |
 | **Monitoring Wiki Agent** | Prometheus exporter custom + Grafana | **Oui**, metrics: `wiki_pages_total`, `ingest_duration_seconds`, `query_latency_seconds`, `llm_calls_total` |
 | **Backup wiki (hors OMV)** | Git auto-commit sur push wiki | **Git sidecar** dans LXC 100 (cron 1h, push vers remote bare) |
+
+## Entretien du 30/07/2026 — Audit BC-250 + adoption OKF v0.2
+
+### Sujet : Révision installation AMD BC-250 + adoption OKF v0.2 pour le vault wiki
+**Participants** : utilisateur + agent opencode
+
+#### Motivation
+Analyser le repo [chelmooz/RAG-Harvard-IT-teacher](https://github.com/chelmooz/RAG-Harvard-IT-teacher) et la doc officielle [elektricm.github.io/amd-bc250-docs/](https://elektricm.github.io/amd-bc250-docs/) pour améliorer les scripts d'installation BC-250 du projet, puis planifier l'adoption du format OKF v0.2.
+
+---
+
+### 1. Confirmation des modèles BC-250 (Machine 3 — baremetal)
+Décision tranchée vs backlog : **l'embedding n'est PAS sur BC-250**.
+
+| Machine | Rôle embedding | Modèle | Backend |
+|---------|---------------|--------|---------|
+| **M1 Master (CPU Xeon 32c/64t)** | Embedding principal | `nomic-embed-text-v2-moe` 768d Q8_0 | CPU Ollama/llama.cpp |
+| **M2 GPU Worker (CPU Xeon 20c/40t)** | Embedding backup | `nomic-embed-text-v2-moe` 768d Q8_0 | CPU Ollama/llama.cpp |
+| **M3 BC-250** | **Aucun** — règle d'or | — | — |
+
+**Règle d'or confirmée** : "Le CPU du BC-250 est le serviteur du GPU. Toute charge CPU significative vole la bande passante mémoire au Generator 14B." (backlog §317)
+
+**Modèles BC-250 exclusivement** :
+
+| Rôle | Modèle | Quant | VRAM | Endpoint |
+|------|--------|-------|------|----------|
+| Generator principal | `qwen3.5:14b` | Q4_K_M | ~9 GB | M3 Ollama |
+| Generator alternatif MoE | `qwen3.5-35b-a3b` | IQ2_M | ~11 GB | M3 Ollama |
+| Text-to-SQL / Code | `qwen3-coder-30b-a3b` | IQ2_M | ~11 GB | M3 Ollama |
+| Vision (Phase 5.2) | `llava-next:13b` / `qwen2.5-vl` | Q4_K_M | ~9 GB | M3 Ollama |
+| Fast-check lexical | `granite-4.0-h-tiny` | Q4_K_M | ~3 GB | M3 Ollama |
+
+**Backend GPU** : Ollama Vulkan (RADV) auto-fallback — **pas ROCm** (non supporté sur GFX1013).
+
+---
+
+### 2. Incohérences corrigées backlog vs scripts existants
+
+| Script existant | Problème vs doc officielle | Correctif prévu |
+|----------------|---------------------------|-----------------|
+| `infrastructure/bc250/setup-vulkan-stack.sh` | `ttm.pages_limit` seul → **insuffisant** (triplet obligatoire `gttsize=14750 ttm.pages_limit=3959290 ttm.page_pool_size=3959290`) | Réécriture complète |
+| `setup-vulkan-stack.sh` | `amdgpu.sg_display=0` inutile sur kernel 6.10+ | Retirer |
+| `setup-vulkan-stack.sh` | Gouverneur via .deb → inexistant, tarball release obligatoire | Changer pour tarball |
+| `setup-vulkan-stack.sh` | Pas de swap + zram config | Ajouter |
+| `setup-vulkan-stack.sh` | Pas de sensors nct6683 | Ajouter |
+| `enable-40cu-unlock.sh` | `cu_map.sh` pas automatisé avant build | Ajouter check harvest pattern interactif |
+| `enable-40cu-unlock.sh` | Pas de hook rebuild post-kernel-upgrade | Ajouter hook apt |
+| `enable-cpu-core-unlock.sh` | Volatil (ne survit pas cold boot), risque documenté | **Exclure** du déploiement standard — garder en `docs/experimental/` |
+
+**Détail triplet VRAM GRUB** (doc officielle §Kernel Configuration) :
+```
+amdgpu.gttsize=14750 ttm.pages_limit=3959290 ttm.page_pool_size=3959290
+```
+Les 3 paramètres DOIVENT être posés ensemble — gttsize seul ne suffit pas (plafond ttm par défaut atteint avant, crash driver). **NE JAMAIS** utiliser `amd_iommu=on` (IOMMU cassé sur BC-250).
+
+**Kernel cible** : 6.18.18 LTS recommandé (doc officielle), pin avec `apt-mark hold`. Éviter 6.15.0-6.15.6 et 6.17.8-6.17.10 (bugs GPU).
+
+**Mesa** : 25.1.3 minimum, 25.3+ recommandé. Debian Testing/Sid uniquement, via experimental repo, pin-priority 500.
+
+**Gouverneur** : `cyan-skillfish-governor-smu` recommandé (filippor, tarball release, pas de kernel patch nécessaire). Config ideal : safe-points 1000/700, 1500/900, 2000/1000, 2200/1000.
+
+**40 CU Unlock** : Optionnel interactif (step 9/9). Clone duggasco/bc250-40cu-unlock, `cu_map.sh` obligatoire avant, `active_cu_number=40` à vérifier. Rebuild après chaque kernel upgrade (hook apt). Rollback via `disable`/`restore`.
+
+---
+
+### 3. Adoption OKF v0.2 — Format du vault wiki
+**Date** : Google Cloud v0.2 annoncé fin juillet 2026 (pré-1.0)
+
+**Constat** : le frontmatter YAML du projet (README section "Convention Frontmatter YAML") est **déjà aligné** à ~90% avec OKF v0.2.
+
+| Champ projet | Champ OKF v0.2 | État |
+|-------------|----------------|------|
+| `type` | `type` (obligatoire) | ✅ OK |
+| `title`, `description`, `tags` | `title`, `description`, `tags` | ✅ OK |
+| `verified` (reviewer + status + timestamp) | `verified` (trust tier dérivé) | ✅ OK — Évaluateur écrit `human-reviewed` |
+| `status`, `stale_after` | `status: draft\|stable\|deprecated`, `stale_after` | ✅ OK — lien direct avec `/api/v1/lint` |
+| `sources` (liste plate) | `sources` (crédibilité par source : author, last_modified, credibility) | 🔧 Enrichir |
+| Structure vault (`index.md`, `log.md`, `entities/`, `concepts/`) | §8 (index), §9 (log) du spec | ✅ OK |
+| — | CLI `okf` (validate, list, show) | 🔧 Wrappers API `/api/v1/okf/validate\|list\|show` |
+| — | Plugin Obsidian `okf-enforcer` | 🔧 Optionnel — pas de dépendance dure tant que pré-1.0 |
+
+**Recommandation** : Adopter la structure frontmatter OKF v0.2 immédiatement (coût ~nul), wrapper CLI `okf` via API sans dépendance dure, pas de lock-in tant que pré-1.0.
+
+**Actions backlog** :
+- Phase 0.6 : Créer `docs/claude-md-template.md` avec template OKF v0.2
+- Phase 0.7 : `scripts/okf-lint.py` — validation frontmatter OKF
+- Phase 0.8 : Endpoints `/api/v1/okf/validate`, `/api/v1/okf/list`, `/api/v1/okf/show`
+- Phase 4.5 : Structure vault OKF (`index.md` §8 + `log.md` §9)
+
+**Mapping acteurs → trust tiers OKF** :
+| Acteur projet | Trust tier OKF | Condition |
+|--------------|---------------|-----------|
+| Page brute ingérée | `unverified` | Défaut |
+| Juge + Avocat OK | `machine-confirmed` | Évaluation auto passée |
+| Évaluateur valide | `human-reviewed` | Synthèse finale positive |
+
+---
+
+### 4. Décisions conservées (inchangées)
+- **Qdrant** → inchangé (hybrid search dense + sparse BM25, pas pgvector)
+- **Python** → `>=3.11` (pyproject.toml inchangé)
+- **Embedding** → Machine 1 CPU (pas de PyTorch ROCm sur BC-250)
+- **Modèles** → liste backlog/README conservée intégralement
+
+---
+
+### 5. Prochaine action validée
+Commencer par **Phase 0.2** : Réécriture `infrastructure/bc250/setup-vulkan-stack.sh` alignée doc officielle (triplet GRUB, Mesa 25.3+, gouverneur SMU tarball, swap + zram, sensors).
+
+---
 
 ## Phase 1 — Pipeline RAG Core (Master LXC 100-101)
 - [ ] 1.1 Ingestion Service (chunking, augmentation, embedding sur Machine 1 CPU)
