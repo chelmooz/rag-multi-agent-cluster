@@ -1,20 +1,110 @@
-# Stack Docker du LXC Master (Orchestrator + API Gateway).
-# STATUT : stub non testé — voir ROADMAP.md.
+# Stack Docker du LXC Master (Orchestrator + API Gateway + Wiki Agent + LangGraph).
+# STATUT : stub non testé — voir ROADMAP.md Phase 0.
 services:
-  api:
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - fastapi-api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  fastapi-api:
     build:
       context: ../../src
+      dockerfile: ../infrastructure/docker/Dockerfile.api
     env_file:
       - ../../.env
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  langgraph-orchestrator:
+    build:
+      context: ../../src
+      dockerfile: ../infrastructure/docker/Dockerfile.langgraph
+    env_file:
+      - ../../.env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  wiki-agent:
+    build:
+      context: ../../src
+      dockerfile: ../infrastructure/docker/Dockerfile.wiki-agent
+    env_file:
+      - ../../.env
+    volumes:
+      - wiki-data:/data/wiki
+      - raw-data:/data/raw
+      - index-data:/data/index
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - WIKI_ROOT=/data/wiki
+      - RAW_ROOT=/data/raw
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   postgres:
     image: postgres:16-alpine
@@ -23,3 +113,18 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  wiki-data:
+  raw-data:
+  index-data:
+  redis-data:
+  postgres-data:

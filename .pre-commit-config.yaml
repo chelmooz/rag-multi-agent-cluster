@@ -1,0 +1,42 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [pydantic, fastapi, httpx, tenacity]
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.95.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+        args: ["-args=-no-color"]
+    # Désactivé par défaut (pas de .tf dans ce repo pour l'instant)
+    # stages: [manual]
+
+  - repo: local
+    hooks:
+      - id: no-change-me-in-env
+        name: "Vérifier absence de CHANGE_ME dans .env"
+        entry: bash -c 'if grep -r "CHANGE_ME" .env 2>/dev/null; then echo "❌ .env contient des CHANGE_ME"; exit 1; fi'
+        language: system
+        files: "^\.env$"
+        stages: [commit]

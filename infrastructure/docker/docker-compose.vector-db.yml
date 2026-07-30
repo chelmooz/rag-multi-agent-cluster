@@ -1,13 +1,58 @@
-# Stack Docker du LXC Vector DB.
+# Stack Docker du LXC Vector DB (Qdrant).
 # STATUT : stub non testé — voir ROADMAP.md.
+# Aligné sur README : Qdrant (hybrid search natif dense + sparse BM25)
 services:
-  chromadb:
-    image: chromadb/chroma:latest
+  qdrant:
+    image: qdrant/qdrant:latest
     restart: unless-stopped
     ports:
-      - "8001:8000"
+      - "6333:6333"
+      - "6334:6334"  # gRPC
     volumes:
-      - chroma-data:/chroma/chroma
+      - qdrant-data:/qdrant/storage
+      - qdrant-snapshots:/qdrant/snapshots
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__STORAGE__SNAPSHOTS_PATH=/qdrant/snapshots
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
 volumes:
-  chroma-data:
+  qdrant-data:
+  qdrant-snapshots:
+  postgres-data:
+  redis-data:

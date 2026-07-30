@@ -1,31 +1,20 @@
-"""Point d'entrée API du cluster RAG multi-agents.
+"""Point d'entrée CLI / développement du cluster RAG multi-agents.
 
-STATUT : squelette non implémenté — voir ROADMAP.md.
+Usage:
+    python -m src.api.main          # Lance le serveur FastAPI (dev)
+    python -m src.core.settings     # Affiche la config résolue
 """
-from fastapi import FastAPI
-from pydantic import BaseModel
+from src.api.main import app
 
-app = FastAPI(title="rag-multi-agent-cluster")
+if __name__ == "__main__":
+    import uvicorn
+    from src.core.settings import get_settings
 
-
-class QueryRequest(BaseModel):
-    question: str
-    context: str | None = None
-
-
-class QueryResponse(BaseModel):
-    # TODO: aligner sur le format compatible OpenAI décrit dans le README
-    # une fois le pipeline agents/RAG implémenté.
-    answer: str
-
-
-@app.post("/api/v1/query", response_model=QueryResponse)
-def query(request: QueryRequest) -> QueryResponse:
-    # TODO: brancher le pipeline réel (planificateur -> recherche hybride
-    # -> reranking -> génération -> Juge/Avocat du diable -> évaluateur).
-    raise NotImplementedError("Pipeline RAG multi-agents pas encore implémenté")
-
-
-@app.get("/api/v1/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+    settings = get_settings()
+    uvicorn.run(
+        "src.api.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level=settings.log_level.lower(),
+    )
