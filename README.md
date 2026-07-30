@@ -10,7 +10,9 @@
 
 > ⚠️ **Correction hardware (29/07/2026)** : le BC-250 tourne sous **Vulkan (Mesa/RADV), pas ROCm** — AMD ne fournit pas de bibliothèques rocBLAS pour ce GPU (GFX1013). Sa mémoire est **16 GB GDDR6 unifiée** partagée CPU/GPU (pas 12 GB dédiés). Voir [docs communautaires BC-250](https://elektricm.github.io/amd-bc250-docs/) et le [guide AI akandr/bc250](https://github.com/akandr/bc250).
 
-> ℹ️ **Beta test frontend** : voir `scripts/test_frontend_api.py` — validation automatisée API + frontend (32 scénarios). **`/api/embed` → OK** (nomic-embed-text-v2-moe 768d, fallback histogramme si indisponible).
+> ℹ️ **Beta test frontend** : voir `scripts/test_frontend_api.py` — validation automatisée API + frontend (32 scénarios). **`/api/embed` → OK** (bge-m3 1024d — dense + sparse en un seul passage, BM25 conservé en complément lexical ; fallback histogramme si indisponible).
+
+> ✅ **Alignement OKF v0.2 (30/07/2026)** : Frontmatter wiki migré vers format OKF v0.2 (Google Cloud, juin 2026). Champs clés : `type` (obligatoire), `verified` (trust tier : unverified/machine-confirmed/human-reviewed), `status` (draft/stable/deprecated), `stale_after` (date), `sources` enrichis (crédibilité par source). Structure vault OKF : `index.md` (§8) + `log.md` (§9). CLI `okf` + plugin Obsidian `okf-enforcer` identifiés — **pas de dépendance dure tant que pré-1.0** (lecture/écriture frontmatter gérée nativement dans Wiki Agent).
 
 ---
 
@@ -157,14 +159,30 @@ wiki/
 └── synthesis/            # Analyses, comparatifs, rapports
 ```
 
-### Convention Frontmatter YAML (extrait `AGENTS.md`)
+### Convention Frontmatter YAML (aligné OKF v0.2)
 
 ```yaml
 ---
+type: "entity|concept|source|synthesis|log|agent|workflow"  # CHAMP OBLIGATOIRE OKF v0.2
 title: "Nom de la page"
-type: "entity|concept|source|synthesis|log"
-tags: ["tag1", "tag2"]
-sources: ["source1.md", "url"]
+description: "Résumé 1-2 phrases pour index/search"           # OKF v0.2
+resource: "wiki"                                              # OKF v0.2 - type de ressource
+tags: ["tag1", "tag2"]                                        # OKF v0.1 base
+verified:                                                     # OKF v0.2 - trust tier (Évaluateur = human-reviewed)
+  - reviewer: "evaluator-agent"
+    status: "human-reviewed"      # unverified | machine-confirmed | human-reviewed
+    timestamp: "2026-07-29T10:30:00Z"
+status: "stable"                  # draft | stable | deprecated (lint endpoint)
+stale_after: "2026-12-31"         # date fraîcheur (lint endpoint)
+sources:                          # OKF v0.2 - crédibilité par source
+  - uri: "source1.md"
+    author: "wiki-agent"
+    last_modified: "2026-07-29T10:30:00Z"
+    credibility: "high"           # high | medium | low
+  - uri: "https://example.com"
+    author: "external"
+    last_modified: "2026-07-29T10:30:00Z"
+    credibility: "medium"
 created: "2026-07-29T10:30:00Z"
 updated: "2026-07-29T10:30:00Z"
 version: 1
@@ -178,7 +196,7 @@ version: 1
 | `POST /api/v1/ingest` | Envoie une source (fichier, URL, texte) → crée/MAJ pages wiki |
 | `POST /api/v1/query` | Pose une question → réponse synthétisée + citations |
 | `GET /api/v1/lint` | Health check wiki : pages orphelines, contradictions, gaps |
-| `GET /api/v1/embed` | Embedding texte → vecteur 768d (nomic-embed-text-v2-moe) + fallback histogramme |
+| `GET /api/v1/embed` | Embedding texte → vecteur dense 1024d + sparse appris (bge-m3) + fallback histogramme |
 
 ### Workflow Web Clipper
 
@@ -260,7 +278,7 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 - **Infrastructure** : Proxmox VE 9.3, LXC, Docker, Docker Compose
 - **IA & LLM (Machine 2, RTX 4000)** : Ollama, CUDA, modèles open-weight (Qwen3.5, Mistral, BGE)
 - **IA & LLM (Machine 3, BC-250)** : Ollama + backend **Vulkan** (`OLLAMA_VULKAN=1`), Mesa/RADV 25.1+ — **pas ROCm** (non supporté sur GFX1013)
-- **IA & LLM (Machine 1)** : embedding `nomic-embed-text-v2-moe` sur **CPU Xeon (principal)** ; RX 580 en **fallback léger uniquement** (OpenCL si besoin)
+- **IA & LLM (Machine 1)** : embedding `bge-m3` (dense + sparse appris) sur **CPU Xeon (principal)**, en complément de BM25 (lexical exact via Qdrant) ; RX 580 en **fallback léger uniquement** (OpenCL si besoin)
 - **Orchestration Agents** : **LangGraph** (choix tranché — graphe d'état explicite, parallélisme natif, checkpointing)
 - **Vector Store & DB** : **Qdrant** (hybrid search natif), PostgreSQL, Redis
 - **API & Backend** : FastAPI, nginx (reverse proxy LXC 102)
@@ -347,13 +365,13 @@ ollama pull qwen3.5:7b@sha256:...             # Juge
 ollama pull mistral:7b@sha256:...             # Avocat (mistral-small-3.2:7b n'existe pas → mistral:7b ou mistral-nemo)
 ollama pull bge-reranker-v2-m3@sha256:...     # Reranker
 # Backup embedding CPU sur M2 (64 GB RAM inutilisée)
-ollama pull nomic-embed-text-v2-moe@sha256:...
+ollama pull bge-m3@sha256:...
 
 # Sur Machine 3 (BC-250) — Ollama Vulkan natif
 ollama pull qwen3.5:14b@sha256:...            # Générateur principal (Q4_K_M ~9 GB)
 ollama pull qwen3.5-35b-a3b@sha256:...        # Générateur alternatif MoE (IQ2_M ~11 GB)
 ollama pull qwen3-coder-30b-a3b@sha256:...    # Text-to-SQL / Code (IQ2_M)
-ollama pull nomic-embed-text-v2-moe@sha256:...  # Embedding MoE (pour variantes)
+ollama pull bge-m3@sha256:...                 # Embedding dense+sparse (pour variantes)
 ollama pull llava-next:13b@sha256:...         # Vision (Phase 5.2)
 ollama pull qwen2.5-vl@sha256:...             # Vision alt (Phase 5.2)
 ollama pull granite-4.0-h-tiny@sha256:...     # Fast-check lexical (Phase 5.4)

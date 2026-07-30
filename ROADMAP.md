@@ -1,12 +1,16 @@
 # Roadmap
 
-État réel au 29/07/2026 : phase de conception documentaire terminée. Aucun code n'existe encore dans ce dépôt. Les cases cochées ci-dessous concernent uniquement la documentation, pas l'implémentation.
+État réel au 30/07/2026 : phase de conception documentaire terminée. Aucun code n'existe encore dans ce dépôt. Les cases cochées ci-dessous concernent uniquement la documentation, pas l'implémentation.
+
+**Alignement OKF v0.2** : Frontmatter wiki migré vers format OKF v0.2 (type obligatoire, verified/trust tier, status/stale_after, sources enrichis). CLI `okf` + plugin Obsidian `okf-enforcer` identifiés pour lint futur — pas de dépendance dure tant que pré-1.0.
 
 ## Documentation
 - [x] README consolidé (architecture, infra, stack, guide d'installation, intégration Obsidian Vault)
 - [x] Schéma d'architecture (`docs/architecture.svg`)
 - [ ] Documentation API (OpenAPI/Swagger)
 - [ ] Tutoriel d'installation pas-à-pas testé de bout en bout
+- [ ] **Template OKF `docs/claude-md-template.md` → `/data/wiki/CLAUDE.md`** (frontmatter OKF v0.2)
+- [ ] **Script `scripts/okf-lint.py` : validation frontmatter OKF + détection stale/orphelins/contradictions** (remplace/partiel `/api/v1/lint`)
 
 ## Infrastructure
 - [ ] Trancher Debian Testing/Sid vs antiX-26 pour le nœud BC-250 (antiX déjà en place selon les notes de Michel — vérifier que Mesa 25.1.3+ y est disponible avant d'exécuter le script tel quel)
@@ -26,6 +30,7 @@
 - [ ] Agents Juge / Avocat du diable / Évaluateur
 - [ ] Endpoint `/api/v1/query`
 - [ ] Actions WikiTools (read_page, write_page, append_log, update_index, lint)
+- [ ] **Endpoints OKF : `/api/v1/okf/validate`, `/api/v1/okf/list`, `/api/v1/okf/show`** (wrappers CLI `okf`)
 
 ## Intégration Obsidian Vault (pattern Karpathy)
 - [ ] Bind mount vault partagé (NFS/SMB entre LXC 100 et client)
@@ -33,6 +38,7 @@
 - [ ] Workflow ingestion : source → pages wiki (avec évaluation multi-agents)
 - [ ] Workflow query : question → recherche wiki → synthèse avec citations
 - [ ] Workflow lint : détection contradictions, orphelins, gaps
+- [ ] **Structure OKF : `index.md` (catalogue §8) + `log.md` (chronologie §9) + frontmatter validé**
 
 ## Fonctionnalités futures
 - [ ] Text-to-SQL sur le nœud BC250

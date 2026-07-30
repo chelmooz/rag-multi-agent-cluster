@@ -6,13 +6,26 @@
 - [ ] 0.3 Docker Compose VectorDB (Qdrant + PostgreSQL + Redis)
 - [ ] 0.4 Docker Compose Orchestrator (FastAPI + workers)
 - [ ] 0.5 Scripts Proxmox LXC (master + GPU passthrough RTX 4000)
+- [ ] 0.6 **Créer `docs/claude-md-template.md` → template CLAUDE.md pour wiki (frontmatter OKF v0.2)**
+- [ ] 0.7 **Créer `scripts/okf-lint.py` : validation frontmatter OKF + détection stale/orphelins/contradictions**
+- [ ] 0.8 **Endpoints OKF wrapper : `/api/v1/okf/validate`, `/api/v1/okf/list`, `/api/v1/okf/show`**
+- [ ] 0.6 Créer `infrastructure/proxmox/create-lxc-wiki-agent.sh` (LXC 100 complet)
+- [ ] 0.7 Créer `infrastructure/docker/orchestrator.yml` + `nginx.conf` + 3 Dockerfiles
+- [ ] 0.8 Créer `docs/claude-md-template.md` → template CLAUDE.md pour wiki (frontmatter OKF v0.2)
+- [ ] 0.9 Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback)
+- [ ] 0.10 Test d'ingestion bout-en-bout : source → embed M1 → index Qdrant → wiki pages → index.md/log.md
+- [ ] 0.11 Configurer mTLS pour API interne (certs auto-signés via pfSense CA)
+- [ ] 0.12 Prometheus exporter custom wiki-agent (metrics: `wiki_pages_total`, `ingest_duration`, `query_latency`)
+- [ ] 0.13 Git sidecar auto-commit dans LXC 100 (cron 1h) pour versioning wiki hors OMV
+- [ ] 0.14 Script `scripts/okf-lint.py` : validation frontmatter OKF v0.2 + détection stale/orphelins/contradictions (wrappers CLI `okf`)
 
 ## Phase 1 — Pipeline RAG Core (Master LXC 100-101)
-- [ ] 1.1 Ingestion Service (chunking, augmentation, embedding sur Machine 2 CPU)
+- [ ] 1.1 Ingestion Service (chunking, augmentation, embedding sur Machine 1 CPU)
 - [ ] 1.2 VectorService (Qdrant client, hybrid search)
 - [ ] 1.3 LexicalSearch (BM25 via Qdrant sparse)
 - [ ] 1.4 Reranker (bge-reranker-v2-m3 sur RTX 4000 - Machine 2)
 - [ ] 1.5 API Endpoints (/ingest, /query OpenAI-compat)
+- [ ] 1.6 **Endpoint `/api/v1/embed` : bge-m3 dense+sparse unifié + fallback histogramme** (OK → README)
 
 ## Phase 2 — Orchestrateur & Planificateur (LXC 100 - Machine 1)
 - [ ] 2.1 Orchestrator (flux principal)
@@ -26,12 +39,15 @@
 - [ ] 3.2 Judge (qwen3.5:7b Q4_K_M sur RTX 4000 - Machine 2 LXC 200) — **séquentiel, unload après écriture relay**
 - [ ] 3.3 Devil's Advocate (mistral-small-3.2:7b Q4_K_M sur RTX 4000 - Machine 2 LXC 201) — **séquentiel après Judge, lit relay**
 - [ ] 3.4 Evaluator (qwen3.5:3b / granite-3.2:2b Q4_K_M sur Machine 1 CPU) — **lit relay.json complet, synthèse finale**
+- [ ] 3.5 **Évaluateur écrit `verified: human-reviewed` dans frontmatter pages validées (OKF trust tier)**
 
-## Phase 4 — Wiki Persistant (Pattern Karpathy)
+## Phase 4 — Wiki Persistant (Pattern Karpathy + OKF v0.2)
 - [ ] 4.1 WikiTools (read/write/append/index/log via vault Obsidian)
 - [ ] 4.2 IngestAgent (source → pages wiki + index.md + log.md)
-- [ ] 4.3 Schema AGENTS.md (conventions nommage, frontmatter, structure)
+- [ ] 4.3 Schema AGENTS.md (conventions nommage, frontmatter OKF v0.2, structure)
 - [ ] 4.4 Endpoint /api/v1/ingest
+- [ ] 4.5 **Structure vault OKF : `index.md` (§8 catalogue) + `log.md` (§9 chronologie) + frontmatter validé**
+- [ ] 4.6 **Lint endpoint `/api/v1/lint` utilise `okf list --stale --orphan --contradiction`**
 
 ## Phase 5 — Variantes Avancées
 - [ ] 5.1 Text-to-SQL (BC250, qwen3-coder-30b-a3b IQ2_M, contexte 64k)
@@ -54,21 +70,23 @@
 
 | Nœud | Rôle | CPU / RAM | GPU / Accélérateur | Virtualisation |
 | :--- | :--- | :--- | :--- | :--- |
-| **Machine 1** | **Master** (Orchestration, API, VectorDB, Monitoring, Evaluator, Embedding CPU, **Relay NFS**) | 2× Xeon E5-2699 v4 / **32 GB ECC** | **AMD Radeon RX 580** (8 GB) | Proxmox VE 9.3 (LXC 100, 101, 102, 103) |
-| **Machine 2** | **GPU Worker** (Reranker, Judge, Avocat, Backup Embedding CPU) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM) | Proxmox VE 9.3 (LXC 200 privilégié GPU, 201) |
-| **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Granite fast-check) | Zen 2 6c/12t / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU unlocked) | Debian Testing/Sid baremetal (Ollama Vulkan natif) |
+| **Machine 1** | **Master** (Orchestration, API, VectorDB, Monitoring, Evaluator, Embedding CPU, **Relay NFS**) | 2× Xeon E5-2699 v4 / **32 GB ECC** | **AMD Radeon RX 580** (8 GB) | Proxmox VE 9.3 (LXC 100, 101, 102, 103, 104*, 105) |
+| **Machine 2** | **GPU Worker** (Reranker, Judge, Avocat, Backup Embedding CPU) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | Proxmox VE 9.3 (LXC 200 privilégié GPU, 201) |
+| **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Fast-check) | Zen 2 6c/12t / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU débloquées) | Debian Testing/Sid baremetal (Ollama Vulkan natif) |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
+
+\* LXC 104 = pfSense, uniquement si pas d'appliance dédiée.
 
 **Réseau** : Machine 1 dispose de 2 ports 10 Gb/s + 1 port 1 Gb/s (carte familiale) — backbone 10 Gb/s inter-nœuds recommandé.
 
-**NFS Relay** : Machine 1 exporte `/data/shared` → monté sur Machine 2 `/data/shared` (fichier `evaluation-relay.json` partagé pour pipeline Juge→Avocat→Evaluateur).
+**NFS Relay** : Machine 1 exporte `/data/shared` → monté sur Machine 2 `/data/shared` (fichier `evaluation-relay.json` partagé pour pipeline Juge→Avocat→Évaluateur).
 
 **Répartition LXC prévue** :
 - Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `102` API Gateway (Nginx), `103` Monitoring (Prometheus/Grafana/Loki)
 - Machine 2 : `200` Inference GPU (passthrough RTX 4000), `201` Workers Agents (Juge, Avocat, backup embedding)
 - Machine 3 : Ollama Vulkan natif (pas de LXC)
 
-## Modèles Recommandés par Machine (29/07/2026 - validé échange)
+## Modèles Recommandés par Machine (30/07/2026 - validé échange)
 
 ### Machine 1 — Master (32GB ECC, RX 580)
 | Rôle | Modèle | Quant | Raison |
