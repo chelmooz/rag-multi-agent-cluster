@@ -102,8 +102,8 @@ class Settings(BaseSettings):
     # ──────────────────────────────────────────────
     # Embedding
     embedding_model: str = Field(
-        default="nomic-embed-text-v2-moe",
-        description="Modèle embedding principal (768d, dense+sparse via bge-m3 fallback)",
+        default="hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0",
+        description="Modèle embedding principal (768d, dense+sparse via bge-m3 fallback) — nomic-embed-text-v2-moe Q8_0 via HF",
         validation_alias="EMBEDDING_MODEL",
     )
     embedding_model_digest: str | None = Field(
@@ -128,8 +128,8 @@ class Settings(BaseSettings):
         validation_alias="GENERATOR_MODEL_DIGEST",
     )
     generator_alt_model: str = Field(
-        default="qwen3.5-35b-a3b",
-        description="Modèle génération alternatif MoE (IQ2_M ~11GB)",
+        default="hf.co/Qwen/Qwen3-30B-A3B-GGUF:Q2_K",
+        description="Modèle génération alternatif MoE — Qwen3-30B-A3B Q2_K ~11.3 Go (HF)",
         validation_alias="GENERATOR_ALT_MODEL",
     )
     generator_alt_model_digest: str | None = Field(
@@ -139,7 +139,8 @@ class Settings(BaseSettings):
 
     # Reranker (RTX 4000)
     reranker_model: str = Field(
-        default="bge-reranker-v2-m3",
+        default="hf.co/gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M",
+        description="Reranker multilingue — bge-reranker-v2-m3 Q4_K_M via HF (RTX 4000)",
         validation_alias="RERANKER_MODEL",
     )
     reranker_model_digest: str | None = Field(
@@ -178,7 +179,8 @@ class Settings(BaseSettings):
 
     # Evaluator (Master CPU)
     evaluator_model: str = Field(
-        default="qwen3.5:3b",
+        default="hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M",
+        description="Évaluateur — Qwen3-4B Q4_K_M ~2.5 Go (CPU M1, HF)",
         validation_alias="EVALUATOR_MODEL",
     )
     evaluator_model_digest: str | None = Field(
@@ -188,7 +190,8 @@ class Settings(BaseSettings):
 
     # Text-to-SQL / Code (BC-250)
     text2sql_model: str = Field(
-        default="qwen3-coder-30b-a3b",
+        default="hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q2_K",
+        description="Text-to-SQL / Code — Qwen3-Coder-30B-A3B Q2_K ~11 Go (BC-250, HF)",
         validation_alias="TEXT2SQL_MODEL",
     )
     text2sql_model_digest: str | None = Field(
@@ -198,7 +201,8 @@ class Settings(BaseSettings):
 
     # Vision (BC-250)
     vision_model: str = Field(
-        default="llava-next:13b",
+        default="hf.co/cjpais/llava-v1.6-vicuna-13b-gguf:Q4_K_M",
+        description="Vision — llava-v1.6-vicuna-13b Q4_K_M 7.87 Go (BC-250, HF)",
         validation_alias="VISION_MODEL",
     )
     vision_model_digest: str | None = Field(
@@ -208,7 +212,8 @@ class Settings(BaseSettings):
 
     # Fast-check lexical (BC-250)
     fastcheck_model: str = Field(
-        default="granite-4.0-h-tiny",
+        default="hf.co/ibm-granite/granite-4.0-h-tiny-GGUF:Q4_K_M",
+        description="Fast-check lexical — granite-4.0-h-tiny Q4_K_M ~3 Go (BC-250, HF)",
         validation_alias="FASTCHECK_MODEL",
     )
     fastcheck_model_digest: str | None = Field(

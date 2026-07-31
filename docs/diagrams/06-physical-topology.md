@@ -25,7 +25,7 @@ flowchart TB
     end
 
     subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
-        Ollama["🤖 Ollama Vulkan natif<br/>Générateur qwen3.5:14b/35b MoE<br/>Text-to-SQL · Vision · Fast-check<br/>CPU au repos pendant inférence"]:::m3
+        Ollama["🤖 Ollama Vulkan natif<br/>Générateur Qwen3-14B/30B-A3B MoE<br/>Text-to-SQL · Vision · Fast-check<br/>CPU au repos pendant inférence"]:::m3
         Glances["📊 Glances -w :61208<br/>Monitoring BC-250 (décision D9)<br/>CPU/RAM/temp — seul nœud hors Proxmox"]:::m3
     end
 

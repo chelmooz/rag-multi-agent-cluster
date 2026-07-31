@@ -1,4 +1,4 @@
-"""Évaluateur Agent — synthèse finale sur Machine 1 CPU (qwen3.5:3b).
+"""Évaluateur Agent — synthèse finale sur Machine 1 CPU (hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M).
 
 Pipeline :
 1. Lit relay.json complet (response + Judge + Avocat)

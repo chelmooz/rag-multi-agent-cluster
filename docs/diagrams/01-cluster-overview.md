@@ -14,7 +14,7 @@ flowchart TB
         Orch["🎯 Orchestrateur<br/>FastAPI · LangGraph · LXC 100"]:::m1
         Qdrant["💾 Qdrant VectorDB<br/>BM25 + Vectoriel 768d · LXC 101"]:::m1
         Embed["🔢 Embedding CPU<br/>nomic-embed-text-v2-moe<br/>768d · Xeon 32c/64t"]:::m1
-        Eval["✅ Évaluateur<br/>qwen3.5:3b · CPU · Synthèse finale"]:::m1
+        Eval["✅ Évaluateur<br/>Qwen3-4B · CPU · Synthèse finale"]:::m1
         Gate["🌐 pfSense VM 104 (reverse proxy + firewall) · Monitoring natif Proxmox · OMV Backup (LXC 105)"]:::backup
     end
 
@@ -26,8 +26,8 @@ flowchart TB
     end
 
     subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
-        Gen["🤖 Générateur<br/>qwen3.5:14b (Q4_K_M ~9GB)<br/>ou 35b-a3b MoE (IQ2_M ~11GB)<br/>Ollama Vulkan natif · CPU au repos"]:::m3
-        Variants["🔀 Variantes<br/>Text-to-SQL (qwen3-coder-30b)<br/>Vision (llava-next:13b / qwen2.5-vl)<br/>Fast-check (granite-4.0-h-tiny)"]:::m3
+        Gen["🤖 Générateur<br/>Qwen3-14B (Q4_K_M ~9GB)<br/>ou Qwen3-30B-A3B MoE (Q2_K ~11.3GB)<br/>Ollama Vulkan natif · CPU au repos"]:::m3
+        Variants["🔀 Variantes<br/>Text-to-SQL (Qwen3-Coder-30B-A3B)<br/>Vision (llava-v1.6-vicuna-13b)<br/>Fast-check (granite-4.0-h-tiny)"]:::m3
     end
 
     Relay["📄 relay.json (NFS partagé M1↔M2)<br/>/data/shared · Évaluation séquentielle"]:::relay

@@ -43,7 +43,7 @@ flowchart TB
     ModeleGen["Modèle génératif<br/>Qwen3-14B hf.co — M3"]:::m3
     JugeLLM["Juge (LLM)<br/>DeepSeek-R1-Distill-Llama-8B — RTX 4000 M2"]:::m2
     Avocat["Avocat du diable<br/>Ministral-8B-Instruct-2410 — M2"]:::m2
-    Evaluateur["Évaluateur<br/>qwen3.5:3b CPU — M1"]:::m1
+    Evaluateur["Évaluateur<br/>Qwen3-4B CPU — M1"]:::m1
     Relay["📄 relay.json<br/>Handoff séquentiel — 1 seul modèle<br/>chargé à la fois sur RTX 4000"]:::op
     ReponseFinale["Réponse finale<br/>Retour à l'utilisateur"]:::final
 
@@ -94,7 +94,7 @@ flowchart TB
         M1_101["LXC 101: Qdrant VectorDB"]:::m1
         M1_104["VM 104: pfSense (reverse proxy + firewall)"]:::m1
         M1_vault["/data/wiki vault"]:::m1
-        M1_models["Modèles CPU (M1)<br/>Embedding: nomic-v2-moe 768d Q8_0 (primary)<br/>Evaluator: qwen3.5:3b Q4_K_M"]:::m1
+        M1_models["Modèles CPU (M1)<br/>Embedding: nomic-v2-moe 768d Q8_0 (primary)<br/>Evaluator: Qwen3-4B Q4_K_M"]:::m1
         M1_wiki["Agent Wiki Maintainer<br/>Ingest / Query / Lint / Index.md + Log.md"]:::m1
     end
 
@@ -104,7 +104,7 @@ flowchart TB
     end
 
     subgraph Machine3["Machine 3: BC250 · Baremetal Debian Sid · 16GB GDDR6 (12GB IA) · 40 CU · Vulkan-only · CPU au repos"]
-        M3_models["Modèles Vulkan (M3)<br/>Generator: Qwen3-14B Q4_K_M (hf.co) ou 35b-a3b MoE IQ2_M<br/>Text-to-SQL: qwen3-coder 30b-a3b MoE IQ2_M<br/>Vision: llava-next:13b Q4<br/>Fast-check: granite-4.0-h-tiny"]:::m3
+        M3_models["Modèles Vulkan (M3)<br/>Generator: Qwen3-14B Q4_K_M (hf.co) ou Qwen3-30B-A3B MoE Q2_K<br/>Text-to-SQL: Qwen3-Coder-30B-A3B MoE Q2_K<br/>Vision: llava-v1.6-vicuna-13b Q4<br/>Fast-check: granite-4.0-h-tiny"]:::m3
         M3_warn["⚠ RÈGLE D'OR BC250<br/>CPU = serviteur du GPU<br/>Aucune charge CPU (embedding, batch) quand le GPU infère"]:::warn
     end
 

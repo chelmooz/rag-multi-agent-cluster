@@ -96,7 +96,7 @@ subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · RX 580
         Orch["🎯 Orchestrateur<br/>FastAPI · LangGraph · LXC 100"]:::m1
         Qdrant["💾 Qdrant VectorDB<br/>BM25 + Vectoriel 768d · LXC 101"]:::m1
         Embed["🔢 Embedding CPU<br/>nomic-embed-text-v2-moe<br/>768d · Xeon 32c/64t"]:::m1
-        Eval["✅ Évaluateur<br/>qwen3.5:3b · CPU · Synthèse finale"]:::m1
+        Eval["✅ Évaluateur<br/>Qwen3-4B · CPU · Synthèse finale"]:::m1
         GW["🛡️ pfSense GW<br/>Reverse Proxy + Firewall + NAT<br/>DNAT → LXC 100:8000"]:::backup
     end
 
@@ -109,8 +109,8 @@ subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 
     end
 
     subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
-        Gen["🤖 Générateur<br/>qwen3.5:14b (Q4_K_M ~9GB)<br/>ou 35b-a3b MoE (IQ2_M ~11GB)<br/>Ollama Vulkan natif · CPU au repos"]:::m3
-        Variants["🔀 Variantes<br/>Text-to-SQL (qwen3-coder-30b)<br/>Vision (llava-next:13b / qwen2.5-vl)<br/>Fast-check (granite-4.0-h-tiny)"]:::m3
+        Gen["🤖 Générateur<br/>Qwen3-14B (Q4_K_M ~9GB)<br/>ou Qwen3-30B-A3B MoE (Q2_K ~11.3GB)<br/>Ollama Vulkan natif · CPU au repos"]:::m3
+        Variants["🔀 Variantes<br/>Text-to-SQL (Qwen3-Coder-30B-A3B)<br/>Vision (llava-v1.6-vicuna-13b)<br/>Fast-check (granite-4.0-h-tiny)"]:::m3
         Glances["📊 Glances -w :61208<br/>Monitoring BC-250 (décision D9)"]:::m3
     end
 
@@ -191,14 +191,14 @@ flowchart TB
 
     subgraph P3["PHASE 3 · Génération — M3 · BC-250 · GPU Vulkan"]
         Assemble["📦 Assemblage<br/>contexte enrichi"]:::m1
-        Gen["🤖 Générateur qwen3.5:14b<br/>M3 · Vulkan · CPU au repos"]:::m3
+        Gen["🤖 Générateur Qwen3-14B<br/>M3 · Vulkan · CPU au repos"]:::m3
     end
 
     subgraph P4["PHASE 4 · Évaluation multi-agents — séquentielle sur M2"]
         Relay["📄 relay.json<br/>NFS M1↔M2"]:::relay
         Judge["① ⚖️ Juge 8b — M2<br/>Qualité + Cohérence"]:::m2
         Advocate["② 😈 Avocat 8b — M2<br/>Failles + Hallucinations"]:::m2
-        Evaluator["③ ✅ Évaluateur 3b — M1<br/>Synthèse des deux avis"]:::m1
+        Evaluator["③ ✅ Évaluateur 4b — M1<br/>Synthèse des deux avis"]:::m1
     end
 
     Answer["🎉 Réponse validée + citations<br/>Archivée vault (pattern Karpathy)"]:::front
@@ -523,7 +523,7 @@ subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · 2×10G
     end
 
     subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
-        Ollama["🤖 Ollama Vulkan natif<br/>Générateur qwen3.5:14b/35b MoE<br/>Text-to-SQL · Vision · Fast-check<br/>CPU au repos pendant inférence"]:::m3
+        Ollama["🤖 Ollama Vulkan natif<br/>Générateur Qwen3-14B/30B-A3B MoE<br/>Text-to-SQL · Vision · Fast-check<br/>CPU au repos pendant inférence"]:::m3
         Glances["📊 Glances -w :61208<br/>Monitoring BC-250 (décision D9)"]:::m3
     end
 
@@ -583,10 +583,10 @@ bash enable-40cu-unlock.sh   # optionnel
 
 # 4. Ollama
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull qwen3.5:14b          # Générateur (M3)
+ollama pull hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M  # Générateur (M3)
 ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M           # Judge (M2)
 ollama pull hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M # Avocat (M2)
-ollama pull nomic-embed-text-v2-moe  # Embedding (M1)
+ollama pull hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0  # Embedding (M1)
 ```
 
 > Voir [`docs/deployment-guide.md`](docs/deployment-guide.md) pour les commandes complètes, les allocations mémoire/vCPU, la config GPU passthrough, et les scripts de post-installation.

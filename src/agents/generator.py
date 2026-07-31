@@ -1,6 +1,6 @@
 """Generator Agent — inférence sur Machine 3 BC-250 (Vulkan ONLY).
 
-Modèle : qwen3.5:14b Q4_K_M (~9GB) ou qwen3.5-35b-a3b IQ2_M (~11GB)
+Modèle : hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M (~9GB) ou hf.co/Qwen/Qwen3-30B-A3B-GGUF:Q2_K (~11.3GB)
 Contrainte : 16 GB RAM unifiée, CPU au repos pendant inference (règle d'or BC-250)
 """
 

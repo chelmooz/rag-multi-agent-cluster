@@ -43,6 +43,7 @@ Phase A (RAG core, mock-first) ──► Phase B (multi-agents, mock-first) ─�
 | C3 | Déployer OMV dans LXC 105 (docker-compose.omv.yml + passthrough HDD 2TB + borg) | `infrastructure/docker/`, `infrastructure/proxmox/` |
 | C4 | Pull des modèles (Ollama M1/M2/M3) + lock digests SHA256 dans `.env` | `.env`, docs |
 | C4.1 | Résolution Hugging Face exclusive (hf.co/...) pour Générateur (Qwen3-14B), Juge (DeepSeek-R1-Distill-Llama-8B), Avocat (Ministral-8B-2410) — cf. `docs/BRIEF-INTEGRATION-MODELES-Q4-HF.md` | `.env`, `settings.py` |
+| C4.2 | Résolution HF étendue aux 7 autres modèles (embedding, reranker, évaluateur, générateur alt, text2sql, vision, fastcheck) — cf. §8 du BRIEF | `.env`, `settings.py` |
 | C5 | Glances (`glances -w`) sur BC-250 uniquement (D9) | `infrastructure/bc250/` |
 | C6 | Smoke tests bout-en-bout sur le cluster réel + mesure de latence (4 appels LLM si éval activée) | `scripts/smoke_test_frontend_api.py` |
 

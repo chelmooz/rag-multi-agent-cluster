@@ -92,8 +92,8 @@ systemctl enable --now nfs-server
 
 # Ollama CPU (embedding + évaluateur)
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull nomic-embed-text-v2-moe
-ollama pull qwen3.5:3b
+ollama pull hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0
+ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M
 ```
 
 > Note : Plus de Monitoring LXC 103 (décision D9) — supervision via graphs natifs Proxmox + pfSense, et Glances sur BC-250 (cf. section 3).
@@ -169,7 +169,7 @@ systemctl daemon-reload && systemctl restart ollama
 
 # Models
 ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M        # Judge (~5 GB Q4_K_M)
-ollama pull bge-reranker-v2-m3
+ollama pull hf.co/gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M                # Reranker (RTX 4000)
 
 # NFS mount relay
 mkdir -p /data/shared
@@ -378,7 +378,7 @@ docker compose -f /srv/omv/docker-compose.yml up -d
 
 ```bash
 ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M@sha256:...
-ollama pull bge-reranker-v2-m3@sha256:...
+ollama pull hf.co/gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M@sha256:...
 ```
 
 ### Machine 2 — LXC 201 (CPU, fallback)
@@ -391,18 +391,18 @@ ollama pull bge-m3@sha256:...
 ### Machine 3 — BC-250 (Vulkan)
 
 ```bash
-ollama pull qwen3.5:14b@sha256:...            # Générateur (~9 GB)
-ollama pull qwen3.5-35b-a3b@sha256:...        # Générateur alternatif (~11 GB)
-ollama pull qwen3-coder-30b-a3b@sha256:...    # Text-to-SQL
-ollama pull llava-next:13b@sha256:...          # Vision
-ollama pull granite-4.0-h-tiny@sha256:...      # Fast-check
+ollama pull hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M@sha256:...  # Générateur (~9 GB)
+ollama pull hf.co/Qwen/Qwen3-30B-A3B-GGUF:Q2_K@sha256:...        # Générateur alternatif (~11.3 GB)
+ollama pull hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q2_K@sha256:...  # Text-to-SQL
+ollama pull hf.co/cjpais/llava-v1.6-vicuna-13b-gguf:Q4_K_M@sha256:...        # Vision
+ollama pull hf.co/ibm-granite/granite-4.0-h-tiny-GGUF:Q4_K_M@sha256:...  # Fast-check
 ```
 
 ### Machine 1 — Hôte (CPU)
 
 ```bash
-ollama pull nomic-embed-text-v2-moe@sha256:... # Embedding
-ollama pull qwen3.5:3b@sha256:...              # Fallback léger
+ollama pull hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0@sha256:... # Embedding
+ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M@sha256:...                   # Fallback léger
 ```
 
 > ⚠️ Fixer les digests SHA256 dans `.env` pour garantir la reproductibilité.

@@ -81,10 +81,10 @@
 - [ ] 2.9 **LangGraph build_graph()** complet — relie Planner → Rewriter → HybridSearch → Reranker → ContextAssembler → Generator → Relay → Judge → Advocate → Evaluator → WikiUpdate
 
 ## Phase 3 — Génération + Évaluation Multi-Agents
-- [ ] 3.1 Generator (qwen3.5:14b Q4_K_M ou qwen3.5-35b-a3b IQ2_M sur BC250 Vulkan)
+- [ ] 3.1 Generator (hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M ou hf.co/Qwen/Qwen3-30B-A3B-GGUF:Q2_K sur BC250 Vulkan)
 - [ ] 3.2 Judge (hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M sur RTX 4000 - Machine 2 LXC 200) — **séquentiel, unload après écriture relay**
 - [ ] 3.3 Devil's Advocate (hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M sur RTX 4000 - Machine 2 LXC 201) — **séquentiel après Judge, lit relay**
-- [ ] 3.4 Evaluator (qwen3.5:3b / granite-3.2:2b Q4_K_M sur Machine 1 CPU) — **lit relay.json complet, synthèse finale**
+- [ ] 3.4 Evaluator (hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M / granite-3.2:2b Q4_K_M sur Machine 1 CPU) — **lit relay.json complet, synthèse finale**
 - [ ] 3.5 **Évaluateur écrit `verified: human-reviewed` dans frontmatter pages validées (OKF trust tier)**
 - [ ] 3.6 **Ollama model unload séquentiel** : `ollama unload` + vérif VRAM libérée entre Judge → Avocat
 
@@ -97,8 +97,8 @@
 - [ ] 4.6 **Lint endpoint `/api/v1/lint` utilise `okf list --stale --orphan --contradiction`**
 
 ## Phase 5 — Variantes Avancées
-- [ ] 5.1 Text-to-SQL (BC250, qwen3-coder-30b-a3b IQ2_M, contexte 64k)
-- [ ] 5.2 Vision (BC250, llava-next:13b / qwen2.5-vl Q4_K_M)
+- [ ] 5.1 Text-to-SQL (BC250, hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q2_K, contexte 64k)
+- [ ] 5.2 Vision (BC250, hf.co/cjpais/llava-v1.6-vicuna-13b-gguf:Q4_K_M / qwen2.5-vl Q4_K_M)
 - [ ] 5.3 Graph RAG (NetworkX + entités wiki)
 - [ ] 5.4 Long-term Memory (PostgreSQL conversations + feedback)
 
@@ -142,28 +142,28 @@
 ### Machine 1 — Master (32GB ECC, RX 580)
 | Rôle | Modèle | Quant | Raison |
 |------|--------|-------|--------|
-| **Embedding principal** | `nomic-embed-text-v2-moe` (768d) | Q8_0 (CPU) | Xeon 32c/64t idle, batch offline |
-| **Évaluateur 3B** | `qwen3.5:3b` / `granite-3.2:2b` | Q4_K_M | Léger, CPU-only, synthèse + décision |
+| **Embedding principal** | `hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0` (768d) | Q8_0 (CPU) | Xeon 32c/64t idle, batch offline |
+| **Évaluateur 4B** | `hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M` / `granite-3.2:2b` | Q4_K_M | Léger, CPU-only, synthèse + décision |
 | **Fallback léger** | `qwen2.5:3b` | Q4_K_M | Usage général de secours — sans pipeline monitoring/alerting dédié (retiré, cf. Phase 7) |
 
 ### Machine 2 — GPU Worker (64GB ECC, RTX 4000 8GB VRAM, Xeon 2698 v4 20c/40t)
 | Rôle | Modèle | Quant | VRAM estimée | Raison |
 |------|--------|-------|--------------|--------|
-| **Reranker** | `bge-reranker-v2-m3` | Q4_K_M | ~4-6 GB | Tient dans RTX 4000 |
+| **Reranker** | `hf.co/gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M` | Q4_K_M | ~4-6 GB | Tient dans RTX 4000 |
 | **Judge** | `hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M` | Q4_K_M | ~5 GB | Éval qualité, fort raisonnement |
 | **Avocat du diable** | `hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M` | Q4_K_M | ~5 GB | Approche différente → diversité |
-| **Embedding batch (backup)** | `nomic-embed-text-v2-moe` | Q8_0 (CPU) | - | 64GB RAM + 40 threads inutilisés si Machine 1 saturée |
+| **Embedding batch (backup)** | `hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0` | Q8_0 (CPU) | - | 64GB RAM + 40 threads inutilisés si Machine 1 saturée |
 
 > **Note** : 64GB ECC permet de charger **tous les buffers simultanément** (reranker + judge + avocat + ingestion) sans swap.
 
 ### Machine 3 — BC250 Baremetal (16GB GDDR6 unifiée, Vulkan-only, 40 CU unlocked)
 | Rôle | Modèle | Quant | Raison |
 |------|--------|-------|--------|
-| **Generator principal** | `qwen3.5:14b` (dense) | Q4_K_M | ~9 GB, 40 CU → ~30 tok/s |
-| **Generator alternatif (qualité)** | `qwen3.5-35b-a3b` (MoE) | IQ2_M | ~11 GB, 40 CU → ~78 tok/s (llama.cpp direct) |
-| **Text-to-SQL / Code** | `qwen3-coder-30b-a3b` (MoE) | IQ2_M | 3B actifs, 64k contexte, français |
-| **Vision (Phase 5.2)** | `llava-next:13b` / `qwen2.5-vl` | Q4_K_M | Même contrainte que Generator 14B |
-| **Fast-check lexical skill** | `granite-4.0-h-tiny` (3.4B hybrid Mamba) | Q4_K_M | 40 CU → **129 tok/s**, 128K+ contexte |
+| **Generator principal** | `hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M` (dense) | Q4_K_M | ~9 GB, 40 CU → ~30 tok/s |
+| **Generator alternatif (qualité)** | `hf.co/Qwen/Qwen3-30B-A3B-GGUF:Q2_K` (MoE) | Q2_K | ~11.3 GB, 40 CU → ~78 tok/s (llama.cpp direct) |
+| **Text-to-SQL / Code** | `hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q2_K` (MoE) | Q2_K | 3B actifs, 64k contexte, français |
+| **Vision (Phase 5.2)** | `hf.co/cjpais/llava-v1.6-vicuna-13b-gguf:Q4_K_M` / `qwen2.5-vl` | Q4_K_M | Même contrainte que Generator 14B |
+| **Fast-check lexical skill** | `hf.co/ibm-granite/granite-4.0-h-tiny-GGUF:Q4_K_M` (3.4B hybrid Mamba) | Q4_K_M | 40 CU → **129 tok/s**, 128K+ contexte |
 
 ---
 
@@ -221,13 +221,13 @@
 - [ ] `systemctl daemon-reload && systemctl restart ollama`
 - [ ] `journalctl -u ollama` → "total=12.3 GiB available"
 - [ ] Modèles pullés avec digests :
-    - [ ] `qwen3.5:14b@sha256:...` (Q4_K_M, ~9 GB)
-    - [ ] `qwen3.5-35b-a3b@sha256:...` (IQ2_M, ~11 GB)
-    - [ ] `qwen3-coder-30b-a3b@sha256:...` (IQ2_M)
-    - [ ] `llava-next:13b@sha256:...` (Q4_K_M)
+    - [ ] `hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M@sha256:...` (Q4_K_M, ~9 GB)
+    - [ ] `hf.co/Qwen/Qwen3-30B-A3B-GGUF:Q2_K@sha256:...` (Q2_K, ~11.3 GB)
+    - [ ] `hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q2_K@sha256:...` (Q2_K)
+    - [ ] `hf.co/cjpais/llava-v1.6-vicuna-13b-gguf:Q4_K_M@sha256:...` (Q4_K_M)
     - [ ] `qwen2.5-vl@sha256:...` (Q4_K_M)
-    - [ ] `granite-4.0-h-tiny@sha256:...` (Q4_K_M)
-    - [ ] `nomic-embed-text-v2-moe@sha256:...`
+    - [ ] `hf.co/ibm-granite/granite-4.0-h-tiny-GGUF:Q4_K_M@sha256:...` (Q4_K_M)
+    - [ ] `hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0@sha256:...`
 
 ### Réseau & NFS (VLAN 10)
 - [ ] IP statique 10.10.0.3/24, MTU 9000 sur interface 1G
@@ -274,7 +274,7 @@
 | **ROCm installé par erreur** | `rocblas_abort()`, compute queue hang | **Ne jamais installer ROCm**. Vulkan only. |
 | **CPU governor `schedutil`** | Spikes latence TTFT, instabilité | `performance` lock via tmpfiles.d |
 | **zram trop gros** | Concurrence RAM physique avec modèles | Max 2 GB (`zram-size = 2048`) |
-| **Modèles sans digest SHA256** | `ollama pull qwen3.5:14b` → version mobile différente | **Toujours** `@sha256:...` dans `.env` / scripts |
+| **Modèles sans digest SHA256** | `ollama pull hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M` → version mobile différente | **Toujours** `@sha256:...` dans `.env` / scripts |
 
 ### Dépendances croisées (ordre d'exécution)
 
@@ -363,16 +363,16 @@ Le Master LXC 100 a **2 × Xeon 2699** (16c/32t chacun, 32GB ECC) contre 6c/12t 
 - [AMD BC250 Documentation](https://elektricm.github.io/amd-bc250-docs/) — Unified Memory Architecture, Vulkan-only, 40 CU unlock
 - [akandr/bc250](https://github.com/akandr/bc250) — Ollama + Vulkan benchmarks, GFX1013 specifics, roofline analysis
 
-→ **Décision** : Embedding sur **Machine 1 Master LXC 100 (Xeon CPU)** via Ollama/llama.cpp CPU `nomic-embed-text-v2-moe` 768d. BC250 GPU réservé **exclusivement** au Generator 14B/MoE (Phase 3.1) et aux variantes lourdes (Phase 5 : Text-to-SQL, Vision, Granite fast-check). Machine 2 (64GB + RTX 4000) = Reranker + Judge + Avocat + backup embedding CPU.
+→ **Décision** : Embedding sur **Machine 1 Master LXC 100 (Xeon CPU)** via Ollama/llama.cpp CPU `hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0` 768d. BC250 GPU réservé **exclusivement** au Generator 14B/MoE (Phase 3.1) et aux variantes lourdes (Phase 5 : Text-to-SQL, Vision, Granite fast-check). Machine 2 (64GB + RTX 4000) = Reranker + Judge + Avocat + backup embedding CPU.
 
 **Actions** :
 - [ ] Mettre à jour `docs/architecture.svg` — 3 machines, mapping correct des modèles
-- [ ] Mettre à jour `src/core/settings.py` — variables `EMBEDDING_HOST=machine1` / `EMBEDDING_MODEL=nomic-embed-text-v2-moe` / `EMBEDDING_MODE=cpu` + endpoints GPU Worker + BC250
+- [ ] Mettre à jour `src/core/settings.py` — variables `EMBEDDING_HOST=machine1` / `EMBEDDING_MODEL=hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0` / `EMBEDDING_MODE=cpu` + endpoints GPU Worker + BC250
 - [ ] Mettre à jour `services/vector.py` — configurer client embedding vers endpoint Machine 1 au lieu de BC250
 - [ ] Phase 1.1 : changer "embedding BC250" → "embedding Machine 1 CPU (backup Machine 2 CPU)"
 - [ ] Phase 3.1 : changer "Qwen2.5-14B sur RTX 4000" → "qwen3.5:14b Q4_K_M / qwen3.5-35b-a3b IQ2_M sur BC250 Vulkan"
 - [ ] Phase 3.2/3.3 : préciser Judge sur LXC 200, Avocat sur LXC 201 (même RTX 4000, VRAM partagée 2×5GB OK)
-- [ ] Phase 5.1 : préciser qwen3-coder-30b-a3b IQ2_M sur BC250
+- [ ] Phase 5.1 : préciser hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q2_K sur BC250
 - [ ] Phase 5.2 : déplacer Vision sur BC250 (pas RTX 4000)
 
 ---
@@ -692,7 +692,7 @@ Wiki Agent (LXC 100)
     │
     ├── Rerank/Judge/Avocat → http://10.10.0.2:11434 (Ollama M2 RTX 4000 CUDA)
     │
-    └── Evaluator → http://10.10.0.1:11434 (Ollama M1 CPU qwen3.5:3b)
+    └── Evaluator → http://10.10.0.1:11434 (Ollama M1 CPU Qwen3-4B)
 ```
 
 ### 5. Schema CLAUDE.md / AGENTS.md — Template pour `/data/wiki/CLAUDE.md`
@@ -769,8 +769,8 @@ Décision tranchée vs backlog : **l'embedding n'est PAS sur BC-250**.
 
 | Machine | Rôle embedding | Modèle | Backend |
 |---------|---------------|--------|---------|
-| **M1 Master (CPU Xeon 32c/64t)** | Embedding principal | `nomic-embed-text-v2-moe` 768d Q8_0 | CPU Ollama/llama.cpp |
-| **M2 GPU Worker (CPU Xeon 20c/40t)** | Embedding backup | `nomic-embed-text-v2-moe` 768d Q8_0 | CPU Ollama/llama.cpp |
+| **M1 Master (CPU Xeon 32c/64t)** | Embedding principal | `hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0` 768d Q8_0 | CPU Ollama/llama.cpp |
+| **M2 GPU Worker (CPU Xeon 20c/40t)** | Embedding backup | `hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0` 768d Q8_0 | CPU Ollama/llama.cpp |
 | **M3 BC-250** | **Aucun** — règle d'or | — | — |
 
 **Règle d'or confirmée** : "Le CPU du BC-250 est le serviteur du GPU. Toute charge CPU significative vole la bande passante mémoire au Generator 14B." (backlog §317)
@@ -779,11 +779,11 @@ Décision tranchée vs backlog : **l'embedding n'est PAS sur BC-250**.
 
 | Rôle | Modèle | Quant | VRAM | Endpoint |
 |------|--------|-------|------|----------|
-| Generator principal | `qwen3.5:14b` | Q4_K_M | ~9 GB | M3 Ollama |
-| Generator alternatif MoE | `qwen3.5-35b-a3b` | IQ2_M | ~11 GB | M3 Ollama |
-| Text-to-SQL / Code | `qwen3-coder-30b-a3b` | IQ2_M | ~11 GB | M3 Ollama |
-| Vision (Phase 5.2) | `llava-next:13b` / `qwen2.5-vl` | Q4_K_M | ~9 GB | M3 Ollama |
-| Fast-check lexical | `granite-4.0-h-tiny` | Q4_K_M | ~3 GB | M3 Ollama |
+| Generator principal | `hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M` | Q4_K_M | ~9 GB | M3 Ollama |
+| Generator alternatif MoE | `hf.co/Qwen/Qwen3-30B-A3B-GGUF:Q2_K` | Q2_K | ~11.3 GB | M3 Ollama |
+| Text-to-SQL / Code | `hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q2_K` | Q2_K | ~11 GB | M3 Ollama |
+| Vision (Phase 5.2) | `hf.co/cjpais/llava-v1.6-vicuna-13b-gguf:Q4_K_M` / `qwen2.5-vl` | Q4_K_M | ~9 GB | M3 Ollama |
+| Fast-check lexical | `hf.co/ibm-granite/granite-4.0-h-tiny-GGUF:Q4_K_M` | Q4_K_M | ~3 GB | M3 Ollama |
 
 **Backend GPU** : Ollama Vulkan (RADV) auto-fallback — **pas ROCm** (non supporté sur GFX1013).
 

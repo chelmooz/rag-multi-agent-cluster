@@ -49,7 +49,7 @@ Cible de dimensionnement retenue : **60-65% de charge max par modèle** sur son 
 | **Juge** | M2 (RTX 4000, hot-swap) | DeepSeek-R1-Distill-Llama-8B | `bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF` | `DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf` | 4,92 Go | 61% de 8 Go |
 | **Avocat du diable** | M2 (RTX 4000, hot-swap) | Ministral-8B-Instruct-2410 | `bartowski/Ministral-8B-Instruct-2410-GGUF` | `Ministral-8B-Instruct-2410-Q4_K_M.gguf` | 4,91 Go | 61% de 8 Go |
 
-Non concernés par ce brief (inchangés) : `embedding_model` (nomic-embed-text-v2-moe, CPU M1), `reranker_model` (bge-reranker-v2-m3, M2), `evaluator_model` (qwen3.5:3b, CPU M1), `text2sql_model`, `vision_model`, `fastcheck_model` (tous M3).
+Les 7 autres rôles (embedding, reranker, évaluateur, générateur alternatif, text2sql, vision, fastcheck) ont été résolus Hugging Face via l'extension **C4.2** — cf. [§8](#8-extension-c42--résolution-hf-de-tous-les-modèles-01082026).
 
 ---
 
@@ -173,8 +173,33 @@ Qwen3 et DeepSeek-R1-Distill-Llama-8B sont Apache 2.0 / licence permissive équi
 
 - Le **pull réel** des modèles (`ollama pull hf.co/...`) : reste tâche **C4**, bloquée par la livraison matérielle des 3 machines (mock-first, D10).
 - Le calcul des digests SHA256 de verrouillage : à faire **après** le premier pull réel, pas avant.
-- `generator_alt_model` (Qwen MoE 35B-A3B), `text2sql_model`, `vision_model`, `fastcheck_model`, `embedding_model`, `reranker_model` : hors périmètre, non demandés dans cet échange.
+- `qwen2.5-vl` : alternative vision documentée dans `backlog.md` (Phase 5.2), non retenue comme valeur par défaut.
 - Toute modification de `docker-compose.*.yml` ou des scripts Proxmox : aucun impact, ces fichiers ne référencent pas les noms de modèles.
+
+---
+
+## 8. Extension C4.2 — Résolution HF de tous les modèles (01/08/2026)
+
+Extension du principe « Hugging Face exclusif » (contrainte de source du §intro) aux 7 modèles restants, initialement déclarés hors périmètre du brief C4.1.
+
+| Rôle | Machine | Modèle | Repo Hugging Face | Quant | Taille |
+|---|---|---|---|---|---|
+| Embedding | M1 CPU | nomic-embed-text-v2-moe | `nomic-ai/nomic-embed-text-v2-moe-GGUF` | Q8_0 | 488 MiB |
+| Reranker | M2 RTX 4000 | bge-reranker-v2-m3 | `gpustack/bge-reranker-v2-m3-GGUF` | Q4_K_M | ~437 Mo |
+| Évaluateur | M1 CPU | Qwen3-4B | `Qwen/Qwen3-4B-GGUF` | Q4_K_M | ~2,5 Go |
+| Générateur alternatif | M3 BC-250 | Qwen3-30B-A3B | `Qwen/Qwen3-30B-A3B-GGUF` | Q2_K | 11,3 Go |
+| Text-to-SQL | M3 BC-250 | Qwen3-Coder-30B-A3B | `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF` | Q2_K | ~11 Go |
+| Vision | M3 BC-250 | llava-v1.6-vicuna-13b | `cjpais/llava-v1.6-vicuna-13b-gguf` | Q4_K_M | 7,87 Go |
+| Fast-check | M3 BC-250 | granite-4.0-h-tiny | `ibm-granite/granite-4.0-h-tiny-GGUF` | Q4_K_M | ~3 Go |
+
+**Décisions de substitution** (modèles inexistants en réel sous les noms fictionnels du projet) :
+
+- **Évaluateur** : `qwen3.5:3b` n'existe pas → **Qwen3-4B officiel** (Q4_K_M ~2,5 Go, CPU M1).
+- **Générateur alternatif** : `qwen3.5-35b-a3b` → **Qwen3-30B-A3B officiel** ; Q2_K (11,3 Go) faute d'IQ2_M publié par Qwen.
+- **Text-to-SQL** : `qwen3-coder-30b-a3b` → **Qwen3-Coder-30B-A3B-Instruct** ; Q2_K retenu (IQ2_M non vérifié dans les repos GGUF), ~11 Go dans le budget 12 Go du BC-250.
+- **Vision** : `llava-next:13b` → **llava-v1.6-vicuna-13b** (Q4_K_M 7,87 Go, + mmproj géré par Ollama).
+
+Les `*_MODEL_DIGEST` restent en `CHANGE_ME` tant que le pull réel (Phase C4) n'a pas eu lieu.
 
 ---
 
@@ -187,3 +212,12 @@ Qwen3 et DeepSeek-R1-Distill-Llama-8B sont Apache 2.0 / licence permissive équi
 - [x] **M4** — `ROADMAP.md` : tâche C4.1 ajoutée
 - [x] **M5** — `backlog.md` : entrée « Incohérences résolues » ajoutée
 - [x] **M6** — `tests/test_settings.py` : aucune assertion sur les modèles (non-régression vérifiée)
+
+## État d'avancement extension C4.2 (01/08/2026)
+
+- [x] **M7** — `settings.py` / `.env.example` : 7 champs résolus `hf.co/...` (embedding, reranker, évaluateur, générateur alt, text2sql, vision, fastcheck)
+- [x] **M8** — Mermaid : README (6 blocs), `docs/architecture.md` (2 blocs), `docs/diagrams/` 01/02/03/06 — labels à jour (noms courts)
+- [x] **M9** — `docs/deployment-guide.md` : commandes `ollama pull hf.co/...@sha256:...` à jour
+- [x] **M10** — `backlog.md` : tableaux/checklists modèles alignés
+- [x] **M11** — `ROADMAP.md` : tâche C4.2 ajoutée
+- [x] **M12** — Docstrings `src/agents/generator.py`, `src/agents/evaluator.py` mises à jour

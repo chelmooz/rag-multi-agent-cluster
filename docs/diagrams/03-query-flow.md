@@ -22,14 +22,14 @@ flowchart TB
 
     subgraph P3["PHASE 3 · Génération — M3 · BC-250 · GPU Vulkan"]
         Assemble["📦 Assemblage<br/>contexte enrichi"]:::m1
-        Gen["🤖 Générateur qwen3.5:14b<br/>M3 · Vulkan · CPU au repos"]:::m3
+        Gen["🤖 Générateur Qwen3-14B<br/>M3 · Vulkan · CPU au repos"]:::m3
     end
 
     subgraph P4["PHASE 4 · Évaluation multi-agents — séquentielle sur M2"]
         Relay["📄 relay.json<br/>NFS M1↔M2"]:::relay
         Judge["① ⚖️ Juge 8b — M2<br/>Qualité + Cohérence"]:::m2
         Advocate["② 😈 Avocat 8b — M2<br/>Failles + Hallucinations"]:::m2
-        Evaluator["③ ✅ Évaluateur 3b — M1<br/>Synthèse des deux avis"]:::m1
+        Evaluator["③ ✅ Évaluateur 4b — M1<br/>Synthèse des deux avis"]:::m1
     end
 
     Answer["🎉 Réponse validée + citations<br/>Archivée vault (pattern Karpathy)"]:::front
