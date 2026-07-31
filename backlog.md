@@ -14,10 +14,10 @@
 - [ ] 0.11 Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback) — **implémenté : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé**
 - [ ] 0.12 Test d'ingestion bout-en-bout : source → embed M1 → index Qdrant → wiki pages → index.md/log.md
 - [ ] 0.13 **Configurer mTLS pour API interne (certs auto-signés via pfSense CA) — BLOQUANT PROD**
-- [ ] 0.14 **Prometheus exporter custom wiki-agent** (metrics: `wiki_pages_total`, `ingest_duration_seconds`, `query_latency_seconds`, `llm_calls_total`)
+- [x] ~~0.14 **Prometheus exporter custom wiki-agent**~~ **RETIRÉ** (cf. D9, 31/07/2026) — pas de Prometheus déployé en v1, metrics consultables via logs applicatifs
 - [ ] 0.15 **Git sidecar auto-commit dans LXC 100** (cron 1h) pour versioning wiki hors OMV
 - [ ] 0.16 **Secrets management** : `sops` + `.env.encrypted` ou HashiCorp Vault (Phase 7) — **pas de CHANGE_ME en prod**
-- [x] 0.17 **Health checks obligatoires** : `/health` + `/ready` sur CHAQUE service Docker → Prometheus scrape dès Phase 0 — **implémenté : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé**
+- [x] 0.17 **Health checks obligatoires** : `/health` + `/ready` sur CHAQUE service Docker — **implémenté : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé** — ~~Prometheus scrape~~ retiré (cf. D9), consultation directe `curl`/Glances
 - [x] 0.18 **Script `scripts/smoke_test_frontend_api.py`** (32 scénarios) — **32/32 PASSED**
 - [ ] 0.19 **API Versioning** : stratégie URL path `/api/v1/` + header `Accept` dès Phase 1.5
 - [ ] 0.20 **Concurrency lock vault Obsidian** : NFS `no_root_squash` + `fcntl` locking OU git sidecar (voir 0.15)
@@ -29,6 +29,7 @@
 - [ ] 0.26 **Créer `infrastructure/docker/docker-compose.omv.yml`** (stack OMV via Docker)
 - [ ] 0.27 **Documenter passage HDD 2TB en passthrough vers LXC 105** (`pct set 105 -mp0 /dev/disk/by-id/...,mp=/srv/backup`)
 - [ ] 0.28 **Configurer secrets OMV** : clés SSH, borg repo, variables d'environnement dans `.env`
+- [ ] 0.29 **Créer fichiers agents manquants** : `src/agents/planner.py`, `src/agents/query_rewriter.py`, `src/agents/context_assembler.py` (stubs avec NotImplementedError)
 
 ## Analyse post-audit (30/07/2026)
 
@@ -71,6 +72,10 @@
 - [ ] 2.3 QueryRewriter (réécriture conversationnelle)
 - [ ] 2.4 ContextAssembler (chunks + savoir interne + fenêtre)
 - [ ] 2.5 HTTP Client Pool (httpx avec retry/circuit-breaker + **mTLS**)
+- [ ] 2.6 **PlannerAgent** (nouveau fichier `src/agents/planner.py`) — analyse intention, décide stratégie outils/variantes
+- [ ] 2.7 **QueryRewriterAgent** (nouveau fichier `src/agents/query_rewriter.py`) — réécriture avec historique conversationnel
+- [ ] 2.8 **ContextAssembler** (nouveau fichier `src/agents/context_assembler.py` ou service) — fusion chunks rerankés + savoir interne + fenêtre courte
+- [ ] 2.9 **LangGraph build_graph()** complet — relie Planner → Rewriter → HybridSearch → Reranker → ContextAssembler → Generator → Relay → Judge → Advocate → Evaluator → WikiUpdate
 
 ## Phase 3 — Génération + Évaluation Multi-Agents
 - [ ] 3.1 Generator (qwen3.5:14b Q4_K_M ou qwen3.5-35b-a3b IQ2_M sur BC250 Vulkan)
@@ -99,20 +104,22 @@
 - [ ] 6.2 Structure vault (index.md, log.md, entities/, concepts/, sources/, synthesis/)
 - [ ] 6.3 Webhook file watcher (Obsidian → cluster via web clipper)
 
-## Phase 7 — Observabilité & Hardening
-- [ ] 7.1 Prometheus + Grafana (LXC 103)
-- [ ] 7.2 Loki + structured logs (correlation ID)
-- [ ] 7.3 Health checks agrégés
+## Phase 7 — Observabilité & Hardening (allégé — décision 31/07/2026, cf. D9)
+- [x] ~~7.1 Prometheus + Grafana (LXC 103)~~ **RETIRÉ** — sur-ingénierie pour 3 nœuds, remplacé par graphs natifs Proxmox VE (M1/M2) + pfSense (RRD/vnstat), zéro coût
+- [x] ~~7.2 Loki + structured logs (correlation ID)~~ **RETIRÉ de la v1** — logs via `journalctl`/Docker logs en direct suffisent tant que le cluster n'est pas stabilisé ; à ré-évaluer seul (sans Prometheus/Grafana) si besoin réel de centralisation
+- [ ] 7.2bis **Glances (mode web `-w`)** sur BC-250 uniquement — seul nœud hors supervision Proxmox (bare metal, pas de LXC/RRD natif)
+- [ ] 7.3 Health checks agrégés (`/health` + `/ready` déjà en place, cf. 0.17)
 - [ ] 7.4 Tests integration (smoke_test_frontend_api.py)
 - [ ] 7.5 **Secrets management prod** : `sops` / Vault rotation
 - [ ] 7.6 **Load testing pré-prod** : `hey` / `locust` sur `/api/v1/query` 10-50 RPS
+- [ ] 7.7 **Réactivation Prometheus+Grafana post-stabilisation** (optionnelle, non planifiée) — seulement si diagnostic perf réel requis (latence Reranker vs Générateur, saturation VRAM RTX4000)
 
 ## Infrastructure Matérielle Validée (selon README.md)
 
 | Nœud | Rôle | CPU / RAM | GPU / Accélérateur | Stockage | Virtualisation |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Machine 1** | **Master** (Orchestration, API, VectorDB, Evaluator, Embedding CPU, Relay NFS, Monitoring) | 2× Xeon E5-2699 v4 / **32 GB ECC** | AMD Radeon RX 580 (8 GB) | 1 TB NVMe | Proxmox VE 9.3 (LXC 100, 101, 103, VM 104) |
-| **Machine 2** | **GPU Worker + Services** (Reranker, Judge, Avocat, Backup Embedding CPU, **OMV Backup**) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | **1 TB NVMe** + **HDD 2TB physique** | Proxmox VE 9.3 (LXC 105, 200 privilégié GPU, 201) |
+| **Machine 1** | **Master** (Orchestration, API, VectorDB, Evaluator, Embedding CPU, Relay NFS) | 2× Xeon E5-2699 v4 / **32 GB ECC** | AMD Radeon RX 580 (8 GB) | 1 TB NVMe | Proxmox VE 9.3 (LXC 100, 101, VM 104) — monitoring natif via UI Proxmox, plus de LXC 103 dédié |
+| **Machine 2** | **GPU Worker + Services** (Reranker, Judge, Avocat, Backup Embedding CPU, **OMV Backup**) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | **1 TB NVMe** + **HDD 2TB physique** | Proxmox VE 9.3 (LXC 105, 200 privilégié GPU, 201) — monitoring natif via UI Proxmox |
 | **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Fast-check) | Zen 2 6c/12t (**→ 8c/16t core unlock** [rw-r-r-0644/bc250-core-unlock](https://github.com/rw-r-r-0644/bc250-core-unlock), volatil après cold boot) / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU débloquées) | Debian Testing/Sid baremetal (Ollama Vulkan natif) |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
@@ -123,7 +130,7 @@
 **NFS Relay** : Machine 1 exporte `/data/shared` → monté sur Machine 2 `/data/shared` (fichier `evaluation-relay.json` partagé pour pipeline Juge→Avocat→Évaluateur).
 
 **Répartition LXC/VM prévue** :
-- Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `103` Monitoring (Prometheus/Grafana/Loki), `104` pfSense (VM — reverse proxy + firewall + NAT)
+- Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `104` pfSense (VM — reverse proxy + firewall + NAT) — ~~`103` Monitoring~~ retiré, graphs natifs Proxmox suffisent
 - Machine 2 : `105` **OMV Backup (HDD 2TB passthrough)**, `200` Inference GPU (passthrough RTX 4000), `201` Workers Agents (Avocat + Backup Embedding CPU)
 - Machine 3 : Ollama Vulkan natif (pas de LXC)
 
@@ -134,7 +141,7 @@
 |------|--------|-------|--------|
 | **Embedding principal** | `nomic-embed-text-v2-moe` (768d) | Q8_0 (CPU) | Xeon 32c/64t idle, batch offline |
 | **Évaluateur 3B** | `qwen3.5:3b` / `granite-3.2:2b` | Q4_K_M | Léger, CPU-only, synthèse + décision |
-| **Monitoring/fallback** | `qwen2.5:3b` | Q4_K_M | Alertes, log summarization basique |
+| **Fallback léger** | `qwen2.5:3b` | Q4_K_M | Usage général de secours — sans pipeline monitoring/alerting dédié (retiré, cf. Phase 7) |
 
 ### Machine 2 — GPU Worker (64GB ECC, RTX 4000 8GB VRAM, Xeon 2698 v4 20c/40t)
 | Rôle | Modèle | Quant | VRAM estimée | Raison |
@@ -227,11 +234,12 @@
 - [ ] Firewall: autoriser 11434 (Ollama), 2049 (NFS), 80/443 (WAN)
 - [ ] Test: `iperf3 -c 10.10.0.1` → >900 Mbps, MTU 9000 OK
 
-### Monitoring & Observabilité
-- [ ] `prometheus-node-exporter` installé + scrape config M1
-- [ ] GPU telemetry: oberon governor metrics (power, temp, clock) exposés
-- [ ] SMART NVMe: `nvme smart-log` cron + alertes usure
-- [ ] Logs: journald → Loki (correlation ID)
+### Monitoring & Observabilité (allégé — décision 31/07/2026, cf. D9)
+- [x] ~~`prometheus-node-exporter` installé + scrape config M1~~ **RETIRÉ** — pas de Prometheus central
+- [ ] **Glances en mode web (`glances -w`)** — seul dashboard sur BC-250 (unique nœud hors supervision Proxmox), CPU/RAM/temp en un seul process léger
+- [ ] GPU telemetry: oberon governor metrics (power, temp, clock) — exposés via Glances si plugin dispo, sinon `watch -n1` cron + log fichier
+- [ ] SMART NVMe: `nvme smart-log` cron + alertes usure (mail/webhook simple, pas d'exporter dédié)
+- [x] ~~Logs: journald → Loki (correlation ID)~~ **RETIRÉ de la v1** — `journalctl` direct suffit
 - [ ] Healthcheck: `curl -f localhost:11434/api/tags` + `vulkaninfo` cron
 
 ### Backup (Pull OMV M1)
@@ -284,7 +292,7 @@
       ↓
 8. Réseau VLAN 10 + NFS mounts + firewall pfSense
       ↓
-9. Monitoring (node-exporter, oberon metrics, SMART, Loki)
+9. Monitoring (Glances web, oberon metrics, SMART) — plus de node-exporter/Loki
       ↓
 10. Backup pull OMV configuré + test restore partiel
       ↓
@@ -495,7 +503,7 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 | **Diversité familles modèles** | Judge (Qwen) ≠ Avocat (Mistral) → vrais biais différents → évaluation croisée efficace. |
 | **Pattern Karpathy (Wiki persistant)** | Frontend Obsidian = 0 code frontend à maintenir. Vault = source de vérité + graphe de connaissances. |
 | **Infrastructure as Code prête** | Proxmox LXC + Docker Compose + scripts bash = reproductible, versionnable. |
-| **Observabilité intégrée** | Prometheus/Grafana/Loki prévu dès Phase 7 — correlation ID depuis le début. |
+| **Observabilité intégrée** | ~~Prometheus/Grafana/Loki prévu dès Phase 7~~ *(analyse dépassée, cf. D9 31/07/2026 : stack complète jugée sur-ingénierie pour 3 nœuds, remplacée par Proxmox/pfSense natif + Glances BC-250)*. |
 
 ### ⚠️ Points de vigilance (Risques maîtrisés)
 
@@ -509,7 +517,7 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 | **Obsidian vault lock concurrency** | Client + Cluster écrivent simultanément | → NFS `no_root_squash` + file locking (fcntl). Ou versioning git sidecar. |
 | **Secrets management absent** | `.env.example` a des `CHANGE_ME` — pas de solution prod | → Phase 7 : `sops` + `.env.encrypted` ou HashiCorp Vault |
 | **VectorDB incohérence** | `docker-compose.vector-db.yml` = Chroma, README = Qdrant | → **Corriger maintenant** : Qdrant (hybrid search natif) |
-| **Health checks = 0** | Pas d'observabilité avant Phase 7 | → Ajouter `/health` + `/ready` sur chaque service + Prometheus scrape dès Phase 0 |
+| **Health checks = 0** | Pas d'observabilité avant Phase 7 | → Ajouter `/health` + `/ready` sur chaque service dès Phase 0 *(déjà fait, cf. 0.17)* — ~~Prometheus scrape~~ retiré, consultation directe possible via `curl`/Glances |
 | **Tests d'intégration = 0** | `scripts/test_frontend_api.py` référencé mais absent | → Écrire `smoke_test_frontend_api.py` (32 scénarios) **avant** tout merge sur `main` |
 | **API Versioning absent** | `/api/v1/` dans README mais pas dans code | → Définir stratégie (URL path `/api/v1/` + header `Accept`) dès Phase 1.5 |
 | **BC250 Kernel upgrade = CU unlock cassé** | Documenté mais pas d'automatisation | → Script `rebuild-cu-unlock.sh` déclenché par `apt` hook `kernel-postinst` |
@@ -518,7 +526,7 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 ### 🔧 Recommandations immédiates (DevOps)
 
 1. **Lock les versions modèles** — Ajouter dans `.env` : `OLLAMA_MODEL_JUDGE=qwen3.5:7b@sha256:xxx` etc.
-2. **Health checks obligatoires** — `/health` sur chaque service (Ollama, Qdrant, API) → Prometheus scrape.
+2. **Health checks obligatoires** — `/health` sur chaque service (Ollama, Qdrant, API) — consultation via `curl`/Glances, ~~Prometheus scrape~~ retiré.
 3. **Secrets management** — Pas de tokens/API keys en dur. `sops` + `.env.encrypted` ou Vault (Phase 7).
 4. **Backup Qdrant** — `qdrant snapshot create` cron quotidien → stocké sur M2 (64GB dispo).
 5. **Test de charge pré-prod** — `hey` / `locust` sur `/api/v1/query` avec 10-50 RPS avant mise en prod.
@@ -730,7 +738,7 @@ LOG_LEVEL=INFO
 - [ ] **0.9** Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback)
 - [ ] **0.10** Test d'ingestion bout-en-bout : source → embed M1 → index Qdrant → wiki pages → index.md/log.md
 - [ ] **0.11** Configurer mTLS pour API interne (certs auto-signés via pfSense CA)
-- [ ] **0.12** Prometheus exporter custom wiki-agent (metrics: `wiki_pages_total`, `ingest_duration_seconds`, `query_latency_seconds`, `llm_calls_total`)
+- [x] ~~**0.12** Prometheus exporter custom wiki-agent~~ **RETIRÉ** (cf. D9) — metrics `wiki_pages_total`/`ingest_duration_seconds`/`query_latency_seconds`/`llm_calls_total` consultables via logs applicatifs, pas d'exporter dédié tant qu'aucun Prometheus n'est déployé
 - [ ] **0.13** Git sidecar auto-commit dans LXC 100 (cron 1h) pour versioning wiki hors OMV
 
 ### 9. Décisions d'architecture à trancher (complément)
@@ -741,7 +749,7 @@ LOG_LEVEL=INFO
 | **Orchestration conteneurs** | Docker Compose vs systemd-nspawn | **Docker Compose** (standard, portable, compose.yml lisible) |
 | **Wiki Agent implémentation** | Python script custom vs LangGraph nodes | **LangGraph** (déjà choisi stack, graphe d'état explicite) |
 | **Authentification API** | mTLS + client certs vs JWT vs none (LAN) | **mTLS** (certs auto-signés pfSense CA, zéro config client) |
-| **Monitoring Wiki Agent** | Prometheus exporter custom + Grafana | **Oui**, metrics: `wiki_pages_total`, `ingest_duration_seconds`, `query_latency_seconds`, `llm_calls_total` |
+| **Monitoring Wiki Agent** | Prometheus exporter custom + Grafana vs logs applicatifs directs | ~~Prometheus/Grafana~~ **RETIRÉ (D9)** — logs applicatifs (`wiki_pages_total` etc. en log structuré) suffisent en v1, pas d'exporter dédié |
 | **Backup wiki (hors OMV)** | Git auto-commit sur push wiki | **Git sidecar** dans LXC 100 (cron 1h, push vers remote bare) |
 
 ## Entretien du 30/07/2026 — Audit BC-250 + adoption OKF v0.2
@@ -952,6 +960,7 @@ Le cluster est **100% offline** : les IA (Ollama) tournent en local sur les 3 ma
 | D5 | **Rate limit inutile** | pfSense gère le périmètre ; de tout façon on est en LAN local sans utilisateurs externes. | Aucun `limit_req`, `limit_req_zone` à ajouter. |
 | D6 | **Structure réseau confirmée** | M2 et M3 branchées en direct sur carte 10 Gb de M1, pas de switch. M1 sortie 1 Gb pfSense → internet pour updates. M2/M3 n'ont pas d'accès internet direct — tout le réseau inter-nœuds est en VLAN 10 (10.10.0.0/24). | Documentation réseau à auditer dans `README.md` et `docs/`. |
 | D7 | **Adoption plan 3 sprints** | Remplace la roadmap précédente (liste plate ~95 items), simplifié en sprints exécutables. | `ROADMAP.md` réécrit en `{Sprint 1 Hygiène/CI → Sprint 2 Backend métier → Sprint 3 Finalisation}`. |
+| D9 | **Monitoring complet (Prometheus+Grafana+Loki, LXC 103) retiré de la v1** | Sur-ingénierie pour 3 nœuds physiques, opérateur seul, projet pas encore en prod. Proxmox VE (M1/M2) et pfSense exposent déjà des graphs RRD natifs (CPU/RAM/disk/network) sans rien ajouter. Seul le BC-250 (bare metal, hors Proxmox) n'a aucune supervision native. | Retrait de Phase 7.1/7.2, item 0.12/0.14, LXC 103 (README + backlog). Ajout **Glances (`glances -w`)** sur BC-250 uniquement. Réactivation Prometheus/Grafana possible plus tard (Phase 7.7, non planifiée) si diagnostic perf réel nécessaire (latence Reranker/Générateur, VRAM RTX4000). |
 
 ### Points techniques à documenter
 
