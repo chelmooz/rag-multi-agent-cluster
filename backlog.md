@@ -52,6 +52,7 @@
 | `infrastructure/docker/Dockerfile.{api,wiki-agent,langgraph}` | ~~Poetry install avec build backend setuptools~~ | **✅ `pip install .`** |
 | `src/api/main.py` | ~~`/ready` retourne `{"checks": "TODO"}`~~ | **✅ checks Qdrant/Ollama M1/M2/M3/PostgreSQL/Redis, 503 si dégradé** |
 | `src/core/settings.py` | `postgres_password = "CHANGE_ME"` en dur | **✅ Validator prod** lève `InsecurePasswordConfigError` déjà en place |
+| `.env.example` / `src/core/settings.py` | `ADVOCATE_MODEL=mistral-small-3.2:7b` — modèle inexistant à cette taille (Mistral Small 3.2 = 24B/14.3 Go, incompatible RTX 4000 8 Go) | **✅ remplacé par Ministral-8B-Instruct-2410 Q4_K_M (4.91 Go), résolu via hf.co/bartowski/...** |
 | `tests/test_api.py` | ~~`test_ready` attend 200 fixe~~ | **✅ accepte 200 ou 503** |
 | `scripts/smoke_test_frontend_api.py` | ~~`NotImplementedError` stub~~ | **✅ 32 scénarios passent** |
 

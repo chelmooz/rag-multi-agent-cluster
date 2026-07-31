@@ -119,8 +119,8 @@ class Settings(BaseSettings):
 
     # Generator (BC-250)
     generator_model: str = Field(
-        default="qwen3.5:14b",
-        description="Modèle génération principal sur BC-250 (Q4_K_M ~9GB)",
+        default="hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M",
+        description="Modèle génération principal sur BC-250 — Qwen3-14B dense, Q4_K_M 9.0 Go (HF)",
         validation_alias="GENERATOR_MODEL",
     )
     generator_model_digest: str | None = Field(
@@ -149,7 +149,11 @@ class Settings(BaseSettings):
 
     # Judge (RTX 4000)
     judge_model: str = Field(
-        default="qwen3.5:7b",
+        default="hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M",
+        description=(
+            "Juge — distillation R1 sur backbone Llama 8B, Q4_K_M 4.92 Go, "
+            "lignée distincte du générateur Qwen"
+        ),
         validation_alias="JUDGE_MODEL",
     )
     judge_model_digest: str | None = Field(
@@ -159,7 +163,12 @@ class Settings(BaseSettings):
 
     # Avocat du diable (RTX 4000)
     advocate_model: str = Field(
-        default="mistral-small-3.2:7b",
+        default="hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M",
+        description=(
+            "Avocat du diable — Ministral-8B-Instruct-2410, Q4_K_M 4.91 Go "
+            "(corrige bug: mistral-small-3.2 n'existe qu'en 24B/14.3 Go, "
+            "incompatible RTX 4000 8 Go)"
+        ),
         validation_alias="ADVOCATE_MODEL",
     )
     advocate_model_digest: str | None = Field(

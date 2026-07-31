@@ -40,9 +40,9 @@ flowchart TB
     SavoirInterne["Savoir interne<br/>Entraînement"]:::src
     Contexte["Contexte<br/>Assemblage enrichi"]:::m2
     CourtTerme["Court terme<br/>Fenêtre contextuelle"]:::src
-    ModeleGen["Modèle génératif<br/>qwen3.5:14b/35b MoE — M3"]:::m3
-    JugeLLM["Juge (LLM)<br/>qwen3.5:7b — RTX 4000 M2"]:::m2
-    Avocat["Avocat du diable<br/>mistral-small-3.2:7b — M2"]:::m2
+    ModeleGen["Modèle génératif<br/>Qwen3-14B hf.co — M3"]:::m3
+    JugeLLM["Juge (LLM)<br/>DeepSeek-R1-Distill-Llama-8B — RTX 4000 M2"]:::m2
+    Avocat["Avocat du diable<br/>Ministral-8B-Instruct-2410 — M2"]:::m2
     Evaluateur["Évaluateur<br/>qwen3.5:3b CPU — M1"]:::m1
     Relay["📄 relay.json<br/>Handoff séquentiel — 1 seul modèle<br/>chargé à la fois sur RTX 4000"]:::op
     ReponseFinale["Réponse finale<br/>Retour à l'utilisateur"]:::final
@@ -99,12 +99,12 @@ flowchart TB
     end
 
     subgraph Machine2["Machine 2: GPU Worker · Xeon 2698 v4 / 64GB ECC · RTX 4000 8GB"]
-        M2_200["LXC 200: Inference GPU<br/>Reranker: bge-v2-m3 Q4_K_M<br/>Judge: qwen3.5:7b Q4_K_M"]:::m2
-        M2_201["LXC 201: Workers Agents<br/>Avocat: mistral-3.2:7b Q4_K_M<br/>Backup Embedding CPU (Xeon 20c/40t idle)"]:::m2
+        M2_200["LXC 200: Inference GPU<br/>Reranker: bge-v2-m3 Q4_K_M<br/>Judge: DeepSeek-R1-Distill-Llama-8B Q4_K_M"]:::m2
+        M2_201["LXC 201: Workers Agents<br/>Avocat: Ministral-8B-Instruct-2410 Q4_K_M<br/>Backup Embedding CPU (Xeon 20c/40t idle)"]:::m2
     end
 
     subgraph Machine3["Machine 3: BC250 · Baremetal Debian Sid · 16GB GDDR6 (12GB IA) · 40 CU · Vulkan-only · CPU au repos"]
-        M3_models["Modèles Vulkan (M3)<br/>Generator: qwen3.5:14b Q4_K_M ou 35b-a3b MoE IQ2_M<br/>Text-to-SQL: qwen3-coder 30b-a3b MoE IQ2_M<br/>Vision: llava-next:13b Q4<br/>Fast-check: granite-4.0-h-tiny"]:::m3
+        M3_models["Modèles Vulkan (M3)<br/>Generator: Qwen3-14B Q4_K_M (hf.co) ou 35b-a3b MoE IQ2_M<br/>Text-to-SQL: qwen3-coder 30b-a3b MoE IQ2_M<br/>Vision: llava-next:13b Q4<br/>Fast-check: granite-4.0-h-tiny"]:::m3
         M3_warn["⚠ RÈGLE D'OR BC250<br/>CPU = serviteur du GPU<br/>Aucune charge CPU (embedding, batch) quand le GPU infère"]:::warn
     end
 
