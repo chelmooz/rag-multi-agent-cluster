@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Machine 2 (GPU Worker + Services) — Xeon E5-2698 v3 (16c/32t), 64 GB ECC, 1 TB NVMe, RTX 4000 (8 GB VRAM)
-# Crée les LXC : 103 Monitoring, 105 OMV Backup, 200 Inference GPU (passthrough RTX 4000, privilégié),
+# Crée les LXC : 103 Monitoring, 200 Inference GPU (passthrough RTX 4000, privilégié),
 #                201 Workers Agents (Avocat + Backup Embedding CPU)
 set -euo pipefail
 
@@ -129,36 +129,10 @@ else
 fi
 
 # ============================================================
-# LXC 105 — OMV Backup (HDD physique sur M2 + cache local)
-# vCPU: 2  RAM: 1 GB  Disque: 8 Go  IP: 10.10.0.105/24
-# Montage HDD physique à faire manuellement après création :
-#   - Ajouter le disque via Proxmox WebUI (passthrough PCI SATA
-#     ou mount point local) OU monter directement dans le LXC
-#   - Point de montage : /srv/backup
-# ============================================================
-info "LXC 105 — OMV Backup"
-if pct status 105 &>/dev/null; then
-  warn "LXC 105 existe déjà."
-else
-  pct create 105 "$TEMPLATE_PATH" \
-    --hostname jarvis-omv \
-    --cores 2 --memory 1024 --swap 512 \
-    --rootfs local:8 \
-    --net0 name=eth0,bridge=$BRIDGE,firewall=1,ip=10.10.0.105/24,gw=$GATEWAY,type=veth \
-    --unprivileged 1 \
-    --ostype debian \
-    --password "$PASSWORD" \
-    --storage local
-  info "LXC 105 créé."
-  warn ">>> Montez un HDD physique dans /srv/backup après installation <<<"
-fi
-
-# ============================================================
 # Résumé
 # ============================================================
 echo -e "\n${GREEN}======= CRÉATION TERMINÉE =======${NC}"
 echo -e "LXC 103  ${YELLOW}10.10.0.103${NC}  Monitoring      (4 vCPU, 2 GB, Prometheus/Grafana/Loki)"
-echo -e "LXC 105  ${YELLOW}10.10.0.105${NC}  OMV Backup      (2 vCPU, 1 GB, + HDD physique)"  
 echo -e "LXC 200  ${YELLOW}10.10.0.200${NC}  Inference GPU   (6 vCPU, 8 GB, privilégié, RTX 4000)"
 echo -e "LXC 201  ${YELLOW}10.10.0.201${NC}  Workers Agents   (4 vCPU, 8 GB, Ollama CPU)"
 echo -e "${GREEN}==================================${NC}"
@@ -170,7 +144,5 @@ echo "  Dans LXC 201 : installer Ollama CPU + NFS mount"
 echo "    pct enter 201 && bash /root/setup-worker-lxc.sh"
 echo "  Dans LXC 103 : installer Docker + Prometheus/Grafana/Loki"
 echo "    pct enter 103 && bash /root/setup-monitoring.sh"
-echo "  Dans LXC 105 : monter HDD physique + configurer OMV + cron backup"
-echo "    pct enter 105 && bash /root/setup-omv.sh"
 echo ""
 echo "ATTENTION : la VM hôte doit être rebootée après config IOMMU."

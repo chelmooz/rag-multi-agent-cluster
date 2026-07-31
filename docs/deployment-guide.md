@@ -7,7 +7,7 @@ Plan d'installation pas-à-pas pour les 3 machines du cluster.
 ## Sommaire
 
 1. [Machine 1 — Control Plane (Proxmox, LXC 100-102)](#machine-1--control-plane)
-2. [Machine 2 — Compute & Storage Plane (Proxmox, LXC 103, 105, 200-201)](#machine-2--gpu-worker--services-compute--storage-plane)
+2. [Machine 2 — Compute & Storage Plane (Proxmox, LXC 103, 200-201)](#machine-2--gpu-worker--services-compute--storage-plane)
 3. [Machine 3 — BC-250 Baremetal (Debian Testing/Sid)](#machine-3--bc-250-baremetal)
 4. [Déploiement Docker & Services](#4-déploiement-docker--services)
 5. [Téléchargement des Modèles](#5-téléchargement-des-modèles)
@@ -111,12 +111,11 @@ ollama pull qwen3.5:3b
 
 ## Machine 2 — GPU Worker + Services (Compute & Storage Plane)
 
-**Matériel** : Xeon E5-2698 v3 (16c/32t), 64 GB ECC, **1 TB NVMe**, RTX 4000 8 GB VRAM, HDD physique backup, Proxmox VE 9.3
+**Matériel** : Xeon E5-2698 v3 (16c/32t), 64 GB ECC, **1 TB NVMe**, RTX 4000 8 GB VRAM, Proxmox VE 9.3
 
 | LXC | IP | vCPU | RAM | Disque | Rôle |
 |-----|----|------|-----|--------|------|
 | 103 | 10.10.0.103 | 4 | 2 GB | 50 GB | Monitoring (Prometheus, Grafana, Loki) |
-| 105 | 10.10.0.105 | 2 | 1 GB | 8 GB + HDD physique | OMV Backup (cron hors heures IA) |
 | 200 | 10.10.0.200 | 6 | 8 GB | 30 GB | Inference GPU (passthrough RTX 4000, privilégié) |
 | 201 | 10.10.0.201 | 4 | 8 GB | 30 GB | Workers Agents (Avocat + Backup Embedding CPU) |
 
@@ -228,45 +227,25 @@ docker run -d --name loki --restart unless-stopped \
   grafana/loki:latest
 ```
 
-### 2.6 Post-installation LXC 105 (OMV Backup)
+### 2.6 Cold save (depuis M1, pas de tier dédié)
+
+Le stack est reproductible depuis ce repo (scripts d'install + `ollama pull`) : seules les données non reproductibles sont sauvegardées, à savoir l'index Qdrant et le wiki généré. Pas de VM/LXC de backup dédiée : le cold save tourne directement depuis l'hôte M1, vers un stockage externe (LUKS).
 
 ```bash
-pct enter 105
-
-# Installer OMV (Debian + OpenMediaVault)
-apt update && apt install -y curl gnupg
-echo "deb https://packages.openmediavault.org/public sandworm main" > /etc/apt/sources.list.d/omv.list
-wget -O /etc/apt/trusted.gpg.d/omv.asc https://packages.openmediavault.org/public/Archive.key
-apt update
-apt install -y openmediavault
-omv-confdbadm populate
-
-# Monter le HDD physique (à adapter selon votre montage)
-# Exemple avec disque /dev/sdb :
-# mkfs.ext4 /dev/sdb1
-mkdir -p /srv/backup
-# echo "UUID=... /srv/backup ext4 defaults 0 2" >> /etc/fstab
-# mount -a
-
-# Installer borg
+# Sur M1 (hôte ou LXC 101)
 apt install -y borgbackup
 
-# Configurer le cron backup en heures creuses (02:00-06:00)
-cat > /etc/cron.d/backup-cluster << 'EOF'
-# Backup cluster - exécution hors heures IA (pipeline inactif)
-# Qdrant snapshot
-0 2 * * * root /usr/local/bin/qdrant-snapshot.sh
-# Rsync configs
-30 2 * * * root /usr/local/bin/rsync-configs.sh
-# Borg create dédupliqué
-0 3 * * * root /usr/local/bin/borg-backup.sh
-# Purge vieux snapshots
-0 5 * * 0 root /usr/local/bin/purge-snapshots.sh
-EOF
+# Qdrant snapshot (atomique)
+/usr/local/bin/qdrant-snapshot.sh
 
-# NFS mount vers M1 pour relay (lecture seule si besoin)
-mkdir -p /data/shared
-echo "10.10.0.1:/data/shared /data/shared nfs ro,hard,intr,noatime 0 0" >> /etc/fstab
+# Cold save manuel ou cron, vers le stockage externe monté (ex: /mnt/cold)
+borg create --compression lz4 /mnt/cold/repo::backup-$(date +%F) \
+  /data/wiki /var/lib/qdrant/snapshots
+
+# Optionnel : cron hors heures IA
+cat > /etc/cron.d/cold-save << 'EOF'
+0 3 * * 0 root /usr/local/bin/qdrant-snapshot.sh && /usr/local/bin/borg-backup.sh
+EOF
 ```
 
 ---
@@ -440,7 +419,6 @@ curl http://10.10.0.103:3000                    # LXC 103 Grafana
 curl http://10.10.0.200:11434/api/tags         # LXC 200 Ollama GPU
 curl http://10.10.0.201:11434/api/tags         # LXC 201 Ollama GPU
 curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
-curl http://10.10.0.105:80                     # LXC 105 OMV WebUI
 ```
 
 ### Endpoints de référence
@@ -477,15 +455,14 @@ curl http://10.10.0.105:80                     # LXC 105 OMV WebUI
 
 
 
-### Machine 2 — Compute & Storage Plane (Xeon E5-2698 v3, 64 GB, 1 TB NVMe, RTX 4000, HDD backup)
+### Machine 2 — Compute & Storage Plane (Xeon E5-2698 v3, 64 GB, 1 TB NVMe, RTX 4000)
 
 | LXC | vCPU | RAM | VRAM GPU | Usage |
 |-----|------|-----|----------|-------|
 | 103 | 4 | 2 GB | — | Monitoring (Prometheus/Grafana/Loki) |
-| 105 | 2 | 1 GB | — | OMV Backup (HDD physique, cron 02:00-06:00) |
 | 200 | 6 | 8 GB | 8 GB (passthrough) | Judge + Reranker |
 | 201 | 4 | 8 GB | — | Avocat + Backup Embedding |
-| **Total** | **16** | **19 GB** | **8 GB VRAM** | **45 GB libre pour cache modèles + backups** |
+| **Total** | **14** | **18 GB** | **8 GB VRAM** | **cache modèles + cold save ponctuel** |
 
 ### Machine 3 (BC-250, 16 GB GDDR6 unifiée)
 

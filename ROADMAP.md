@@ -6,7 +6,7 @@
 
 ## Documentation
 - [x] README consolidé (architecture, infra, stack, guide d'installation, intégration Obsidian Vault)
-- [x] Schéma d'architecture (`docs/architecture.svg`)
+- [x] Schéma d'architecture (`docs/architecture.md`, Mermaid)
 - [ ] Documentation API (OpenAPI/Swagger)
 - [ ] Tutoriel d'installation pas-à-pas testé de bout en bout
 - [ ] **Template OKF `docs/claude-md-template.md` → `/data/wiki/CLAUDE.md`** (frontmatter OKF v0.2)

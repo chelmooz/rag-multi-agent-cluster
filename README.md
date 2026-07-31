@@ -20,7 +20,7 @@
 
 - [Vue d'ensemble](#-vue-densemble)
 - [Architecture du Système](#️-architecture-du-système)
-- [Plan de Backup (2-1)](#-plan-de-backup-2-1)
+- [Cold Save](#-cold-save)
 - [Topologie Réseau & Sécurité](#-topologie-réseau--sécurité)
 - [Intégration avec Obsidian (pattern Karpathy)](#-intégration-avec-obsidian-pattern-karpathy)
 - [Fonctionnalités Clés](#-fonctionnalités-clés)
@@ -47,7 +47,7 @@ Contrairement aux RAG classiques qui se contentent de générer une réponse, ce
 
 ## 🏗️ Architecture du Système
 
-Voir aussi le schéma complet dans [`docs/architecture.svg`](docs/architecture.svg) (mapping des composants sur les 3 machines du cluster).
+Voir aussi le schéma complet dans [`docs/architecture.md`](docs/architecture.md) (mapping des composants sur les 3 machines du cluster).
 
 ### Légende des couleurs (commune à tous les diagrammes)
 
@@ -55,66 +55,234 @@ Voir aussi le schéma complet dans [`docs/architecture.svg`](docs/architecture.s
 |---|---|---|
 | 🔵 | Frontend / Entrées-Sorties | Client (Obsidian) |
 | 🩵 | Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS | **M1** Master |
-| 🟢 | Reranker, Juge, Avocat, Backup Embedding CPU, Monitoring, Backup | **M2** GPU Worker + Services |
+| 🟢 | Reranker, Juge, Avocat, Backup Embedding CPU, Monitoring | **M2** GPU Worker + Services |
 | 🟠 | Générateur, Text-to-SQL, Vision, Fast-check | **M3** BC-250 Baremetal |
 | 🩷 | `relay.json` (NFS partagé M1↔M2) | Évaluation séquentielle |
-| 🟡 | Backup / Passerelle | M2 (HDD OMV), Off-site, pfSense |
+| 🟡 | Backup / Passerelle | Cold save (M1), pfSense |
 
 **Conventions de flèches** : `──▶` flux synchrone · `┄┄▶` asynchrone, feedback ou backup.
 
 ### 🗺️ Vue d'ensemble du cluster
 
-![Architecture cluster](docs/diagrams/01-cluster-overview.svg)
+```mermaid
+flowchart TB
+    classDef frontend fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+    classDef m1 fill:#e0f2fe,stroke:#0ea5e9,stroke-width:2px
+    classDef m2 fill:#dcfce7,stroke:#22c55e,stroke-width:2px
+    classDef m3 fill:#fed7aa,stroke:#f97316,stroke-width:2px
+    classDef relay fill:#fce7f3,stroke:#db2777,stroke-width:2px
+    classDef backup fill:#fef3c7,stroke:#d97706,stroke-width:2px,stroke-dasharray: 5 5
+
+    Client["🧠 Obsidian Vault<br/>Frontend markdown local<br/>HTTPS 443"]:::frontend
+    GW["🛡️ pfSense GW<br/>NAT · Firewall · Inter-VLAN<br/>DNAT → 10.10.0.1:443"]:::backup
+
+    subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · RX 580 · 2×10GbE+1GbE"]
+        Orch["🎯 Orchestrateur<br/>FastAPI · LangGraph · LXC 100"]:::m1
+        Qdrant["💾 Qdrant VectorDB<br/>BM25 + Vectoriel 768d · LXC 101"]:::m1
+        Embed["🔢 Embedding CPU<br/>nomic-embed-text-v2-moe<br/>768d · Xeon 32c/64t"]:::m1
+        Eval["✅ Évaluateur<br/>qwen3.5:3b · CPU · Synthèse finale"]:::m1
+        Gate["🌐 API Gateway (nginx LXC 102) · Monitoring (LXC 103) · pfSense optionnel (LXC 104)"]:::backup
+    end
+
+    subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE"]
+        Rerank["📊 Reranker<br/>bge-reranker-v2-m3 · CUDA · LXC 200"]:::m2
+        Judge["⚖️ Juge ①<br/>qwen3.5:7b · CUDA · Qualité + Cohérence"]:::m2
+        Advocate["😈 Avocat ②<br/>mistral:7b · CUDA · Failles + Hallucinations"]:::m2
+        BackupEmbed["🔢 Backup Embedding<br/>nomic-v2-moe · CPU · Xeon 20c/40t"]:::m2
+    end
+
+    subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
+        Gen["🤖 Générateur<br/>qwen3.5:14b (Q4_K_M ~9GB)<br/>ou 35b-a3b MoE (IQ2_M ~11GB)<br/>Ollama Vulkan natif · CPU au repos"]:::m3
+        Variants["🔀 Variantes<br/>Text-to-SQL (qwen3-coder-30b)<br/>Vision (llava-next:13b / qwen2.5-vl)<br/>Fast-check (granite-4.0-h-tiny)"]:::m3
+    end
+
+    Relay["📄 relay.json (NFS partagé M1↔M2)<br/>/data/shared · Évaluation séquentielle"]:::relay
+    Cold["🧊 COLD SAVE<br/>borg/rsync manuel ou cron<br/>Qdrant snapshot + wiki vault → stockage externe<br/>OS/modèles = reproductibles, non sauvegardés"]:::backup
+
+    Client -->|HTTPS 443| GW --> Orch
+    Orch --> Qdrant --> Embed
+    Orch -->|séquentiel, contexte enrichi| Gen
+    Gen -.-> Variants
+    Qdrant -.->|reranking| Rerank
+    Rerank -.-> Judge
+    Judge -.->|①| Relay
+    Advocate -.->|②| Relay
+    Relay -.-> Eval
+    BackupEmbed -.-> Advocate
+    Qdrant -.->|cold save périodique| Cold
+
+    %% RÈGLE D'OR BC-250 : le CPU est le serviteur du GPU.
+    %% Toute charge CPU = vol de bande passante mémoire au Générateur 14B.
+    %% Embedding = M1 CPU (principal) / M2 CPU (backup).
+```
 
 ### 📥 Flux d'ingestion (offline, asynchrone)
 
 L'ingestion n'est **jamais dans le chemin critique** d'une requête : chunking, embedding et indexation tournent en batch sur le CPU de M1.
 
-![Flux ingestion](docs/diagrams/02-ingestion-flow.svg)
+```mermaid
+flowchart LR
+    classDef src fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+    classDef cpu fill:#e0f2fe,stroke:#0ea5e9,stroke-width:2px
+    classDef store fill:#fed7aa,stroke:#f97316,stroke-width:2px
+    classDef wiki fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px
+
+    Sources["📄 Sources brutes<br/>Fichiers · Web Clipper<br/>POST /api/v1/ingest"]:::src
+    Chunk["✂️ Chunking + Augmentation<br/>Cron offline · CPU M1 · Xeon 32c/64t"]:::cpu
+    Embed["🔢 Embedding CPU<br/>nomic-embed-text-v2-moe<br/>768d · Q8_0"]:::cpu
+    BM25["📚 Index lexical BM25<br/>Qdrant sparse · M1 · LXC 101"]:::store
+    Vec["💾 Index vectoriel<br/>Qdrant dense 768d · M1 · LXC 101"]:::store
+    Wiki["🧠 Pages Wiki Obsidian<br/>entities/ · concepts/ · sources/<br/>vault partagé + index.md + log.md"]:::wiki
+
+    Sources --> Chunk
+    Chunk --> BM25
+    Chunk --> Embed --> Vec
+    Embed -.->|async| Wiki
+    Chunk -.->|async| Wiki
+
+    %% Traitement 100% batch · asynchrone · hors chemin critique requête
+    %% Parallélisable sur Xeon 32c/64t
+```
 
 ### 🔄 Flux de requête & évaluation multi-agents
 
-![Flux requête évaluation](docs/diagrams/03-query-flow.svg)
+```mermaid
+flowchart TB
+    classDef m1 fill:#e0f2fe,stroke:#0ea5e9,stroke-width:2px
+    classDef m2 fill:#dcfce7,stroke:#22c55e,stroke-width:2px
+    classDef m3 fill:#fed7aa,stroke:#f97316,stroke-width:2px
+    classDef relay fill:#fce7f3,stroke:#db2777,stroke-width:2px
+    classDef front fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+
+    Query["💬 Requête utilisateur"]:::front
+
+    subgraph P1["PHASE 1 · Planification — M1 · CPU"]
+        Plan["🎯 Planificateur<br/>Analyse d'intention"]:::m1
+        Rewrite["✍️ Réécriture<br/>Contexte conversationnel"]:::m1
+    end
+
+    subgraph P2["PHASE 2 · Recherche hybride + Reranking"]
+        BM25["📚 BM25<br/>Qdrant sparse · M1"]:::m1
+        VecSearch["💾 Vectorielle<br/>Qdrant dense · M1"]:::m1
+        Variants["🔀 Variantes<br/>SQL · Vision · M3"]:::m3
+        Rerank["📊 Reranker<br/>bge-v2-m3 · M2"]:::m2
+    end
+
+    subgraph P3["PHASE 3 · Génération — M3 · BC-250 · GPU Vulkan"]
+        Assemble["📦 Assemblage<br/>contexte enrichi"]:::m1
+        Gen["🤖 Générateur qwen3.5:14b<br/>M3 · Vulkan · CPU au repos"]:::m3
+    end
+
+    subgraph P4["PHASE 4 · Évaluation multi-agents — séquentielle sur M2"]
+        Relay["📄 relay.json<br/>NFS M1↔M2"]:::relay
+        Judge["① ⚖️ Juge 7b — M2<br/>Qualité + Cohérence"]:::m2
+        Advocate["② 😈 Avocat 7b — M2<br/>Failles + Hallucinations"]:::m2
+        Evaluator["③ ✅ Évaluateur 3b — M1<br/>Synthèse des deux avis"]:::m1
+    end
+
+    Answer["🎉 Réponse validée + citations<br/>Archivée vault (pattern Karpathy)"]:::front
+
+    Query --> Plan --> Rewrite
+    Rewrite --> BM25
+    Rewrite --> VecSearch
+    Rewrite --> Variants
+    BM25 --> Rerank
+    VecSearch --> Rerank
+    Variants --> Rerank
+    Rerank --> Assemble --> Gen --> Relay
+    Relay --> Judge --> Advocate --> Evaluator
+    Evaluator -.->|feedback| Plan
+    Evaluator --> Answer
+
+    %% Conventions : trait plein = synchrone, pointillé = asynchrone/feedback
+    %% ①②③ étapes séquentielles de l'évaluation (1 seul modèle chargé à la fois sur RTX 4000)
+```
 
 ---
 
-## 🔐 Plan de Backup (2-1)
+## 🔐 Cold Save
 
 ### Architecture
 
-![Backup 2-1](docs/diagrams/04-backup-21.svg)
+```mermaid
+flowchart LR
+    classDef prod fill:#e0f2fe,stroke:#0ea5e9,stroke-width:2px
+    classDef cold fill:#fef3c7,stroke:#d97706,stroke-width:2px
 
-### Règle 2-1
+    Qdrant["💾 Qdrant snapshot<br/>VectorDB — M1 LXC 101"]:::prod
+    Wiki["🧠 Wiki vault<br/>/data/wiki — M1"]:::prod
+    Cold["🧊 Cold save<br/>borg/rsync manuel ou cron<br/>Stockage externe (LUKS)"]:::cold
 
-| Règle | Implémentation |
-|---|---|
-| **2 copies** | Prod (NVMe) + OMV Backup (HDD physique sur M2) |
-| **1 média** | NVMe + HDD (médias distincts) |
-| **1 off-site** | Rotation physique HDD (manuel) |
+    Qdrant --> Cold
+    Wiki --> Cold
 
-### Outils & Rétention
+    %% OS, LXC, modèles = reproductibles depuis ce repo (scripts d'install + ollama pull) : non sauvegardés.
+    %% Seules les données non reproductibles (index Qdrant + wiki généré) sont sauvegardées.
+    %% Pas de tier "backup live" dédié (OMV/LXC 105) : cold save déclenché directement depuis M1.
+```
+
+### Pourquoi pas de règle 3-2-1
+
+Le stack (OS, LXC, modèles) est entièrement reproductible depuis ce repo — pas besoin de le sauvegarder. Les archives de données sources existent déjà par ailleurs. Seul ce qui n'est reproductible qu'en le regénérant (index Qdrant, wiki généré) est sauvegardé, via un cold save ponctuel — pas de VM de backup dédiée, pas de rotation multi-support.
+
+### Outils
 
 | Outil | Usage |
 |---|---|
 | borg | Sauvegarde dédupliquée, chiffrée, compression LZ4 |
-| rsync | Sync configs Ollama, wiki, scripts |
-| qdrant snapshot | Backup atomique VectorDB (cron quotidien) |
-| OMV | Interface NFS/SMB, scheduling cron, gestion HDD |
-
-### Planning d'exécution (heures creuses IA)
-
-| Fenêtre | Tâche | Note |
-|---------|-------|------|
-| **02:00** | Qdrant snapshot | Backup atomique VectorDB |
-| **02:30** | Rsync wiki + configs | Configs Ollama, scripts, .env |
-| **03:00** | Borg create | Sauvegarde dédupliquée complète |
-| **05:00 (dim)** | Purge vieux snapshots | Rétention rolling 14j/3m |
+| qdrant snapshot | Backup atomique VectorDB |
 
 ---
 
 ## 🌐 Topologie Réseau & Sécurité
 
-![Topologie réseau](docs/diagrams/05-network-topology.svg)
+```mermaid
+flowchart TB
+    classDef wan fill:#fef3c7,stroke:#d97706,stroke-width:2px
+    classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+    classDef mgmt fill:#f1f5f9,stroke:#6b7280,stroke-width:2px
+    classDef m1 fill:#e0f2fe,stroke:#0ea5e9,stroke-width:2px
+    classDef m2 fill:#dcfce7,stroke:#22c55e,stroke-width:2px
+    classDef m3 fill:#fed7aa,stroke:#f97316,stroke-width:2px
+    classDef relay fill:#fce7f3,stroke:#db2777,stroke-width:2px
+    classDef cold fill:#fef3c7,stroke:#d97706,stroke-width:2px
+
+    subgraph VLAN20["VLAN 20 · WAN — 192.168.1.0/24"]
+        Internet["🌐 Internet<br/>Updates OS / modèles LLM"]:::wan
+        pfSense["🛡️ pfSense — Passerelle<br/>VM Proxmox M1 (LXC 104) ou appliance dédiée<br/>Routes inter-VLAN + NAT sortant"]:::wan
+    end
+
+    subgraph VLAN40["VLAN 40 · Client — 192.168.10.0/24"]
+        Obsidian["🧠 Client Obsidian<br/>Vault + Web Clipper · Web UI"]:::client
+    end
+
+    subgraph VLAN30["VLAN 30 · Mgmt — 172.16.0.0/24"]
+        Admin["🔧 Admin / IPMI<br/>Proxmox GUI · SSH secours (1G)"]:::mgmt
+    end
+
+    subgraph VLAN10["VLAN 10 · Cluster — 10.10.0.0/24 — backbone 10G · MTU 9000 (jumbo frames, +15% débit)"]
+        M1["M1 — Master · 10.10.0.1<br/>2× Xeon E5-2699v4 / 32GB ECC<br/>LXC 100 Orchestrator+Wiki · LXC 101 Qdrant<br/>LXC 102 API Gateway · LXC 103 Monitoring<br/>LXC 104 pfSense (option)<br/>Export NFS /data/shared"]:::m1
+        M2["M2 — GPU Worker · 10.10.0.2<br/>Xeon E5-2698v4 / 64GB ECC · RTX 4000 8GB<br/>LXC 200 Inference GPU (Reranker+Juge)<br/>LXC 201 Workers Agents (Avocat+Backup Embedding)<br/>Mount NFS /data/shared"]:::m2
+        M3["M3 — BC-250 Baremetal<br/>Zen 2 6c/12t · 16GB GDDR6 unifiée<br/>40 CU débloquées · Vulkan/Mesa (RADV)<br/>Générateur · Text-to-SQL · Vision · Fast-check<br/>Ollama Vulkan natif (pas de LXC)"]:::m3
+        Relay["relay.json<br/>TTL 300s"]:::relay
+    end
+
+    subgraph COLDBOX["Cold save"]
+        HDD["Stockage externe (LUKS)<br/>borg/rsync manuel ou cron · qdrant snapshot + wiki vault<br/>OS/modèles reproductibles, non sauvegardés"]:::cold
+    end
+
+    Internet <--> |NAT sortant| pfSense
+    Obsidian -->|TCP 80/443| pfSense
+    pfSense -->|SSH/HTTPS| M1
+    Admin -.->|SSH/HTTPS isolé| M1
+    Admin -.->|SSH/HTTPS isolé| M2
+    M1 -->|Qdrant 6333| M2
+    M1 -->|Ollama 11434| M3
+    M2 -->|Ollama/Qdrant| M3
+    M1 -.->|TCP 2049| Relay
+    M2 -.->|TCP 2049| Relay
+    M1 -->|borg/rsync cron| HDD
+```
 
 ### VLAN / Sous-réseaux
 
@@ -133,7 +301,7 @@ L'ingestion n'est **jamais dans le chemin critique** d'une requête : chunking, 
 - **Mount M2** : `/data/shared` sur `10.10.0.1:/data/shared` (fstab, `_netdev`)
 - **Fichier** : `evaluation-relay.json` (verrou fichier atomique, TTL 300 s)
 
-> ⚠️ **Note** : Le NFS pour l'évaluation est exporté par l'hôte M1 (`10.10.0.1`) pour simplicité et performance. L'OMV (LXC 105 sur M2) gère le backup avec HDD physique local, pas le relay temps-réel. Les sauvegardes s'exécutent en dehors des heures d'utilisation IA (cron 02:00-06:00).
+> ⚠️ **Note** : Le NFS pour l'évaluation est exporté par l'hôte M1 (`10.10.0.1`) pour simplicité et performance. Le cold save (Qdrant snapshot + wiki vault) est déclenché directement depuis M1, pas de tier de backup dédié.
 
 ### Règles Firewall (pfSense) — Flux autorisés
 
@@ -243,12 +411,9 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 
 | Machine | Disque | Usage |
 |---|---|---|
-| M1 (Master) | 1 TB NVMe | Proxmox + LXCs + Qdrant + Wiki + Relay NFS |
+| M1 (Master) | 1 TB NVMe | Proxmox + LXCs + Qdrant + Wiki + Relay NFS + cold save (externe) |
 | M2 (GPU Worker + Services) | 1 TB NVMe | Proxmox + LXCs + cache Ollama + **Monitoring LXC 103** |
-| | HDD physique (à installer) | **OMV LXC 105** — sauvegarde dédupliquée, rétention rolling |
 | M3 (BC-250) | 475 GB NVMe | OS Debian + Modèles |
-
-> ⚠️ **OMV LXC 105** est déployé sur **Machine 2** avec un HDD physique monté dans `/srv/backup`. Le disque virtio 500 Go initial sur M1 est migré via rsync/vzdump lors de la transition. Voir `docs/deployment-guide.md` pour la procédure.
 
 ### ⚡ Règle d'or BC-250
 
@@ -271,7 +436,6 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 | | `104` | pfSense (option, si pas d'appliance dédiée) |
 | | | **~18.5 GB / 32 GB utilisés** (6 GB libérés) |
 | Machine 2 | `103` | Monitoring (Prometheus/Grafana/Loki) |
-| | `105` | OMV Backup (HDD physique, cron hors heures IA) |
 | | `200` | Inference GPU (passthrough RTX 4000) — Reranker + Juge |
 | | `201` | Workers Agents — Avocat + Backup Embedding CPU |
 | Machine 3 | — | Ollama Vulkan natif (pas de LXC) |
@@ -281,13 +445,55 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 | Machine | IP (VLAN 10) | Rôle | Hardware | Services |
 |---------|-------------|------|----------|----------|
 | **M1** (Master) | `10.10.0.1` | Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS | 2× Xeon E5-2699 v4 32c/64t, 32 GB ECC, 1 TB NVMe | Qdrant (LXC 101 :6333), Ollama CPU (nomic-embed + évaluateur), nginx API Gateway (LXC 102 :80/443), pfSense (LXC 104) |
-| **M2** (GPU Worker + Services) | `10.10.0.2` | Reranker, Juge, Avocat, Backup Embedding CPU, **Monitoring, Backup** | Xeon 20c/40t, 64 GB ECC, **1 TB NVMe**, RTX 4000 (CUDA) + HDD physique | Ollama GPU (LXC 200-201 :11434), Prometheus/Grafana/Loki (LXC 103), OMV Backup (LXC 105, HDD) |
+| **M2** (GPU Worker + Services) | `10.10.0.2` | Reranker, Juge, Avocat, Backup Embedding CPU, **Monitoring** | Xeon 20c/40t, 64 GB ECC, **1 TB NVMe**, RTX 4000 (CUDA) | Ollama GPU (LXC 200-201 :11434), Prometheus/Grafana/Loki (LXC 103) |
 
 **Endpoints :** Ollama M1 = `http://10.10.0.1:11434`, Ollama M2 = `http://10.10.0.2:11434`, Qdrant = `http://10.10.0.1:6333`, Gateway = `10.10.0.1:80/443`
 
 ### 🖥️ Topologie physique : machines, LXC & flux
 
-![Topologie physique](docs/diagrams/06-physical-topology.svg)
+```mermaid
+flowchart TB
+    classDef wan fill:#f1f5f9,stroke:#64748b,stroke-width:2px
+    classDef fw fill:#fef3c7,stroke:#d97706,stroke-width:3px
+    classDef m1 fill:#f0f9ff,stroke:#0ea5e9,stroke-width:2px
+    classDef m2 fill:#f0fdf4,stroke:#22c55e,stroke-width:2px
+    classDef m3 fill:#fff7ed,stroke:#f97316,stroke-width:2px
+    classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+    classDef cold fill:#fed7aa,stroke:#f97316,stroke-width:2px
+
+    WAN["🌐 WAN / Internet<br/>VLAN 20 · 192.168.1.0/24<br/>Updates · Pull modèles"]:::wan
+    GW["🛡️ pfSense GW<br/>VM M1 LXC 104 ou appliance dédiée<br/>NAT + Firewall + Inter-VLAN<br/>192.168.1.1 / 10.10.0.254"]:::fw
+    Client["🧠 CLIENT · Obsidian Vault<br/>VLAN 40 · 192.168.10.0/24<br/>Graph View · HTTPS 443 → pfSense DNAT → LXC 102"]:::client
+
+    subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · 2×10GbE+1GbE mgmt"]
+        LXC100["🎯 LXC 100<br/>Orchestrator + Wiki Agent<br/>LangGraph + FastAPI"]:::m1
+        LXC101["💾 LXC 101<br/>Qdrant VectorDB<br/>BM25 + Vectoriel 768d"]:::m1
+        LXC102["🌐 LXC 102<br/>API Gateway · nginx + TLS"]:::m1
+        LXC103["📊 LXC 103<br/>Monitoring<br/>Prometheus+Grafana+Loki"]:::m1
+        LXC104["🛡️ LXC 104<br/>pfSense VM (option)"]:::fw
+    end
+
+    subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE mgmt"]
+        LXC200["⚡ LXC 200 (GPU passthrough)<br/>Reranker bge-v2-m3 + Juge qwen3.5:7b<br/>CUDA · RTX 4000"]:::m2
+        LXC201["🤖 LXC 201<br/>Avocat mistral:7b<br/>+ Backup Embedding CPU"]:::m2
+    end
+
+    subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
+        Ollama["🤖 Ollama Vulkan natif<br/>Générateur qwen3.5:14b/35b MoE<br/>Text-to-SQL · Vision · Fast-check<br/>CPU au repos pendant inférence"]:::m3
+    end
+
+    Cold["🧊 COLD SAVE<br/>Stockage externe (LUKS)<br/>borg/rsync manuel ou cron : Qdrant snapshot + wiki vault<br/>OS/modèles reproductibles, non sauvegardés"]:::cold
+
+    WAN --> GW
+    GW -->|NAT + inter-VLAN| Client
+    Client -->|HTTPS 443| LXC102
+    LXC100 --> LXC101
+    LXC101 -->|reranking| LXC200
+    LXC100 -.->|relay.json NFS| LXC201
+    LXC201 -.->|relay.json NFS| LXC100
+    LXC100 -->|génération| Ollama
+    LXC101 -->|cold save périodique| Cold
+```
 
 ---
 
@@ -315,7 +521,7 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 # 1. LXC Proxmox
 cd infrastructure/proxmox
 bash create-lxc-master.sh   # M1 : LXC 100 (Orchestrator), 101 (Vector DB), 102 (Gateway)
-bash create-lxc-gpu.sh      # M2 : LXC 103 (Monitoring), 105 (OMV), 200 (GPU passthrough), 201 (Workers)
+bash create-lxc-gpu.sh      # M2 : LXC 103 (Monitoring), 200 (GPU passthrough), 201 (Workers)
 
 # 2. Stacks Docker
 cd infrastructure/docker
@@ -382,8 +588,8 @@ Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rie
 
 | Risque | Impact | Mitigation |
 |---|---|---|
-| **SPOF : Machine 1 (Master)** | Qdrant + API + Wiki + Évaluateur + NFS = tout s'arrête si M1 tombe | Backup Qdrant snapshot quotidien sur M2 (HDD OMV). NFS export read-only possible depuis M2. |
-| **Résilience M2** | Monitoring + Backup hébergés sur M2 → si M2 tombe, perte monitoring et backup | Prometheus en pull peut scraper M1/M3 directement. Backup OMV inaccessible mais données prod survivent sur M1. |
+| **SPOF : Machine 1 (Master)** | Qdrant + API + Wiki + Évaluateur + NFS = tout s'arrête si M1 tombe | Cold save périodique (Qdrant snapshot + wiki vault) vers stockage externe. NFS export read-only possible depuis M2. |
+| **Résilience M2** | Monitoring hébergé sur M2 → si M2 tombe, perte du monitoring | Prometheus en pull peut scraper M1/M3 directement. Aucun impact sur la prod (M1/M3 continuent de tourner). |
 | **Latence NFS sur évaluation** | Relay file = point de synchronisation bloquant | MTU 9000 + 10 GbE = <1 ms RTT. Timeout 120 s Juge → Avocat. Acceptable. |
 | **BC-250 baremetal = pas de snapshot/rollback** | Mise à jour noyau/BIOS risquée | Tests sur VM simulée d'abord. Backup config `/etc` + BIOS P3.00 sur USB. |
 | **RTX 4000 8 GB limite dure** | Pas de place pour un modèle > 7B quantifié | Choix validé : Juge/Avocat 7B max. Si besoin 14B → seul le BC-250 peut. |
@@ -395,7 +601,7 @@ Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rie
 1. **Lock les versions modèles** — Ajouter dans `.env` : `OLLAMA_MODEL_JUDGE=qwen3.5:7b@sha256:xxx` etc.
 2. **Health checks obligatoires** — `/health` sur chaque service (Ollama, Qdrant, API) → Prometheus scrape.
 3. **Secrets management** — Pas de tokens/API keys en dur. `sops` + `.env.encrypted` ou Vault (Phase 7).
-4. **Backup Qdrant** — `qdrant snapshot create` cron quotidien (02:00) → stocké sur HDD OMV M2.
+4. **Cold save Qdrant + wiki** — `qdrant snapshot create` + borg/rsync vers stockage externe (manuel ou cron).
 5. **Test de charge pré-prod** — `hey` / `locust` sur `/api/v1/query` avec 10-50 RPS avant mise en prod.
 6. **Runbook incident** — Documenter : « BC-250 ne boot plus », « RTX 4000 OOM », « NFS stale handle », « Qdrant corruption ».
 

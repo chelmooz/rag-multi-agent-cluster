@@ -564,6 +564,34 @@ Prêt pour Phase 0 (squelette + config + Docker Compose).
 
 ---
 
+### 31/07/2026 — Backup 3-2-1 (OMV) annulé → Cold save simple — **TRANCHÉ (annule et remplace l'entrée du 29/07/2026 ci-dessus)**
+
+**Décision** : pas de tier OMV/LXC 105, pas de règle 2-1/3-2-1. Le stack (OS, LXC, modèles) est reproductible depuis ce repo — inutile de le sauvegarder. Les archives des données sources existent déjà par ailleurs.
+
+**Ce qui est sauvegardé** : Qdrant snapshot + wiki vault (`/data/wiki`) uniquement — les seules données non reproductibles.
+
+**Comment** : borg/rsync manuel ou cron, déclenché directement depuis M1, vers un stockage externe (LUKS). Pas de VM/LXC dédiée, pas de rotation multi-support, pas d'off-site planifié.
+
+**Impact** : LXC 105 retiré de `infrastructure/proxmox/create-lxc-gpu.sh`, `README.md`, `docs/architecture.md`, `docs/diagrams/`, `docs/deployment-guide.md`.
+
+
+### 31/07/2026 — Filtre anti-injection Niveau 1 (regex) — **EN COURS**
+
+**Statut** : module `src/tools/injection_filter.py` créé, patterns regex définis, mais **test RED toujours échoué** — le pattern ne matche pas `"ignore all previous instructions"` (retourne LOW au lieu de HIGH).
+
+**Cause probable** : complexité des patterns regex avec groupes optionnels (`(?:all|the\s+)?\s*(?:previous|prior|...)`) — à valider avec un test unitaire simple et robuste.
+
+**Prochaine action** :
+- [ ] Simplifier les patterns regex (pistes : `r"ignore\s+.*?\s+previous\s+instructions?"` avec `.*?` lazy, ou patterns littéraux simples)
+- [ ] Écrire `tests/test_injection_filter.py` avec 10-15 payloads connus (OWASP LLM Top 10)
+- [ ] Vérifier faux positifs < 5% sur texte légitime
+- [ ] Gate GREEN : `assert scan("ignore all previous instructions").risk == "high"`
+
+**Contexte** : plan utilisateur (MCP + anti-injection). Le filtre est prioritaire car le risque existe dès que l'ingestion tourne. Le MCP est différé (dépend de WikiAgent concret + mTLS Phase 0.13).
+
+**Fichiers touchés** : `src/tools/injection_filter.py` (créé)
+
+
 ## 29/07/2026 — Architecture LXC 100 (Orchestrator + Wiki Agent) + Schema CLAUDE.md — **NOUVEAU**
 
 ### 1. Spécifications LXC 100 — Master Orchestrator
