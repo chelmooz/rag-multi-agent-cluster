@@ -54,13 +54,16 @@
 | `tests/test_api.py` | ~~`test_ready` attend 200 fixe~~ | **✅ accepte 200 ou 503** |
 | `scripts/smoke_test_frontend_api.py` | ~~`NotImplementedError` stub~~ | **✅ 32 scénarios passent** |
 
-## Phase 1 — Pipeline RAG Core (Master LXC 100-101)
-- [ ] 1.1 Ingestion Service (chunking, augmentation, embedding sur Machine 1 CPU)
-- [ ] 1.2 VectorService (Qdrant client, hybrid search)
-- [ ] 1.3 LexicalSearch (BM25 via Qdrant sparse)
-- [ ] 1.4 Reranker (bge-reranker-v2-m3 sur RTX 4000 - Machine 2)
-- [ ] 1.5 API Endpoints (/ingest, /query OpenAI-compat) + **versioning `/api/v1/`**
-- [ ] 1.6 **Endpoint `/api/v1/embed` : bge-m3 dense+sparse unifié + fallback histogramme** (OK → README)
+## Phase 1 — Pipeline RAG Core (Master LXC 100-101) — **EN COURS**
+- [x] 1.1 Ingestion Service (chunking, augmentation, embedding sur Machine 1 CPU)
+- [x] 1.2 VectorService (Qdrant client, hybrid search natif dense + sparse BM25)
+- [x] 1.3 LexicalSearch (BM25 via Qdrant sparse vectors natif)
+- [x] 1.4 Reranker (bge-reranker-v2-m3 sur RTX 4000 - Machine 2)
+- [x] 1.5 API Endpoints (/ingest, /query, /embed OpenAI-compat) + versioning `/api/v1/`
+- [x] 1.6 Endpoint `/api/v1/embed` : bge-m3 dense+sparse unifié + fallback histogramme
+- [x] 1.7 OllamaClient complet (generate, embed, rerank, unload, health + retry/circuit-breaker)
+- [x] 1.8 OllamaClientPool routing intelligent (M1/M2/M3 selon rôle)
+- [x] 1.9 Tests d'intégration hybrid search (ingest → embed → search → rerank)
 
 ## Phase 2 — Orchestrateur & Planificateur (LXC 100 - Machine 1)
 - [ ] 2.1 Orchestrator (flux principal)

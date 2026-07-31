@@ -24,8 +24,8 @@ flowchart TB
     end
 
     Documents["Documents<br/>Sources brutes"]:::src
-    Chunking["Chunking<br/>Chevauchement"]:::m2
-    Augment["Augmentation<br/>Métadonnées, contexte"]:::m2
+    Chunking["Chunking<br/>Chevauchement"]:::m1
+    Augment["Augmentation<br/>Métadonnées, contexte"]:::m1
     BM25["Index lexical (BM25)<br/>Qdrant sparse — M1"]:::m1
     EmbedCPU["Embedding CPU<br/>nomic-v2-moe 768d — M1"]:::m1
     VectorDB["VectorDB (Qdrant)<br/>Index vectoriel — M1 LXC 101"]:::m1
@@ -35,7 +35,7 @@ flowchart TB
     Rewrite["Réécriture<br/>Contexte conversationnel"]:::m2
     RechLex["Recherche lexicale<br/>BM25 — Machine 1"]:::m1
     RechVec["Vectorielle<br/>Similarité — Machine 1"]:::m1
-    Variantes["Variantes<br/>SQL/Img — Machine 2/3"]:::m2
+    Variantes["Variantes<br/>SQL/Img — Machine 3 (BC250)"]:::m3
     Rerank["Reranker<br/>bge-v2-m3 — RTX 4000 M2"]:::m2
     SavoirInterne["Savoir interne<br/>Entraînement"]:::src
     Contexte["Contexte<br/>Assemblage enrichi"]:::m2
@@ -87,6 +87,7 @@ flowchart TB
     classDef m3 fill:#fff7ed,stroke:#f97316,stroke-width:2px
     classDef warn fill:#fef2f2,stroke:#ef4444,stroke-width:2px,stroke-dasharray: 2 2
     classDef cold fill:#fef3c7,stroke:#d97706,stroke-width:2px
+    classDef op fill:#ffffff,stroke:#8b5cf6,stroke-width:1.5px,stroke-dasharray: 3 3
 
     subgraph Machine1["Machine 1: Master · 2× Xeon 2699 v4 / 32GB ECC"]
         M1_100["LXC 100: Orchestrator + Wiki"]:::m1
@@ -108,14 +109,17 @@ flowchart TB
         M3_warn["⚠ RÈGLE D'OR BC250<br/>CPU = serviteur du GPU<br/>Aucune charge CPU (embedding, batch) quand le GPU infère"]:::warn
     end
 
+    Relay["📄 relay.json<br/>Handoff séquentiel — 1 seul modèle<br/>chargé à la fois sur RTX 4000"]:::op
+
     Cold["🧊 Cold save<br/>OMV LXC 105 (M2) → HDD 2TB (LUKS)<br/>borg pull M1/M3 + rsync — Qdrant + wiki + configs<br/>cron 02:00-05:00 · retention 14j/3m"]:::cold
 
     M1_100 --> M1_101
     M1_wiki --> M1_vault
     M1_100 -.->|reranking| M2_200
     M1_101 -.->|recherche| M2_200
-    M2_200 -.->|relay.json ① Juge| M2_201
-    M2_201 -.->|relay.json ② Avocat| M1_100
+    M2_200 -.->|relay.json ① Juge| Relay
+    Relay -.->|relay.json ② Avocat| M2_201
+    M2_201 -.->|relay.json ③ Évaluateur| M1_100
     M1_100 -.->|génération| M3_models
     M2_200 -.->|contexte enrichi| M3_models
     M1_101 -.->|snapshot 02:00| Cold

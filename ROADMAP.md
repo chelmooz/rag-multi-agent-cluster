@@ -19,18 +19,24 @@
 | 1.13 | Configurer passthrough HDD 2TB vers LXC 105 `/srv/backup` | `infrastructure/proxmox/` |
 | 1.14 | Configurer borg repo HDD + clés SSH OMV→M1/M3 | `infrastructure/backup/` |
 
-## Sprint 2 — Backend métier (cœur du projet)
+## Sprint 2 — Phase 1 Hybrid Search + Phase 2 Orchestrator (Cœur du projet)
 
 | # | Tâche | Fichiers |
 |---|-------|----------|
-| 2.1 | `OllamaClient` complet (generate, embed, unload, health) | `src/services/ollama.py` |
-| 2.2 | `VectorService` : hybrid_search + upsert + create_collection | `src/services/vector.py` |
-| 2.3 | `WikiAgent` : write_page, update_index, append_log, validate_frontmatter | `src/agents/wiki_agent.py` |
-| 2.4 | `okf-lint.py` : validation frontmatter OKF v0.2 + détection stale/orphelins | `scripts/okf_lint.py` |
-| 2.5 | Endpoints `/api/v1/embed`, `/api/v1/ingest`, `/api/v1/lint` | `src/api/main.py` |
-| 2.6 | Endpoints OKF : `/api/v1/okf/validate`, `/list`, `/show` | `src/api/main.py` |
-| 2.7 | `Generator`, `Judge`, `Advocate`, `Evaluator` — pipeline multi-agents | `src/agents/*.py` |
-| 2.8 | `build_graph()` complet dans LangGraph orchestrator | `src/agents/langgraph_orchestrator.py` |
+| 2.1 | `OllamaClient` complet (generate, embed, rerank, unload, health + retry/circuit-breaker) | `src/services/ollama.py` |
+| 2.2 | `OllamaClientPool` routing intelligent M1/M2/M3 selon rôle | `src/services/ollama.py` |
+| 2.3 | `VectorService` : hybrid_search + upsert + create_collection (dense + sparse BM25 natif Qdrant) | `src/services/vector.py` |
+| 2.4 | `IngestionService` : chunking, augmentation, embedding batch → Qdrant | `src/services/ingestion.py` |
+| 2.5 | `LexicalSearch` helper : sparse vectors BM25 via Qdrant natif | `src/services/lexical.py` |
+| 2.6 | `RerankerService` : bge-reranker-v2-m3 via Ollama M2 | `src/services/reranker.py` |
+| 2.7 | Endpoints `/api/v1/embed`, `/api/v1/ingest`, `/api/v1/query` (hybrid search) | `src/api/main.py` |
+| 2.8 | Tests d'intégration hybrid search bout-en-bout | `tests/test_hybrid_search.py` |
+| 2.9 | `WikiAgent` : write_page, update_index, append_log, validate_frontmatter | `src/agents/wiki_agent.py` |
+| 2.10 | `okf-lint.py` : validation frontmatter OKF v0.2 + détection stale/orphelins | `scripts/okf_lint.py` |
+| 2.11 | Endpoints OKF : `/api/v1/okf/validate`, `/list`, `/show` | `src/api/main.py` |
+| 2.12 | Endpoint `/api/v1/lint` wiki | `src/api/main.py` |
+| 2.13 | `Generator`, `Judge`, `Advocate`, `Evaluator` — pipeline multi-agents | `src/agents/*.py` |
+| 2.14 | `build_graph()` complet dans LangGraph orchestrator | `src/agents/langgraph_orchestrator.py` |
 
 ## Sprint 3 — Finalisation & Tests
 
