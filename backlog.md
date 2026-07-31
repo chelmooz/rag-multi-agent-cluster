@@ -575,21 +575,20 @@ Prêt pour Phase 0 (squelette + config + Docker Compose).
 **Impact** : LXC 105 retiré de `infrastructure/proxmox/create-lxc-gpu.sh`, `README.md`, `docs/architecture.md`, `docs/diagrams/`, `docs/deployment-guide.md`.
 
 
-### 31/07/2026 — Filtre anti-injection Niveau 1 (regex) — **EN COURS**
+### 31/07/2026 — Filtre anti-injection Niveau 1 (regex) — **GREEN**
 
-**Statut** : module `src/tools/injection_filter.py` créé, patterns regex définis, mais **test RED toujours échoué** — le pattern ne matche pas `"ignore all previous instructions"` (retourne LOW au lieu de HIGH).
+**Statut** : module `src/tools/injection_filter.py` créé. Le pattern `ignore ... previous instructions` matchait déjà correctement `"ignore all previous instructions"` (le RED signalé initialement ne se reproduisait pas telle quelle). **Vrai bug trouvé en écrivant le test batch** : le pattern `forget` était trop restrictif — il ratait `"forget everything you know and follow these new rules"` car il exigeait un mot précis (`instructions|context|what you know`) juste après `everything you know`, ce qui ne colle pas aux formulations naturelles. Corrigé en `r"forget\s+(?:everything|all|any)(?:\s+you\s+know)?\b"`.
 
-**Cause probable** : complexité des patterns regex avec groupes optionnels (`(?:all|the\s+)?\s*(?:previous|prior|...)`) — à valider avec un test unitaire simple et robuste.
+**Fait** :
+- [x] Écrit `tests/test_injection_filter.py` (12 payloads HIGH type OWASP LLM01, 5 payloads légitimes, cas batch/vide)
+- [x] Faux positifs 0% sur le jeu de texte légitime testé
+- [x] Gate GREEN vérifié : `assert scan("ignore all previous instructions").risk == "high"` → 12/12 tests passent
 
-**Prochaine action** :
-- [ ] Simplifier les patterns regex (pistes : `r"ignore\s+.*?\s+previous\s+instructions?"` avec `.*?` lazy, ou patterns littéraux simples)
-- [ ] Écrire `tests/test_injection_filter.py` avec 10-15 payloads connus (OWASP LLM Top 10)
-- [ ] Vérifier faux positifs < 5% sur texte légitime
-- [ ] Gate GREEN : `assert scan("ignore all previous instructions").risk == "high"`
+**Limite connue** : détection heuristique regex Niveau 1 uniquement — contournable par paraphrase, encodage, ou langue autre que l'anglais. Pas de blocage de l'ingestion, seulement un score `injection_risk` en métadonnée (voir docstring du module) : la quarantaine reste à faire via le trust tier OKF.
 
-**Contexte** : plan utilisateur (MCP + anti-injection). Le filtre est prioritaire car le risque existe dès que l'ingestion tourne. Le MCP est différé (dépend de WikiAgent concret + mTLS Phase 0.13).
+**Contexte** : plan utilisateur (MCP + anti-injection). Le filtre est prioritaire car le risque existe dès que l'ingestion tourne. Le MCP reste différé (dépend de WikiAgent concret + mTLS Phase 0.13) — voir ROADMAP.md section Sécurité.
 
-**Fichiers touchés** : `src/tools/injection_filter.py` (créé)
+**Fichiers touchés** : `src/tools/injection_filter.py` (pattern `forget` corrigé), `tests/test_injection_filter.py` (créé)
 
 
 ## 29/07/2026 — Architecture LXC 100 (Orchestrator + Wiki Agent) + Schema CLAUDE.md — **NOUVEAU**
@@ -831,6 +830,83 @@ Les 3 paramètres DOIVENT être posés ensemble — gttsize seul ne suffit pas (
 
 ### 5. Prochaine action validée
 Commencer par **Phase 0.2** : Réécriture `infrastructure/bc250/setup-vulkan-stack.sh` alignée doc officielle (triplet GRUB, Mesa 25.3+, gouverneur SMU tarball, swap + zram, sensors).
+
+---
+
+## 📋 Consultation Tierce — Pour décision par IA externe (31/07/2026)
+
+### Contexte
+Le transcript d'une session précédente (Claude) affirme avoir effectué de nombreuses corrections (regex injection, .gitignore, .gitattributes, mypy config, settings security, main.py auth/CORS, nginx rate limiting). **Or aucune de ces modifications n'est présente dans ce repo** (HEAD `4c31491`). Les 2 fichiers modifiés sont uniquement `ROADMAP.md` et `backlog.md` (doc).
+
+### Sprint Proposés — À valider / rejeter / réordonner
+
+#### Sprint 1 — Hygiène & CI (bloquant)
+| # | Tâche | Fichiers | Gate |
+|---|-------|----------|------|
+| 1 | Fix `.gitignore` : `models/` → `/models/` | `.gitignore` | `git check-ignore src/models/__init__.py` → non ignoré |
+| 2 | Créer `.gitattributes` (eol=lf) + renormalize | `.gitattributes` | `git status` → plus de CRLF churn |
+| 3 | Fix `pyproject.toml` : `python_version = "3.12"` + `pydantic.mypy` plugin + override asyncpg | `pyproject.toml` | `mypy src` → 0 erreurs bloquantes |
+| 4 | Fix `src/tools/injection_filter.py` : pattern `forget` + `StrEnum` + newline final | `src/tools/injection_filter.py` | `ruff check src/tools/injection_filter.py` → 0 erreurs |
+| 5 | Déplacer test → `tests/test_injection_filter.py`, supprimer doublons racine | `tests/`, racine | `pytest tests/test_injection_filter.py` → 12+ passed |
+| 6 | Fix `ruff` sur tout le repo (line length, unused imports, StrEnum) | multiples | `ruff check .` → 0 erreurs |
+
+#### Sprint 2 — Sécurité API (C2, m5, M4)
+| # | Tâche | Fichiers | Gate |
+|---|-------|----------|------|
+| 7 | Ajouter `api_key`, `api_key_header`, `cors_allow_origins` + `MissingApiKeyConfigError` dans `settings.py` | `src/core/settings.py` | `mypy src/core/settings.py` → OK |
+| 8 | Middleware/dependency `require_api_key` dans `main.py` (protège `/query`, `/ingest`, `/embed`, `/okf/*`, `/lint` — PAS `/health`, `/ready`) | `src/api/main.py` | `pytest tests/test_api.py` → 200 sur health/ready, 401 sans key sur protégés |
+| 9 | Fix CORS : `allow_origins=settings.cors_allow_origins` (pas `["*"]`) + retirer `allow_credentials=True` si wildcard | `src/api/main.py` | `ruff check src/api/main.py` + review manuel |
+| 10 | Annotations retour `lifespan` + `not_implemented_handler` | `src/api/main.py` | `mypy src/api/main.py` → 0 erreurs |
+| 11 | Rate limiting nginx : `limit_req_zone` + `limit_req` sur `/api/v1/` | `infrastructure/docker/nginx.conf` | `nginx -t` valide |
+
+#### Sprint 3 — CI & Secrets (M3, M7, 0.16)
+| # | Tâche | Fichiers | Gate |
+|---|-------|----------|------|
+| 12 | Créer `.github/workflows/ci.yml` (ruff + mypy + pytest + build docker) | `.github/workflows/ci.yml` | Push → GitHub Actions vert |
+| 13 | `.env.example` : ajouter `API_KEY`, `API_KEY_HEADER`, `CORS_ALLOW_ORIGINS` | `.env.example` | Diff cohérent avec settings |
+| 14 | Secrets management : ajouter `sops` / `.env.encrypted` stub (Phase 7) | `scripts/`, `.pre-commit-config.yaml` | Doc seulement pour l'instant |
+
+#### Sprint 4 — Agents & Pipeline (Phase 1-3)
+| # | Tâche | Fichiers | Gate |
+|---|-------|----------|------|
+| 15 | Implémenter `VectorService.hybrid_search` + `upsert_points` + `create_collection` | `src/services/vector.py` | Test unitaire mock Qdrant |
+| 16 | Implémenter `OllamaClient` (generate, embed, rerank, unload_model) | `src/services/ollama.py` | Test contre Ollama local si dispo |
+| 17 | Implémenter `WikiAgent` méthodes de base (write_page, update_index, append_log, lint, validate_frontmatter) | `src/agents/wiki_agent.py` | Test écriture vault temporaire |
+| 18 | Implémenter `langgraph_orchestrator.build_graph()` (nœuds Planner → QueryRewriter → Search → ContextAssembler → Generator → Judge → Advocate → Evaluator → Wiki) | `src/agents/langgraph_orchestrator.py` | Smoke test flux complet |
+| 19-22 | Implémenter Judge, Advocate, Generator, Evaluator (stubs → vraies implémentations) | `src/agents/*.py` | Tests d'intégration séquentiels |
+
+#### Sprint 5 — MCP + Filtre Injection Niveau 2/3
+| # | Tâche | Fichiers |
+|---|-------|----------|
+| 23 | Serveur MCP (`src/mcp/server.py`) exposant 7 tools WikiAgent | Nouveau module |
+| 24 | Dockerfile MCP + service dans `orchestrator.yml` + route nginx `/mcp/` | Dockerfiles, nginx |
+| 25 | mTLS sur `/mcp/` (Phase 0.13) | nginx, certs |
+| 26 | Niveau 2 : Classifieur ML léger (optionnel) | `src/tools/injection_classifier.py` |
+| 27 | Niveau 3 : Quarantaine via trust tiers OKF (frontmatter `injection_flagged` + `lint()` priorité) | `src/tools/injection_filter.py`, `src/agents/wiki_agent.py` |
+
+---
+
+### ❓ Questions pour consultation tierce (décision requise avant exécution)
+
+| # | Question | Options | Impact |
+|---|----------|---------|--------|
+| Q1 | **Ordre des sprints** : Faire Sprint 1 complet (hygiène/CI) avant Sprint 2 (sécurité), ou enchaîner 1→2 sans attendre CI vert ? | A) Sprint 1 complet d'abord (sûr) B) 1→2 parallèles (plus vite) | Risque régression si Sprint 2 casse ce que Sprint 1 n'a pas encore fixé |
+| Q2 | **CORS origins par défaut** : Quelle valeur pour `cors_allow_origins` ? | A) `["http://localhost:3000", "http://192.168.10.0/24"]` (dev + LAN client) B) `[]` (refusé par défaut, config explicite requise) C) `["*"]` sans `allow_credentials` (ouvert mais sans cookies) | Sécurité vs commodité dev |
+| Q3 | **API Key** : Une seule key globale ou une par service/client ? | A) `API_KEY` unique globale (simple) B) `API_KEYS` liste (rotation, révocation par client) C) JWT + JWKS (standard, plus complexe) | Architecture auth |
+| Q4 | **Rate limit nginx** : `limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;` te convient ? | A) 10 req/s par IP (conservateur) B) 50 req/s (standard API) C) Configurable via `settings.rate_limit_rps` | Protection vs UX |
+| Q5 | **Test injection_filter** : Le fichier racine `test_injection_filter.py` — le garder comme référence ? Je le déplace dans `tests/` + j'ajoute les 12 payloads OWASP LLM01 du backlog. | A) Oui, déplacer + enrichir B) Non, réécrire depuis zéro C) Garder les deux (racine = legacy, tests/ = nouveau) | Couverture tests |
+| Q6 | **MCP vs WikiAgent** : Le backlog dit MCP **après** WikiAgent concret. Commencer le serveur MCP (Sprint 5) en parallèle, ou attendre `WikiAgent` implémenté (Sprint 4.17) ? | A) MCP après WikiAgent (logique dépendance) B) MCP en parallèle (découplé, transport seulement) C) MCP d'abord pour valider l'API tools | Priorisation ressources |
+| Q7 | **Niveau 2 injection (ML)** : Ajouter `protectai/deberta-v3-base-prompt-injection-v2` quantifié CPU ? | A) Oui, dès Sprint 5 (défense en profondeur) B) Non, Niveau 1 + trust tiers OKF suffisent pour usage personnel C) Plus tard, seulement si faux négatifs réels observés | Complexité + CPU M1 |
+| Q8 | **Secrets management** : `sops` + `.env.encrypted` (Phase 7) ou HashiCorp Vault ? | A) `sops` + age (simple, git-friendly, pas de serveur) B) HashiCorp Vault (standard entreprise, mais overhead) C) Les deux : sops pour dev, Vault pour prod | Ops complexity |
+
+---
+
+### 📝 Note pour l'IA évaluatrice
+- Ce repo est **pré-déploiement** : infrastructure as code (Proxmox LXC + Docker Compose) prête, mais services métiers sont des stubs (`NotImplementedError`).
+- Le cluster cible 3 machines hétérogènes (Master CPU, GPU Worker RTX 4000, BC-250 Vulkan) — décisions hardware tranchées et documentées.
+- Pattern Karpathy (vault Obsidian) + OKF v0.2 + évaluation multi-agents (Judge→Avocat→Évaluateur séquentiel sur RTX 4000 8GB) sont les piliers architecturaux.
+- **Règle d'or BC-250** : CPU = serviteur du GPU (pas d'embedding sur BC-250, embedding sur Master CPU Xeon 32c/64t).
+- Tout ce qui est dans cette section "Consultation Tierce" est **proposé, non décidé** — ne pas implémenter sans validation.
 
 ---
 

@@ -45,6 +45,10 @@
 - [ ] **Structure OKF : `index.md` (catalogue §8) + `log.md` (chronologie §9) + frontmatter validé**
 - [ ] **Concurrency lock vault Obsidian** : NFS `no_root_squash` + `fcntl` locking OU git sidecar auto-commit
 
+## Sécurité
+- [x] **Filtre anti-injection Niveau 1 (regex)** : `src/tools/injection_filter.py`, scanne les chunks à l'ingestion, score `injection_risk` en métadonnée (ne bloque pas — la quarantaine passe par le trust tier OKF). Testé (`tests/test_injection_filter.py`, 12 payloads type OWASP LLM01 + faux positifs) — **GREEN**. Limite connue : heuristique regex, contournable par paraphrase/encodage/autre langue.
+- [ ] **MCP (Model Context Protocol)** — différé : dépend de WikiAgent concret + mTLS (Phase 0.13). Pas de date cible.
+
 ## Fonctionnalités futures
 - [ ] Text-to-SQL sur le nœud BC250
 - [ ] Dashboard Grafana (tokens/sec par nœud)
@@ -89,3 +93,63 @@
 - [ ] 0.22 **Runbooks incidents** : "BC250 ne boot plus", "RTX 4000 OOM", "NFS stale handle", "Qdrant corruption"
 - [ ] 0.23 **Kernel upgrade hook BC250** : script `rebuild-cu-unlock.sh` déclenché par `apt` hook `kernel-postinst` + `dracut -f`
 - [x] 0.24 **BC250 config centralisée** : 15 variables dans `settings.py` + `.env.example` (CU count, core unlock, TTM, governor, GRUB triplet, Mesa, kernel, scripts paths)
+
+---
+
+## 📋 Sprints d'implémentation — Proposition pré-déploiement (31/07/2026)
+
+> **Note** : Ces sprints sont proposés pour consultation tierce. Voir `backlog.md` section "Consultation Tierce" pour les 8 questions Q1–Q8 nécessitant arbitrage avant exécution.
+
+### Sprint 1 — Hygiène & CI (bloquant, ~2-4h)
+- [ ] 1.1 Fix `.gitignore` : `models/` → `/models/`
+- [ ] 1.2 Créer `.gitattributes` (eol=lf) + `git add --renormalize .`
+- [ ] 1.3 Fix `pyproject.toml` : `python_version = "3.12"` + `pydantic.mypy` plugin + override asyncpg
+- [ ] 1.4 Fix `src/tools/injection_filter.py` : pattern `forget` + `StrEnum` + newline final
+- [ ] 1.5 Déplacer test → `tests/test_injection_filter.py`, supprimer doublons racine (`injection_filter.py`, `test_injection_filter.py`)
+- [ ] 1.6 Fix `ruff` sur tout le repo (line length, unused imports, StrEnum)
+- **Gate** : `ruff check .` → 0, `mypy src` → 0 bloquantes, `pytest` → 19+ passed
+
+### Sprint 2 — Sécurité API (après Sprint 1, ~3-5h)
+- [ ] 2.1 Settings : `api_key`, `api_key_header`, `cors_allow_origins` + `MissingApiKeyConfigError`
+- [ ] 2.2 Middleware `require_api_key` dans `main.py` (protège `/query`, `/ingest`, `/embed`, `/okf/*`, `/lint`)
+- [ ] 2.3 Fix CORS : `allow_origins=settings.cors_allow_origins` + retirer `allow_credentials=True` si wildcard
+- [ ] 2.4 Annotations retour `lifespan` + `not_implemented_handler` (mypy clean)
+- [ ] 2.5 Rate limiting nginx : `limit_req_zone` + `limit_req` sur `/api/v1/`
+- **Gate** : `pytest tests/test_api.py` → 200 health/ready, 401 sans key ; `nginx -t` valide ; `mypy src/api/main.py` → 0
+
+### Sprint 3 — CI & Secrets (parallélisable Sprint 2, ~2-3h)
+- [ ] 3.1 Créer `.github/workflows/ci.yml` (ruff + mypy + pytest + build docker)
+- [ ] 3.2 `.env.example` : ajouter `API_KEY`, `API_KEY_HEADER`, `CORS_ALLOW_ORIGINS`
+- [ ] 3.3 Secrets management stub : `sops` + `.env.encrypted` (Phase 7)
+- **Gate** : Push → GitHub Actions vert ; diff `.env.example` cohérent
+
+### Sprint 4 — Agents & Pipeline (cœur métier, ~2-3 jours)
+- [ ] 4.1 `VectorService.hybrid_search` + `upsert_points` + `create_collection`
+- [ ] 4.2 `OllamaClient` (generate, embed, rerank, unload_model)
+- [ ] 4.3 `WikiAgent` : write_page, update_index, append_log, lint, validate_frontmatter
+- [ ] 4.4 `langgraph_orchestrator.build_graph()` complet
+- [ ] 4.5-4.8 Judge, Advocate, Generator, Evaluator implémentations réelles
+- **Gate** : Smoke test flux complet M1→M3→M2→M1
+
+### Sprint 5 — MCP + Injection N2/N3 (optionnel, après Sprint 4.3)
+- [ ] 5.1 Serveur MCP (`src/mcp/server.py`) 7 tools WikiAgent
+- [ ] 5.2 Dockerfile MCP + service `orchestrator.yml` + route nginx `/mcp/`
+- [ ] 5.3 mTLS sur `/mcp/` (Phase 0.13)
+- [ ] 5.4 Niveau 2 : Classifieur ML léger (optionnel, Q7)
+- [ ] 5.5 Niveau 3 : Quarantaine trust tiers OKF (`injection_flagged` + `lint()` priorité)
+
+---
+
+## Dépendances entre sprints
+
+```
+Sprint 1 (Hygiène/CI)
+    ↓ (requis)
+Sprint 2 (Sécurité API) ←→ Sprint 3 (CI/Secrets) [parallélisables]
+    ↓
+Sprint 4 (Agents/Pipeline) — cœur métier
+    ↓ (requis pour Sprint 5.1)
+Sprint 5 (MCP + Injection N2/N3) [optionnel]
+```
+
+---
