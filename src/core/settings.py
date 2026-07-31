@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     """Configuration globale du cluster RAG multi-agents."""
 
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).parents[3] / ".env",
+        env_file=Path(__file__).resolve().parents[2] / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -38,11 +38,11 @@ class Settings(BaseSettings):
     )
 
     # ──────────────────────────────────────────────
-    # API Cluster (LXC 102 : API Gateway / nginx)
+    # API Cluster (LXC 100, exposée via pfSense VM 104)
     # ──────────────────────────────────────────────
-    cluster_api_url: HttpUrl = Field(
+    cluster_api_url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://localhost:8000",
-        description="URL de base de l'API cluster (exposée via nginx LXC 102)",
+        description="URL de base de l'API cluster (exposée via pfSense VM 104)",
         validation_alias="CLUSTER_API_URL",
     )
 
@@ -76,19 +76,19 @@ class Settings(BaseSettings):
     # ──────────────────────────────────────────────
     # Ollama Endpoints (3 nœuds)
     # ──────────────────────────────────────────────
-    ollama_m1_url: HttpUrl = Field(
+    ollama_m1_url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://10.10.0.1:11434",
         description="Ollama Machine 1 (Master) — Embedding CPU principal + Evaluator + fallback",
         validation_alias="OLLAMA_M1_URL",
     )
 
-    ollama_m2_url: HttpUrl = Field(
+    ollama_m2_url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://10.10.0.2:11434",
         description="Ollama Machine 2 (GPU Worker) — Reranker, Judge, Avocat, Backup Embedding CPU",
         validation_alias="OLLAMA_M2_URL",
     )
 
-    ollama_m3_url: HttpUrl = Field(
+    ollama_m3_url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://10.10.0.3:11434",
         description=(
             "Ollama Machine 3 (BC-250 Baremetal) — "
@@ -210,7 +210,7 @@ class Settings(BaseSettings):
     # ──────────────────────────────────────────────
     # Vector Store (Qdrant)
     # ──────────────────────────────────────────────
-    qdrant_url: HttpUrl = Field(
+    qdrant_url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://10.10.0.1:6333",
         description="Qdrant sur Machine 1 (LXC 101)",
         validation_alias="QDRANT_URL",
@@ -325,6 +325,15 @@ class Settings(BaseSettings):
     top_k_retrieval: int = Field(default=20, validation_alias="TOP_K_RETRIEVAL")
     top_k_rerank: int = Field(default=8, validation_alias="TOP_K_RERANK")
     similarity_threshold: float = Field(default=0.7, validation_alias="SIMILARITY_THRESHOLD")
+    evaluation_enabled: bool = Field(
+        default=False,
+        description=(
+            "Boucle d'évaluation multi-agents (Judge → Advocate → Evaluator) — "
+            "défaut OFF en pré-déploiement (aucun LLM pullé, latence 4 appels LLM/requête). "
+            "Décision D12 : activation optionnelle par requête/endpoint."
+        ),
+        validation_alias="EVALUATION_ENABLED",
+    )
 
     # ──────────────────────────────────────────────
     # BC-250 Baremetal (Machine 3 — Vulkan ONLY)

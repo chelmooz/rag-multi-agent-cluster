@@ -1,17 +1,17 @@
 # Backlog — Cluster RAG Multi-Agents
 
 ## Phase 0 — Squelette & Config (FONDATIONS — à faire AVANT tout code métier)
-- [ ] 0.1 Structure `src/` complète (agents, tools, core, api, services)
-- [ ] 0.2 Config centralisée `.env` + `settings.py` (Pydantic Settings) — **single source of truth**
+- [x] 0.1 Structure `src/` complète (agents, tools, core, api, services) — **+ `src/{api` corrompu supprimé, `src/models/` mort supprimé (31/07/2026)**
+- [x] 0.2 Config centralisée `.env` + `settings.py` (Pydantic Settings) — **single source of truth** — **+ bug corrigé 31/07/2026 : `env_file` pointait sur `parents[3]` (H:\) au lieu de `parents[2]` → le .env n'était JAMAIS lu. `.env.example` réécrit aligné sur les `validation_alias` réels**
 - [x] 0.3 Docker Compose VectorDB (**Qdrant** + PostgreSQL + Redis) — **aligné Qdrant, restart policies ajoutées**
 - [x] 0.4 Docker Compose Orchestrator (FastAPI + LangGraph workers + Wiki Agent) — **build.context corrigé** *(nginx retiré, pfSense gère reverse proxy)*
-- [x] 0.5 Scripts Proxmox LXC (master + GPU passthrough RTX 4000)
+- [x] 0.5 Scripts Proxmox LXC (master + GPU passthrough RTX 4000) — **mis à jour D9 (31/07/2026) : LXC 102 nginx et LXC 103 Monitoring retirés des scripts**
 - [ ] 0.6 **Créer `docs/claude-md-template.md` → template CLAUDE.md pour wiki (frontmatter OKF v0.2)**
 - [ ] 0.7 **Créer `scripts/okf-lint.py` : validation frontmatter OKF + détection stale/orphelins/contradictions**
 - [ ] 0.8 **Endpoints OKF wrapper : `/api/v1/okf/validate`, `/api/v1/okf/list`, `/api/v1/okf/show`**
-- [ ] 0.9 Créer `infrastructure/proxmox/create-lxc-wiki-agent.sh` (LXC 100 complet)
-- [x] 0.10 Créer `infrastructure/docker/orchestrator.yml` + `nginx.conf` (pour dev) + 3 Dockerfiles (api, wiki-agent, langgraph) — **fix Poetry→pip install .**
-- [ ] 0.11 Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback) — **implémenté : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé**
+- [x] 0.9 Créer `infrastructure/proxmox/create-lxc-wiki-agent.sh` (LXC 100 complet) — **couvert par `create-lxc-master.sh` (LXC 100 Orchestrator + Wiki Agent, 8 vCPU/10 GB)**
+- [x] 0.10 Créer `infrastructure/docker/orchestrator.yml` + `nginx.conf` (pour dev) + 3 Dockerfiles (api, wiki-agent, langgraph) — **fix Poetry→pip install .** — **nginx.conf supprimé (D4/D9, 31/07/2026), pfSense gère le reverse proxy**
+- [x] 0.11 Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback) — **implémenté dans l'API : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé (`/health` + `/ready`)**
 - [ ] 0.12 Test d'ingestion bout-en-bout : source → embed M1 → index Qdrant → wiki pages → index.md/log.md
 - [ ] 0.13 **Configurer mTLS pour API interne (certs auto-signés via pfSense CA) — BLOQUANT PROD**
 - [x] ~~0.14 **Prometheus exporter custom wiki-agent**~~ **RETIRÉ** (cf. D9, 31/07/2026) — pas de Prometheus déployé en v1, metrics consultables via logs applicatifs
@@ -19,7 +19,7 @@
 - [ ] 0.16 **Secrets management** : `sops` + `.env.encrypted` ou HashiCorp Vault (Phase 7) — **pas de CHANGE_ME en prod**
 - [x] 0.17 **Health checks obligatoires** : `/health` + `/ready` sur CHAQUE service Docker — **implémenté : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé** — ~~Prometheus scrape~~ retiré (cf. D9), consultation directe `curl`/Glances
 - [x] 0.18 **Script `scripts/smoke_test_frontend_api.py`** (32 scénarios) — **32/32 PASSED**
-- [ ] 0.19 **API Versioning** : stratégie URL path `/api/v1/` + header `Accept` dès Phase 1.5
+- [x] 0.19 **API Versioning** : stratégie URL path `/api/v1/` + header `Accept` — **prefix `/api/v1/` en place via `settings.api_prefix` (31/07/2026) ; header `Accept` à compléter lors de l'implémentation des endpoints (A7)**
 - [ ] 0.20 **Concurrency lock vault Obsidian** : NFS `no_root_squash` + `fcntl` locking OU git sidecar (voir 0.15)
 - [ ] 0.21 **Backup Qdrant** : `qdrant snapshot create` cron quotidien → stocké sur OMV M2 (HDD 2TB)
 - [ ] 0.22 **Runbooks incidents** : "BC250 ne boot plus", "RTX 4000 OOM", "NFS stale handle", "Qdrant corruption", "OMV HDD failure"
@@ -55,16 +55,18 @@
 | `tests/test_api.py` | ~~`test_ready` attend 200 fixe~~ | **✅ accepte 200 ou 503** |
 | `scripts/smoke_test_frontend_api.py` | ~~`NotImplementedError` stub~~ | **✅ 32 scénarios passent** |
 
-## Phase 1 — Pipeline RAG Core (Master LXC 100-101) — **EN COURS**
-- [x] 1.1 Ingestion Service (chunking, augmentation, embedding sur Machine 1 CPU)
-- [x] 1.2 VectorService (Qdrant client, hybrid search natif dense + sparse BM25)
-- [x] 1.3 LexicalSearch (BM25 via Qdrant sparse vectors natif)
-- [x] 1.4 Reranker (bge-reranker-v2-m3 sur RTX 4000 - Machine 2)
-- [x] 1.5 API Endpoints (/ingest, /query, /embed OpenAI-compat) + versioning `/api/v1/`
-- [x] 1.6 Endpoint `/api/v1/embed` : bge-m3 dense+sparse unifié + fallback histogramme
-- [x] 1.7 OllamaClient complet (generate, embed, rerank, unload, health + retry/circuit-breaker)
-- [x] 1.8 OllamaClientPool routing intelligent (M1/M2/M3 selon rôle)
-- [x] 1.9 Tests d'intégration hybrid search (ingest → embed → search → rerank)
+## Phase 1 — Pipeline RAG Core (Master LXC 100-101) — **À FAIRE — AUCUNE TÂCHE LIVRÉE (audit 31/07/2026)**
+
+> ⚠️ Correction d'état : les items 1.1-1.9 ci-dessous étaient cochés `[x]` mais **rien n'est implémenté** dans le code — `src/services/{ingestion,lexical,reranker}.py` absents, `OllamaClient`/`VectorService` et les endpoints `/ingest` `/query` `/embed` lèvent tous `NotImplementedError`. L'ordre d'exécution suit le ROADMAP Sprint 2.
+- [ ] 1.1 Ingestion Service (chunking, augmentation, embedding sur Machine 1 CPU)
+- [ ] 1.2 VectorService (Qdrant client, hybrid search natif dense + sparse BM25)
+- [ ] 1.3 LexicalSearch (BM25 via Qdrant sparse vectors natif)
+- [ ] 1.4 Reranker (bge-reranker-v2-m3 sur RTX 4000 - Machine 2)
+- [ ] 1.5 API Endpoints (/ingest, /query, /embed OpenAI-compat) + versioning `/api/v1/`
+- [ ] 1.6 Endpoint `/api/v1/embed` : bge-m3 dense+sparse unifié + fallback histogramme
+- [ ] 1.7 OllamaClient complet (generate, embed, rerank, unload, health + retry/circuit-breaker)
+- [ ] 1.8 OllamaClientPool routing intelligent (M1/M2/M3 selon rôle)
+- [ ] 1.9 Tests d'intégration hybrid search (ingest → embed → search → rerank)
 
 ## Phase 2 — Orchestrateur & Planificateur (LXC 100 - Machine 1)
 - [ ] 2.1 Orchestrator (flux principal)
@@ -518,7 +520,7 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 | **Secrets management absent** | `.env.example` a des `CHANGE_ME` — pas de solution prod | → Phase 7 : `sops` + `.env.encrypted` ou HashiCorp Vault |
 | **VectorDB incohérence** | `docker-compose.vector-db.yml` = Chroma, README = Qdrant | → **Corriger maintenant** : Qdrant (hybrid search natif) |
 | **Health checks = 0** | Pas d'observabilité avant Phase 7 | → Ajouter `/health` + `/ready` sur chaque service dès Phase 0 *(déjà fait, cf. 0.17)* — ~~Prometheus scrape~~ retiré, consultation directe possible via `curl`/Glances |
-| **Tests d'intégration = 0** | `scripts/test_frontend_api.py` référencé mais absent | → Écrire `smoke_test_frontend_api.py` (32 scénarios) **avant** tout merge sur `main` |
+| **Tests d'intégration = 0** | `scripts/test_frontend_api.py` référencé mais absent | → ✅ Écrire `smoke_test_frontend_api.py` (32 scénarios) — **32/32 PASSED**, nom corrigé dans README |
 | **API Versioning absent** | `/api/v1/` dans README mais pas dans code | → Définir stratégie (URL path `/api/v1/` + header `Accept`) dès Phase 1.5 |
 | **BC250 Kernel upgrade = CU unlock cassé** | Documenté mais pas d'automatisation | → Script `rebuild-cu-unlock.sh` déclenché par `apt` hook `kernel-postinst` |
 | **Ollama unload séquentiel non implémenté** | Point critique pipeline Judge→Avocat | → Implémenter dans `services/agents/judge.py` + `advocate.py` avec healthcheck VRAM |
@@ -710,9 +712,8 @@ Contenu structuré (voir README.md section ajoutée) avec :
 
 | Script | Emplacement | Description |
 |--------|-------------|-------------|
-| `create-lxc-wiki-agent.sh` | `infrastructure/proxmox/` | Création LXC 100 + config post-install |
-| `orchestrator.yml` | `infrastructure/docker/` | Docker Compose stack complète |
-| `nginx.conf` | `infrastructure/docker/` | Reverse proxy + TLS local |
+| `create-lxc-master.sh` | `infrastructure/proxmox/` | Création LXC 100/101 + VM 104 |
+| `orchestrator.yml` | `infrastructure/docker/` | Docker Compose stack complète (nginx supprimé, D4) |
 | `Dockerfile.api` | `infrastructure/docker/` | FastAPI + deps |
 | `Dockerfile.wiki-agent` | `infrastructure/docker/` | Wiki Agent (LangGraph + tools) |
 | `Dockerfile.langgraph` | `infrastructure/docker/` | Orchestrateur LangGraph |
@@ -961,14 +962,29 @@ Le cluster est **100% offline** : les IA (Ollama) tournent en local sur les 3 ma
 | D6 | **Structure réseau confirmée** | M2 et M3 branchées en direct sur carte 10 Gb de M1, pas de switch. M1 sortie 1 Gb pfSense → internet pour updates. M2/M3 n'ont pas d'accès internet direct — tout le réseau inter-nœuds est en VLAN 10 (10.10.0.0/24). | Documentation réseau à auditer dans `README.md` et `docs/`. |
 | D7 | **Adoption plan 3 sprints** | Remplace la roadmap précédente (liste plate ~95 items), simplifié en sprints exécutables. | `ROADMAP.md` réécrit en `{Sprint 1 Hygiène/CI → Sprint 2 Backend métier → Sprint 3 Finalisation}`. |
 | D9 | **Monitoring complet (Prometheus+Grafana+Loki, LXC 103) retiré de la v1** | Sur-ingénierie pour 3 nœuds physiques, opérateur seul, projet pas encore en prod. Proxmox VE (M1/M2) et pfSense exposent déjà des graphs RRD natifs (CPU/RAM/disk/network) sans rien ajouter. Seul le BC-250 (bare metal, hors Proxmox) n'a aucune supervision native. | Retrait de Phase 7.1/7.2, item 0.12/0.14, LXC 103 (README + backlog). Ajout **Glances (`glances -w`)** sur BC-250 uniquement. Réactivation Prometheus/Grafana possible plus tard (Phase 7.7, non planifiée) si diagnostic perf réel nécessaire (latence Reranker/Générateur, VRAM RTX4000). |
+| D10 | **Mock-first — aucun LLM pullé avant déploiement** | Pré-déploiement : aucune machine du cluster n'est livrée, aucun Ollama n'a de modèles. Le code (OllamaClient, agents, endpoints) doit être développé et testé 100% via `httpx.MockTransport` + Qdrant mocké, sans matériel. | Phase A/B entièrement développables et vérifiables en CI sans hardware. Les tests d'intégration mockent les réponses Ollama (generate/embed/rerank) et Qdrant. |
+| D11 | **Ordre d'exécution : RAG core (Phase A) avant multi-agents (Phase B)** | Conforme au ROADMAP : l'hybrid search (Hybrid RAG + Retrieve-and-rerank) est le socle ; le pipeline multi-agents (évaluation) consomme ce socle. | ROADMAP réorganisé en 4 phases (A/B/C/D) avec phases C (déploiement) et D (CI) séparées. |
+| D12 | **Boucle d'évaluation multi-agents OPTIONNELLE** | Juge → Avocat → Évaluateur = 4 appels LLM/requête (génération + 3 éval) → latence critique sur RTX 4000 8 GB + BC250 non conventionnel. Inutile pour le chat simple, utile pour les réponses finales. | Flag `evaluation_enabled` dans `settings.py` (défaut `false`, cf. `.env.example`). Activation par endpoint/requête prévue (Phase B6). Feedback Évaluateur → Planner limité à 1 itération max. |
 
 ### Points techniques à documenter
 
-- **IP correction `.env.example`** : Qdrant/Postgres/Redis actuellement pointés sur `10.10.0.1` (gateway) → doivent pointer sur `10.10.0.101` (LXC 101 Vector DB). Cf. scripts Proxmox `create-lxc-master.sh`.
-- **Volume NFS `/data/shared` pour relay.json** : manquant dans `docker-compose.orchestrator.yml` — doit être ajouté pour que Judge soit avant le relay à travers le pipeline.
+- ~~**IP correction `.env.example`** : Qdrant/Postgres/Redis actuellement pointés sur `10.10.0.1` (gateway) → doivent pointer sur `10.10.0.101` (LXC 101 Vector DB). Cf. scripts Proxmox `create-lxc-master.sh`.~~ **✅ FAIT (31/07/2026)** : `.env.example` réécrit avec `10.10.0.101`, noms de variables alignés sur `settings.py`.
+- **Volume NFS `/data/shared` pour relay.json** : manquant dans `docker-compose.orchestrator.yml` — doit être ajouté pour que Judge soit avant le relay à travers le pipeline (→ ROADMAP C2).
 - **BC250_CU_COUNT=24 par défaut** : 40 n'est valable qu'après l'exécution du script d'indistance, qui est encore non testé sur ordinal BAC.
-  - **Duplication postgres/redis** dans les deux `docker-compose.{vector-db,orchestrator}.yml` → port conflict si lancés sur le même hôte. À fusionner ou isoler en un seul réseau.
-- **`models/` dans `.repoignore` igno aussi `src/models/`** par erreur. Pattern `models/` doit devenir `/models/` pour ne pas cacher le package.
+- **Duplication postgres/redis** dans les deux `docker-compose.{vector-db,orchestrator}.yml` → port conflict si lancés sur le même hôte. À fusionner ou isoler en un seul réseau (→ Phase C).
+- ~~**`models/` dans `.repoignore` igno aussi `src/models/`** par erreur. Pattern `models/` doit devenir `/models/` pour ne pas cacher le package.~~ **✅ FAIT (31/07/2026)** : `.gitignore` OK (`models/`), package mort `src/models/` supprimé.
+- ~~**Bug `settings.py` env_file** : `Path(__file__).parents[3]` pointait sur `H:\` au lieu de la racine projet → le `.env` n'était jamais chargé (silencieux).~~ **✅ CORRIGÉ (31/07/2026)** : `parents[2]`. Vérifié : `.env.example` chargé (CU=40, Qdrant LXC 101, OKF tiers OK).
+
+### Plan de build (31/07/2026 — décisions D10-D12)
+
+`ROADMAP.md` réorganisé en 4 phases (A → B → C → D) :
+
+- **Phase A — RAG core (mock-first)** : OllamaClient + Pool (A1-A2) → VectorService (A3) → IngestionService (A4) → LexicalSearch (A5) → RerankerService (A6) → endpoints `/embed` `/ingest` `/query` (A7) → tests hybrid search (A8).
+- **Phase B — Multi-agents (mock-first)** : Planner → QueryRewriter → ContextAssembler → WikiAgent → Generator/Judge/Advocate/Evaluator → `evaluation_enabled` (D12) → `build_graph()` → endpoints OKF/lint → tests séquentiels relay.
+- **Phase C — Déploiement** (bloquée : machines à livrer) : CMD idempotents Docker, NFS relay, OMV LXC 105, pull modèles + digests, Glances BC-250, smoke tests réels.
+- **Phase D — CI/finalisation** : `.github/workflows/ci.yml`, template CLAUDE.md OKF, runbooks, merge main.
+
+**Sprint 1 (Hygiène/CI) : TERMINÉ (31/07/2026)** — voir ROADMAP.md. Inclut : ruff 0 erreurs, mypy 0 bloquantes (plugin pydantic.mypy + py3.12 + override asyncpg), `.gitattributes` créé, `src/{api` et `src/models/` supprimés, doublon `test_injection_filter.py` supprimé, `.env.example` aligné (IPs + noms de variables), nginx/LXC 102-103 retirés (D4/D9).
 
 ### Décision de planification post-déploiement
 

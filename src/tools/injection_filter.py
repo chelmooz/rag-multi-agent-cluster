@@ -6,10 +6,10 @@ Le trust tier OKF (unverified/machine-confirmed/human-reviewed) gère la quarant
 """
 import re
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class InjectionRiskLevel(str, Enum):
+class InjectionRiskLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"

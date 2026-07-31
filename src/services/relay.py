@@ -19,7 +19,7 @@ class RelayService:
             return None
         if await self.stale():
             return None
-        return json.loads(self.relay_path.read_text(encoding="utf-8"))
+        return json.loads(self.relay_path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
 
     async def stale(self) -> bool:
         if not self.relay_path.exists():

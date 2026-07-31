@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Machine 2 (GPU Worker + Services) — Xeon E5-2698 v3 (16c/32t), 64 GB ECC, 1 TB NVMe, RTX 4000 (8 GB VRAM)
-# Crée les LXC : 103 Monitoring, 200 Inference GPU (passthrough RTX 4000, privilégié),
+# Crée les LXC : 200 Inference GPU (passthrough RTX 4000, privilégié),
 #                201 Workers Agents (Avocat + Backup Embedding CPU)
+# Note : LXC 103 Monitoring retiré (décision D9) — graphs natifs Proxmox + Glances BC-250.
 set -euo pipefail
 
 PASSWORD="${PASSWORD:-jarvis}"
@@ -109,30 +110,9 @@ else
 fi
 
 # ============================================================
-# LXC 103 — Monitoring (Prometheus + Grafana + Loki)
-# vCPU: 4  RAM: 2 GB  Disque: 50 GB  IP: 10.10.0.103/24
-# ============================================================
-info "LXC 103 — Monitoring"
-if pct status 103 &>/dev/null; then
-  warn "LXC 103 existe déjà."
-else
-  pct create 103 "$TEMPLATE_PATH" \
-    --hostname jarvis-monitoring \
-    --cores 4 --memory 2048 --swap 1024 \
-    --rootfs local:50 \
-    --net0 name=eth0,bridge=$BRIDGE,firewall=1,ip=10.10.0.103/24,gw=$GATEWAY,type=veth \
-    --unprivileged 1 --features nesting=1 \
-    --ostype debian \
-    --password "$PASSWORD" \
-    --storage local
-  info "LXC 103 créé."
-fi
-
-# ============================================================
 # Résumé
 # ============================================================
 echo -e "\n${GREEN}======= CRÉATION TERMINÉE =======${NC}"
-echo -e "LXC 103  ${YELLOW}10.10.0.103${NC}  Monitoring      (4 vCPU, 2 GB, Prometheus/Grafana/Loki)"
 echo -e "LXC 200  ${YELLOW}10.10.0.200${NC}  Inference GPU   (6 vCPU, 8 GB, privilégié, RTX 4000)"
 echo -e "LXC 201  ${YELLOW}10.10.0.201${NC}  Workers Agents   (4 vCPU, 8 GB, Ollama CPU)"
 echo -e "${GREEN}==================================${NC}"
@@ -142,7 +122,5 @@ echo "  Dans LXC 200 : installer NVIDIA drivers + Ollama CUDA"
 echo "    pct enter 200 && bash /root/setup-gpu-lxc.sh"
 echo "  Dans LXC 201 : installer Ollama CPU + NFS mount"
 echo "    pct enter 201 && bash /root/setup-worker-lxc.sh"
-echo "  Dans LXC 103 : installer Docker + Prometheus/Grafana/Loki"
-echo "    pct enter 103 && bash /root/setup-monitoring.sh"
 echo ""
 echo "ATTENTION : la VM hôte doit être rebootée après config IOMMU."

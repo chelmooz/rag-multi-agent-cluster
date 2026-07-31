@@ -15,7 +15,7 @@ flowchart TB
         Qdrant["💾 Qdrant VectorDB<br/>BM25 + Vectoriel 768d · LXC 101"]:::m1
         Embed["🔢 Embedding CPU<br/>nomic-embed-text-v2-moe<br/>768d · Xeon 32c/64t"]:::m1
         Eval["✅ Évaluateur<br/>qwen3.5:3b · CPU · Synthèse finale"]:::m1
-        Gate["🌐 pfSense VM 104 (reverse proxy + firewall) · Monitoring (LXC 103) · OMV Backup (LXC 105)"]:::backup
+        Gate["🌐 pfSense VM 104 (reverse proxy + firewall) · Monitoring natif Proxmox · OMV Backup (LXC 105)"]:::backup
     end
 
     subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE"]

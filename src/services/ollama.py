@@ -23,7 +23,7 @@ class OllamaClient:
         self.base_url = base_url.rstrip("/")
         self._client = AsyncClient(base_url=self.base_url, timeout=timeout)
 
-    async def generate(self, model: str, prompt: str, **kwargs) -> dict:
+    async def generate(self, model: str, prompt: str, **kwargs: object) -> dict:
         """Génération textuelle via /api/generate."""
         # TODO: implémenter avec retry + fallback
         raise NotImplementedError
@@ -50,13 +50,13 @@ class OllamaClient:
         # Ollama : POST /api/generate avec keep_alive=0 ou "" pour libérer la VRAM
         raise NotImplementedError
 
-    async def close(self):
+    async def close(self) -> None:
         await self._client.aclose()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "OllamaClient":
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: object) -> None:
         await self.close()
 
 
@@ -72,7 +72,7 @@ class OllamaClientPool:
     - evaluate()  → M1 (CPU)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         from src.core.settings import settings as s
 
         self.m1 = OllamaClient(str(s.ollama_m1_url))

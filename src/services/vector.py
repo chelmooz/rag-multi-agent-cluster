@@ -12,7 +12,7 @@ class VectorService:
     - rag-wiki : pages du vault Obsidian (embeddings nomic-embed-text-v2-moe 768d)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         from src.core.settings import settings
 
         self.client = QdrantClient(

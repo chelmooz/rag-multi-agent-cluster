@@ -31,7 +31,7 @@ class WikiAgent:
         raise NotImplementedError
 
 
-def main():
+def main() -> None:
     """Point d'entrée pour le conteneur Docker wiki-agent."""
     import asyncio
     asyncio.run(WikiAgent().lint())

@@ -15,7 +15,6 @@ flowchart TB
     subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · 2×10GbE+1GbE mgmt"]
         LXC100["🎯 LXC 100<br/>Orchestrator + Wiki Agent<br/>LangGraph + FastAPI"]:::m1
         LXC101["💾 LXC 101<br/>Qdrant VectorDB<br/>BM25 + Vectoriel 768d"]:::m1
-        LXC103["📊 LXC 103<br/>Monitoring<br/>Prometheus+Grafana+Loki"]:::m1
         VM104["🛡️ VM 104<br/>pfSense — Reverse Proxy<br/>+ Firewall + NAT + TLS"]:::fw
     end
 
@@ -27,6 +26,7 @@ flowchart TB
 
     subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
         Ollama["🤖 Ollama Vulkan natif<br/>Générateur qwen3.5:14b/35b MoE<br/>Text-to-SQL · Vision · Fast-check<br/>CPU au repos pendant inférence"]:::m3
+        Glances["📊 Glances -w :61208<br/>Monitoring BC-250 (décision D9)<br/>CPU/RAM/temp — seul nœud hors Proxmox"]:::m3
     end
 
     Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2) → HDD 2TB<br/>borg pull M1/M3 → borg create<br/>cron 02:00-05:00 · retention 14j/3m"]:::cold

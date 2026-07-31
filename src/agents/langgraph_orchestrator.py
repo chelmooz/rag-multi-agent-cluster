@@ -1,3 +1,4 @@
+# mypy: disable-error-code=no-untyped-def
 """LangGraph Orchestrator — graphe d'état explicite du pipeline multi-agents.
 
 Workflow :
@@ -6,7 +7,7 @@ Workflow :
 3. Recherche hybride (BM25 + vectoriel) + rerank
 4. Assembler le contexte (chunks + savoir interne)
 5. Générer réponse (BC250)
-6. Évaluer (Judge → Avocat → Évaluateur)
+6. Évaluer (Judge → Avocat → Évaluateur) — si `evaluation_enabled` (D12)
 7. Mettre à jour le wiki (pages, index, log)
 8. Retourner la réponse utilisateur
 """

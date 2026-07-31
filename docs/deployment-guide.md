@@ -6,8 +6,8 @@ Plan d'installation pas-à-pas pour les 3 machines du cluster.
 
 ## Sommaire
 
-1. [Machine 1 — Control Plane (Proxmox, LXC 100-101, 103, VM 104)](#machine-1--control-plane)
-2. [Machine 2 — Compute & Storage Plane (Proxmox, LXC 103, 105, 200-201)](#machine-2--gpu-worker--services-compute--storage-plane)
+1. [Machine 1 — Control Plane (Proxmox, LXC 100-101, VM 104)](#machine-1--control-plane)
+2. [Machine 2 — Compute & Storage Plane (Proxmox, LXC 105, 200-201)](#machine-2--gpu-worker--services-compute--storage-plane)
 3. [Machine 3 — BC-250 Baremetal (Debian Testing/Sid)](#machine-3--bc-250-baremetal)
 4. [Déploiement Docker & Services](#4-déploiement-docker--services)
 5. [Téléchargement des Modèles](#5-téléchargement-des-modèles)
@@ -23,7 +23,6 @@ Plan d'installation pas-à-pas pour les 3 machines du cluster.
 |--------|----|------|-----|--------|------|
 | 100 | 10.10.0.100 | 8 | 10 GB | 50 GB | Orchestrator + Wiki Agent (Docker) |
 | 101 | 10.10.0.101 | 6 | 8 GB | 80 GB | Vector DB (Docker : Qdrant, Postgres, Redis) |
-| 103 | 10.10.0.103 | 4 | 2 GB | 50 GB | Monitoring (Prometheus, Grafana, Loki) |
 | 104 | — | 1 | 512 MB | — | pfSense (VM, reverse proxy + firewall + NAT) |
 
 ### Ordre d'exécution
@@ -80,7 +79,7 @@ curl http://localhost:6333/health
 curl http://localhost:6333/collections
 ```
 
-#### 1.5 Hôte M1 — NFS export + Ollama CPU + Monitoring (LXC 103)
+#### 1.5 Hôte M1 — NFS export + Ollama CPU
 
 ```bash
 # NFS relay pour l'évaluation séquentielle
@@ -97,8 +96,7 @@ ollama pull nomic-embed-text-v2-moe
 ollama pull qwen3.5:3b
 ```
 
-> Note : Le Monitoring (LXC 103 — Prometheus/Grafana/Loki) est déployé sur Machine 2, pas sur M1.
-> Voir section 2.3 du guide Machine 2.
+> Note : Plus de Monitoring LXC 103 (décision D9) — supervision via graphs natifs Proxmox + pfSense, et Glances sur BC-250 (cf. section 3).
 
 ---
 
@@ -108,7 +106,6 @@ ollama pull qwen3.5:3b
 
 | LXC | IP | vCPU | RAM | Disque | Rôle |
 |-----|----|------|-----|--------|------|
-| 103 | 10.10.0.103 | 4 | 2 GB | 50 GB | Monitoring (Prometheus, Grafana, Loki) |
 | 105 | 10.10.0.105 | 2 | 4 GB | 20 GB | **OMV Backup** (Docker - HDD 2TB passthrough) |
 | 200 | 10.10.0.200 | 6 | 8 GB | 30 GB | Inference GPU (passthrough RTX 4000, privilégié) |
 | 201 | 10.10.0.201 | 4 | 8 GB | 30 GB | Workers Agents (Avocat + Backup Embedding CPU) |
@@ -138,29 +135,11 @@ cd infrastructure/proxmox
 bash create-lxc-gpu.sh
 ```
 
-### 2.3 Post-installation LXC 103 (Monitoring)
+### 2.3 Monitoring — graphs natifs Proxmox uniquement
 
-```bash
-pct enter 103
-
-# Docker
-curl -fsSL https://get.docker.com | sh
-
-# Prometheus
-docker run -d --name prometheus --restart unless-stopped \
-  -p 9090:9090 -v /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
-  prom/prometheus:latest
-
-# Grafana
-docker run -d --name grafana --restart unless-stopped \
-  -p 3000:3000 -e GF_SECURITY_ADMIN_PASSWORD=CHANGE_ME \
-  grafana/grafana:latest
-
-# Loki
-docker run -d --name loki --restart unless-stopped \
-  -p 3100:3100 -v /etc/loki/config.yaml:/etc/loki/config.yaml \
-  grafana/loki:latest
-```
+> Décision D9 (31/07/2026) : **plus de Prometheus/Grafana/Loki (LXC 103 retiré)**.
+> Supervision M1/M2 via l'UI Proxmox (graphs RRD natifs CPU/RAM/disk/network).
+> Supervision BC-250 via **Glances** (mode web `glances -w`) — cf. section 3.
 
 ### 2.4 Post-installation LXC 200 (Inference GPU)
 
@@ -423,7 +402,7 @@ ollama pull granite-4.0-h-tiny@sha256:...      # Fast-check
 
 ```bash
 ollama pull nomic-embed-text-v2-moe@sha256:... # Embedding
-ollama pull qwen3.5:3b@sha256:...              # Monitoring / fallback
+ollama pull qwen3.5:3b@sha256:...              # Fallback léger
 ```
 
 > ⚠️ Fixer les digests SHA256 dans `.env` pour garantir la reproductibilité.
@@ -436,12 +415,11 @@ ollama pull qwen3.5:3b@sha256:...              # Monitoring / fallback
 # Depuis n'importe quel nœud du VLAN 10 (10.10.0.0/24) :
 curl http://10.10.0.100:8000/api/v1/health     # LXC 100 FastAPI
 curl http://10.10.0.101:6333/health            # LXC 101 Qdrant
-curl http://10.10.0.103:9090                    # LXC 103 Prometheus
-curl http://10.10.0.103:3000                    # LXC 103 Grafana
 curl http://10.10.0.105:80                      # LXC 105 OMV Web UI
 curl http://10.10.0.200:11434/api/tags         # LXC 200 Ollama GPU
 curl http://10.10.0.201:11434/api/tags         # LXC 201 Ollama CPU
 curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
+curl http://10.10.0.3:61208                     # M3 BC-250 Glances (monitoring)
 ```
 
 ### Endpoints de référence
@@ -457,9 +435,7 @@ curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
 | Ollama M2 CPU | `http://10.10.0.201:11434` |
 | Ollama M3 BC-250 | `http://10.10.0.3:11434` |
 | Ollama M1 CPU (host) | `http://10.10.0.1:11434` |
-| Prometheus | `http://10.10.0.103:9090` |
-| Grafana | `http://10.10.0.103:3000` |
-| Loki | `http://10.10.0.103:3100` |
+| Glances BC-250 (M3) | `http://10.10.0.3:61208` |
 | OMV Backup | `http://10.10.0.105:80` |
 | NFS relay | `10.10.0.1:/data/shared` → `/data/shared` |
 
@@ -473,9 +449,8 @@ curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
 |-----|------|-----|-------|
 | 100 | 8 | 10 GB | Orchestrator + Wiki Agent |
 | 101 | 6 | 8 GB | Vector DB |
-| 103 | 4 | 2 GB | Monitoring (Prometheus/Grafana/Loki) |
 | 104 (VM) | 1 | 512 MB | pfSense (reverse proxy + firewall + NAT) |
-| **Total** | **19** | **~21 GB** | **~11 GB libre pour Proxmox + burst** |
+| **Total** | **15** | **~18.5 GB** | **~13 GB libre pour Proxmox + burst** |
 
 
 
@@ -483,15 +458,15 @@ curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
 
 | LXC | vCPU | RAM | VRAM GPU | Usage |
 |-----|------|-----|----------|-------|
-| 103 | 4 | 2 GB | — | Monitoring (Prometheus/Grafana/Loki) |
 | 105 | 2 | 4 GB | — | **OMV Backup (HDD 2TB passthrough, borg)** |
 | 200 | 6 | 8 GB | 8 GB (passthrough) | Judge + Reranker |
 | 201 | 4 | 8 GB | — | Avocat + Backup Embedding |
-| **Total** | **16** | **22 GB** | **8 GB VRAM** | **cache modèles + cold save OMV (HDD 2TB)** |
+| **Total** | **12** | **20 GB** | **8 GB VRAM** | **cache modèles + cold save OMV (HDD 2TB)** |
 
 ### Machine 3 (BC-250, 16 GB GDDR6 unifiée)
 
 Pas de LXC — Ollama Vulkan natif. Mémoire GDDR6 partagée CPU/GPU (max ~12 GB dispo pour IA, le reste pour le système).
+Monitoring : **Glances** (`glances -w`, port 61208) — seul nœud sans supervision Proxmox (décision D9).
 
 ---
 

@@ -1,26 +1,9 @@
 # Stack Docker du LXC Master — Machine 1 (LXC 100).
-# Orchestrator + API Gateway + Wiki Agent + LangGraph
+# Orchestrator + API + Wiki Agent + LangGraph
+# Note : pas de reverse proxy nginx (décision D9) — pfSense (VM 104) gère le proxy.
 name: rag-orchestrator
 
 services:
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/nginx/certs:ro
-    depends_on:
-      - fastapi-api
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
   fastapi-api:
     build:
       context: ../../

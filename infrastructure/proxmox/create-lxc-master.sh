@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Machine 1 (Master) — Dual Xeon E5-2699 v3 (36c/72t), 32 GB ECC, 1 TB NVMe
-# Crée les LXC : 100 Orchestrator, 101 Vector DB, 102 API Gateway,
-#                104 pfSense (VM)
+# Crée les LXC : 100 Orchestrator, 101 Vector DB, 104 pfSense (VM)
 set -euo pipefail
 
 PASSWORD="${PASSWORD:-jarvis}"
@@ -31,7 +30,7 @@ TEMPLATE_PATH="local:vztmpl/$TEMPLATE"
 # ============================================================
 # LXC 100 — Orchestrator + Wiki Agent (Docker)
 # vCPU: 8  RAM: 10 GB  Disque: 50 GB  IP: 10.10.0.100/24
-# Services: nginx, fastapi-api, langgraph-orchestrator,
+# Services: fastapi-api, langgraph-orchestrator,
 #           wiki-agent, redis, postgres
 # ============================================================
 info "LXC 100 — Orchestrator + Wiki Agent"
@@ -71,28 +70,9 @@ else
 fi
 
 # ============================================================
-# LXC 102 — API Gateway (nginx seul)
-# vCPU: 1  RAM: 512 MB  Disque: 8 GB  IP: 10.10.0.102/24
-# ============================================================
-info "LXC 102 — API Gateway"
-if pct status 102 &>/dev/null; then
-  warn "LXC 102 existe déjà."
-else
-  pct create 102 "$TEMPLATE_PATH" \
-    --hostname jarvis-gateway \
-    --cores 1 --memory 512 --swap 512 \
-    --rootfs local:8 \
-    --net0 name=eth0,bridge=$BRIDGE,firewall=1,ip=10.10.0.102/24,gw=$GATEWAY,type=veth \
-    --unprivileged 1 \
-    --ostype debian \
-    --password "$PASSWORD" \
-    --storage local
-  info "LXC 102 créé."
-fi
-
-# ============================================================
 # VM 104 — pfSense (optionnel, non LXC)
 # vCPU: 1  RAM: 512 MB  IP: 10.10.0.104/24 (WAN: DHCP)
+# Reverse proxy + firewall + NAT (décision D9 — pas de nginx LXC)
 # ============================================================
 info "VM 104 — pfSense (optionnel, créer manuellement via WebUI)"
 warn "pfSense nécessite une VM, pas un LXC (FreeBSD)."
@@ -107,11 +87,9 @@ warn "    --cdrom local:iso/pfSense-CE-2.7.2-RELEASE-amd64.iso --ostype other"
 echo -e "\n${GREEN}======= CRÉATION TERMINÉE =======${NC}"
 echo -e "LXC 100  ${YELLOW}10.10.0.100${NC}  Orchestrator (8 vCPU, 10 GB RAM, Docker)"
 echo -e "LXC 101  ${YELLOW}10.10.0.101${NC}  Vector DB     (6 vCPU,  8 GB RAM, Docker)"
-echo -e "LXC 102  ${YELLOW}10.10.0.102${NC}  API Gateway   (1 vCPU,512 MB RAM, nginx)"
 echo -e "VM  104  ${YELLOW}10.10.0.104${NC}  pfSense       (optionnel — VM seulement)"
 echo -e "${GREEN}==================================${NC}"
 echo ""
 echo "Prochaine étape : lancer les scripts de post-install dans chaque LXC :"
 echo "  pct enter 100  # puis installer Docker, lancer docker-compose.orchestrator.yml"
 echo "  pct enter 101  # Docker + docker-compose.vector-db.yml"
-echo "  pct enter 102  # nginx"

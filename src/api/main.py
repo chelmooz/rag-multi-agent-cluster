@@ -3,10 +3,12 @@
 Architecture :
 - FastAPI + LangGraph pour l'orchestration
 - Configuration centralisée via src.core.settings
-- Health/Readiness probes pour Prometheus/K8s
+- Health/Readiness probes (consultation via curl/Glances — pas de Prometheus, cf. D9)
 """
 import asyncio
+from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
+from typing import cast
 
 import asyncpg
 import httpx
@@ -62,19 +64,21 @@ async def _check_postgres(dsn: str) -> dict:
     try:
         conn = await asyncio.wait_for(asyncpg.connect(dsn), timeout=_TIMEOUT)
         await conn.close()
-        return {"status": "ok"}
     except Exception as e:
         return {"status": "error", "detail": type(e).__name__}
+    else:
+        return {"status": "ok"}
 
 
 async def _check_redis(url: str) -> dict:
     try:
         r = Redis.from_url(url, socket_connect_timeout=_TIMEOUT)
-        await asyncio.wait_for(r.ping(), timeout=_TIMEOUT)
+        await asyncio.wait_for(cast(Awaitable[bool], r.ping()), timeout=_TIMEOUT)
         await r.aclose()
-        return {"status": "ok"}
     except Exception as e:
         return {"status": "error", "detail": type(e).__name__}
+    else:
+        return {"status": "ok"}
 
 
 async def _run_checks() -> dict:
@@ -90,7 +94,7 @@ async def _run_checks() -> dict:
     for name, coro in checks.items():
         try:
             results[name] = await asyncio.wait_for(coro, timeout=_TIMEOUT)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             results[name] = {"status": "error", "detail": "timeout"}
         except Exception as e:
             results[name] = {"status": "error", "detail": type(e).__name__}
@@ -98,7 +102,7 @@ async def _run_checks() -> dict:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
@@ -117,7 +121,7 @@ app = FastAPI(
 
 
 @app.exception_handler(NotImplementedError)
-async def not_implemented_handler(request: Request, exc: NotImplementedError):
+async def not_implemented_handler(request: Request, exc: NotImplementedError) -> JSONResponse:
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 

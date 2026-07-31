@@ -1,8 +1,8 @@
 """Point d'entrée CLI / développement du cluster RAG multi-agents.
 
 Usage:
-    python -m src.api.main          # Lance le serveur FastAPI (dev)
-    python -m src.core.settings     # Affiche la config résolue
+    python -m src.main             # Lance le serveur FastAPI (dev, reload)
+    python -m src.api.main         # Lance le serveur FastAPI
 """
 
 if __name__ == "__main__":

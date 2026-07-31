@@ -92,7 +92,6 @@ flowchart TB
     subgraph Machine1["Machine 1: Master · 2× Xeon 2699 v4 / 32GB ECC"]
         M1_100["LXC 100: Orchestrator + Wiki"]:::m1
         M1_101["LXC 101: Qdrant VectorDB"]:::m1
-        M1_103["LXC 103: Prometheus/Grafana"]:::m1
         M1_104["VM 104: pfSense (reverse proxy + firewall)"]:::m1
         M1_vault["/data/wiki vault"]:::m1
         M1_models["Modèles CPU (M1)<br/>Embedding: nomic-v2-moe 768d Q8_0 (primary)<br/>Evaluator: qwen3.5:3b Q4_K_M"]:::m1
