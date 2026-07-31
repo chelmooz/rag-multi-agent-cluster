@@ -1010,3 +1010,28 @@ Le cluster est **100% offline** : les IA (Ollama) tournent en local sur les 3 ma
 
 ---
 
+## 31/07/2026 — Session close (Sprint 1 terminé) — POINT DE REPRISE
+
+### État de fin de session
+
+- **Working tree : propre, tout pushé sur `main`** (HEAD `f7d9846`).
+- **Sprint 1 (Hygiène/CI) : TERMINÉ** — ruff 0 erreurs, mypy 0 bloquantes (19 fichiers), pytest 14/14, `.gitattributes` créé, `src/{api` + `src/models/` supprimés, `.env.example` aligné sur `settings.py`, nginx/LXC 102-103 retirés (D4/D9).
+- **ROADMAP.md** : plan 4 phases (A → B → C → D), décisions D10-D12 archivées.
+- **README.md** : statut "développement mock-first" + tableau d'avancement.
+
+### Prochaine étape — Phase A1 (OllamaClient + OllamaClientPool)
+
+1. Implémenter `OllamaClient` : `generate`, `embed`, `rerank`, `unload_model`, `health` + retry (tenacity) + circuit-breaker — **testable via `httpx.MockTransport`** (décision D10, aucun LLM requis).
+2. Implémenter `OllamaClientPool` : routage M1/M2/M3 par rôle (embed→M1 fallback M2, generate→M3, rerank/judge/advocate→M2, evaluate→M1).
+3. Tests unitaires dédiés : `tests/test_ollama.py` (mocks httpx, retry, circuit-breaker, fallback pool).
+4. Puis A2-A8 selon ROADMAP (VectorService → Ingestion → Lexical → Reranker → endpoints → test_hybrid_search).
+
+### Rappels utiles pour la reprise
+
+- Config lue depuis `.env` à la racine (bug `parents[2]` corrigé — vérifier qu'aucun `.env` traînant ne reste).
+- `EVALUATION_ENABLED=false` par défaut (D12) — ne pas activer avant le pull des modèles.
+- Le smoke test vit dans `scripts/smoke_test_frontend_api.py` (exclu du collect pytest par défaut, `testpaths=["tests"]`).
+- Erreurs mypy autorisées : `# type: ignore[assignment]` sur les 5 champs `HttpUrl` (plugin pydantic.mypy), `# mypy: disable-error-code=no-untyped-def` non nécessaire (annotations ajoutées aux stubs).
+
+---
+
