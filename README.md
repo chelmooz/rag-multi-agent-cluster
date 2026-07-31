@@ -76,19 +76,21 @@ flowchart TB
     Client["🧠 Obsidian Vault<br/>Frontend markdown local<br/>HTTPS 443"]:::frontend
     GW["🛡️ pfSense GW<br/>NAT · Firewall · Inter-VLAN<br/>DNAT → 10.10.0.1:443"]:::backup
 
-    subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · RX 580 · 2×10GbE+1GbE"]
+subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · RX 580 · 2×10GbE+1GbE"]
         Orch["🎯 Orchestrateur<br/>FastAPI · LangGraph · LXC 100"]:::m1
         Qdrant["💾 Qdrant VectorDB<br/>BM25 + Vectoriel 768d · LXC 101"]:::m1
         Embed["🔢 Embedding CPU<br/>nomic-embed-text-v2-moe<br/>768d · Xeon 32c/64t"]:::m1
         Eval["✅ Évaluateur<br/>qwen3.5:3b · CPU · Synthèse finale"]:::m1
-        Gate["🌐 API Gateway (nginx LXC 102) · Monitoring (LXC 103) · pfSense optionnel (LXC 104)"]:::backup
+        GW["🛡️ pfSense GW<br/>Reverse Proxy + Firewall + NAT<br/>DNAT → LXC 100:8000"]:::backup
     end
 
-    subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE"]
+subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE"]
         Rerank["📊 Reranker<br/>bge-reranker-v2-m3 · CUDA · LXC 200"]:::m2
         Judge["⚖️ Juge ①<br/>qwen3.5:7b · CUDA · Qualité + Cohérence"]:::m2
         Advocate["😈 Avocat ②<br/>mistral:7b · CUDA · Failles + Hallucinations"]:::m2
         BackupEmbed["🔢 Backup Embedding<br/>nomic-v2-moe · CPU · Xeon 20c/40t"]:::m2
+        Monitoring["📊 Monitoring<br/>Prometheus/Grafana/Loki · LXC 103"]:::m2
+        OMV["📦 OMV Backup<br/>HDD 2TB · borg/rsync · LXC 105"]:::m2
     end
 
     subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
@@ -96,8 +98,8 @@ flowchart TB
         Variants["🔀 Variantes<br/>Text-to-SQL (qwen3-coder-30b)<br/>Vision (llava-next:13b / qwen2.5-vl)<br/>Fast-check (granite-4.0-h-tiny)"]:::m3
     end
 
-    Relay["📄 relay.json (NFS partagé M1↔M2)<br/>/data/shared · Évaluation séquentielle"]:::relay
-    Cold["🧊 COLD SAVE<br/>borg/rsync manuel ou cron<br/>Qdrant snapshot + wiki vault → stockage externe<br/>OS/modèles = reproductibles, non sauvegardés"]:::backup
+Relay["📄 relay.json (NFS partagé M1↔M2)<br/>/data/shared · Évaluation séquentielle"]:::relay
+    Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2) → HDD 2TB<br/>borg/rsync cron · Qdrant snapshot + wiki vault + configs<br/>OS/modèles = reproductibles, non sauvegardés"]:::backup
 
     Client -->|HTTPS 443| GW --> Orch
     Orch --> Qdrant --> Embed
@@ -109,7 +111,10 @@ flowchart TB
     Advocate -.->|②| Relay
     Relay -.-> Eval
     BackupEmbed -.-> Advocate
-    Qdrant -.->|cold save périodique| Cold
+    Qdrant -.->|snapshot 02:00| Cold
+    Wiki -.->|rsync 02:30| Cold
+    Configs -.->|rsync 02:30| Cold
+    Models -.->|rsync 02:30| Cold
 
     %% RÈGLE D'OR BC-250 : le CPU est le serviteur du GPU.
     %% Toute charge CPU = vol de bande passante mémoire au Générateur 14B.
@@ -200,37 +205,60 @@ flowchart TB
 
 ---
 
-## 🔐 Cold Save
+## 🔐 Cold Save (via OMV sur Machine 2)
 
 ### Architecture
 
 ```mermaid
 flowchart LR
     classDef prod fill:#e0f2fe,stroke:#0ea5e9,stroke-width:2px
+    classDef omv fill:#f3e8ff,stroke:#a855f7,stroke-width:2px
     classDef cold fill:#fef3c7,stroke:#d97706,stroke-width:2px
 
     Qdrant["💾 Qdrant snapshot<br/>VectorDB — M1 LXC 101"]:::prod
     Wiki["🧠 Wiki vault<br/>/data/wiki — M1"]:::prod
-    Cold["🧊 Cold save<br/>borg/rsync manuel ou cron<br/>Stockage externe (LUKS)"]:::cold
+    Configs["⚙️ Configs M1/M2/BC250<br/>/etc, scripts, .env"]:::prod
+    Models["🤖 Cache modèles Ollama<br/>M1, M2, BC250"]:::prod
 
-    Qdrant --> Cold
-    Wiki --> Cold
+    OMV["📦 OMV LXC 105 (M2)<br/>HDD 2TB physique — borg repo"]:::omv
+    HDD["💿 HDD 2TB (LUKS)<br/>borg create --compression lz4"]:::cold
 
-    %% OS, LXC, modèles = reproductibles depuis ce repo (scripts d'install + ollama pull) : non sauvegardés.
-    %% Seules les données non reproductibles (index Qdrant + wiki généré) sont sauvegardées.
-    %% Pas de tier "backup live" dédié (OMV/LXC 105) : cold save déclenché directement depuis M1.
+    Qdrant -.->|pull 02:00| OMV
+    Wiki -.->|rsync 02:30| OMV
+    Configs -.->|rsync 02:30| OMV
+    Models -.->|rsync 02:30| OMV
+    OMV -->|borg create 03:00| HDD
+    HDD -.->|prune dim 05:00<br/>keep-daily 14, keep-monthly 3| HDD
 ```
 
-### Pourquoi pas de règle 3-2-1
+### Stratégie 2-1 (NVMe + HDD)
 
-Le stack (OS, LXC, modèles) est entièrement reproductible depuis ce repo — pas besoin de le sauvegarder. Les archives de données sources existent déjà par ailleurs. Seul ce qui n'est reproductible qu'en le regénérant (index Qdrant, wiki généré) est sauvegardé, via un cold save ponctuel — pas de VM de backup dédiée, pas de rotation multi-support.
+| Niveau | Support | Contenu | Fréquence | Outil |
+|--------|---------|---------|-----------|-------|
+| **Prod** | M1: 1 TB NVMe | Proxmox, LXCs, Qdrant, Wiki | — | — |
+| | M2: 1 TB NVMe | Proxmox, LXCs, Ollama cache, Monitoring | — | — |
+| | BC250: 475 GB NVMe | OS Debian, Modèles (9-11 GB) | — | — |
+| **Backup** | HDD 2TB dans M2 (OMV LXC 105) | Qdrant snapshots, Wiki rsync, Configs, Ollama models cache | Quotidien (cron 02:00-05:00) | borg pull → borg create |
+
+**Règle 2-1** : 2 copies (Prod NVMe + OMV HDD) · 2 médias (NVMe + HDD) · **Pas d'off-site planifié** (rotation manuelle si besoin).
+
+### Flux Backup (cron OMV — heures creuses IA)
+
+```
+02:00  Qdrant snapshot create (atomique) → OMV pull
+02:30  Rsync : wiki vault + configs M1/M2/BC250 + Ollama cache → OMV
+03:00  Borg create --compression lz4 → HDD 2TB (LUKS)
+05:00 (dim) Borg prune --keep-daily 14 --keep-monthly 3
+```
 
 ### Outils
 
 | Outil | Usage |
 |---|---|
-| borg | Sauvegarde dédupliquée, chiffrée, compression LZ4 |
+| borg | Sauvegarde dédupliquée, chiffrée (repokey), compression LZ4 |
 | qdrant snapshot | Backup atomique VectorDB |
+| rsync | Sync incrémental wiki/configs/cache modèles |
+| OMV | UI web gestion stockage, SMART, notifications, borg frontend |
 
 ---
 
@@ -260,15 +288,15 @@ flowchart TB
         Admin["🔧 Admin / IPMI<br/>Proxmox GUI · SSH secours (1G)"]:::mgmt
     end
 
-    subgraph VLAN10["VLAN 10 · Cluster — 10.10.0.0/24 — backbone 10G · MTU 9000 (jumbo frames, +15% débit)"]
+subgraph VLAN10["VLAN 10 · Cluster — 10.10.0.0/24 — backbone 10G · MTU 9000 (jumbo frames, +15% débit)"]
         M1["M1 — Master · 10.10.0.1<br/>2× Xeon E5-2699v4 / 32GB ECC<br/>LXC 100 Orchestrator+Wiki · LXC 101 Qdrant<br/>LXC 102 API Gateway · LXC 103 Monitoring<br/>LXC 104 pfSense (option)<br/>Export NFS /data/shared"]:::m1
-        M2["M2 — GPU Worker · 10.10.0.2<br/>Xeon E5-2698v4 / 64GB ECC · RTX 4000 8GB<br/>LXC 200 Inference GPU (Reranker+Juge)<br/>LXC 201 Workers Agents (Avocat+Backup Embedding)<br/>Mount NFS /data/shared"]:::m2
+        M2["M2 — GPU Worker · 10.10.0.2<br/>Xeon E5-2698v4 / 64GB ECC · RTX 4000 8GB<br/>LXC 103 Monitoring · LXC 105 OMV Backup<br/>LXC 200 Inference GPU (Reranker+Juge)<br/>LXC 201 Workers Agents (Avocat+Backup Embedding)<br/>Mount NFS /data/shared · HDD 2TB passthrough"]:::m2
         M3["M3 — BC-250 Baremetal<br/>Zen 2 6c/12t · 16GB GDDR6 unifiée<br/>40 CU débloquées · Vulkan/Mesa (RADV)<br/>Générateur · Text-to-SQL · Vision · Fast-check<br/>Ollama Vulkan natif (pas de LXC)"]:::m3
         Relay["relay.json<br/>TTL 300s"]:::relay
     end
 
-    subgraph COLDBOX["Cold save"]
-        HDD["Stockage externe (LUKS)<br/>borg/rsync manuel ou cron · qdrant snapshot + wiki vault<br/>OS/modèles reproductibles, non sauvegardés"]:::cold
+    subgraph COLDBOX["Cold save (OMV M2 → HDD 2TB)"]
+        HDD["Stockage HDD 2TB (LUKS)<br/>borg repo · qdrant snapshot + wiki vault + configs<br/>cron 02:00-05:00 · retention 14j/3m"]:::cold
     end
 
     Internet <--> |NAT sortant| pfSense
@@ -311,9 +339,11 @@ flowchart TB
 | `10.10.0.0/24` | `10.10.0.0/24` | TCP 11434 | Ollama API (M2, M3) |
 | `10.10.0.0/24` | `10.10.0.0/24` | TCP 2049/NFS | Relay évaluation + vault wiki |
 | `10.10.0.2` | `10.10.0.1` | TCP 2049 | Mount NFS M1→M2 |
-| `192.168.10.0/24` | `10.10.0.1` | TCP 80/443 | Client → API Gateway (nginx LXC 102) |
+| `192.168.10.0/24` | `10.10.0.1` | TCP 80/443 | Client → pfSense (reverse proxy → LXC 100:8000) |
 | `10.10.0.0/24` | `192.168.1.0/24` | TCP 80/443 | Sortie modèles/updates (via pfSense NAT) |
 | `172.16.0.0/24` | *any* | SSH/HTTPS | Admin Proxmox/IPMI (isolé) |
+
+**Reverse Proxy** : pfSense (VM 104 sur M1) — termine TLS, DNAT 443 → LXC 100:8000. Pas de nginx dédié.
 
 **MTU** : 9000 (Jumbo frames) sur VLAN 10 pour NFS/Ollama/Qdrant — gain ~15 % débit gros transferts.
 
@@ -432,10 +462,10 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 |---|---|---|
 | Machine 1 | `100` | Orchestrator + Wiki Agent |
 | | `101` | Vector DB (Qdrant) |
-| | `102` | API Gateway (nginx) |
-| | `104` | pfSense (option, si pas d'appliance dédiée) |
+| | `103` | Monitoring (Prometheus/Grafana/Loki) |
+| | `104` | pfSense (VM) — Reverse proxy + Firewall + NAT |
 | | | **~18.5 GB / 32 GB utilisés** (6 GB libérés) |
-| Machine 2 | `103` | Monitoring (Prometheus/Grafana/Loki) |
+| Machine 2 | `105` | **OMV Backup (HDD 2TB passthrough)** |
 | | `200` | Inference GPU (passthrough RTX 4000) — Reranker + Juge |
 | | `201` | Workers Agents — Avocat + Backup Embedding CPU |
 | Machine 3 | — | Ollama Vulkan natif (pas de LXC) |
@@ -444,8 +474,8 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 
 | Machine | IP (VLAN 10) | Rôle | Hardware | Services |
 |---------|-------------|------|----------|----------|
-| **M1** (Master) | `10.10.0.1` | Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS | 2× Xeon E5-2699 v4 32c/64t, 32 GB ECC, 1 TB NVMe | Qdrant (LXC 101 :6333), Ollama CPU (nomic-embed + évaluateur), nginx API Gateway (LXC 102 :80/443), pfSense (LXC 104) |
-| **M2** (GPU Worker + Services) | `10.10.0.2` | Reranker, Juge, Avocat, Backup Embedding CPU, **Monitoring** | Xeon 20c/40t, 64 GB ECC, **1 TB NVMe**, RTX 4000 (CUDA) | Ollama GPU (LXC 200-201 :11434), Prometheus/Grafana/Loki (LXC 103) |
+| **M1** (Master) | `10.10.0.1` | Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS | 2× Xeon E5-2699 v4 32c/64t, 32 GB ECC, 1 TB NVMe | Qdrant (LXC 101 :6333), Ollama CPU (nomic-embed + évaluateur), pfSense VM 104 (reverse proxy, firewall, NAT) |
+| **M2** (GPU Worker + Services) | `10.10.0.2` | Reranker, Juge, Avocat, Backup Embedding CPU, Monitoring, **OMV Backup** | Xeon 20c/40t, 64 GB ECC, **1 TB NVMe + HDD 2TB**, RTX 4000 (CUDA) | Ollama GPU (LXC 200-201 :11434), Prometheus/Grafana/Loki (LXC 103), OMV LXC 105 (borg/rsync cron) |
 
 **Endpoints :** Ollama M1 = `http://10.10.0.1:11434`, Ollama M2 = `http://10.10.0.2:11434`, Qdrant = `http://10.10.0.1:6333`, Gateway = `10.10.0.1:80/443`
 
@@ -465,15 +495,15 @@ flowchart TB
     GW["🛡️ pfSense GW<br/>VM M1 LXC 104 ou appliance dédiée<br/>NAT + Firewall + Inter-VLAN<br/>192.168.1.1 / 10.10.0.254"]:::fw
     Client["🧠 CLIENT · Obsidian Vault<br/>VLAN 40 · 192.168.10.0/24<br/>Graph View · HTTPS 443 → pfSense DNAT → LXC 102"]:::client
 
-    subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · 2×10GbE+1GbE mgmt"]
+subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · 2×10GbE+1GbE mgmt"]
         LXC100["🎯 LXC 100<br/>Orchestrator + Wiki Agent<br/>LangGraph + FastAPI"]:::m1
         LXC101["💾 LXC 101<br/>Qdrant VectorDB<br/>BM25 + Vectoriel 768d"]:::m1
-        LXC102["🌐 LXC 102<br/>API Gateway · nginx + TLS"]:::m1
         LXC103["📊 LXC 103<br/>Monitoring<br/>Prometheus+Grafana+Loki"]:::m1
-        LXC104["🛡️ LXC 104<br/>pfSense VM (option)"]:::fw
+        VM104["🛡️ VM 104<br/>pfSense — Reverse Proxy + Firewall + NAT<br/>DNAT 443 → LXC 100:8000"]:::fw
     end
 
     subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE mgmt"]
+        LXC105["📦 LXC 105<br/>OMV Backup · HDD 2TB passthrough<br/>borg repo + cron pull"]:::m2
         LXC200["⚡ LXC 200 (GPU passthrough)<br/>Reranker bge-v2-m3 + Juge qwen3.5:7b<br/>CUDA · RTX 4000"]:::m2
         LXC201["🤖 LXC 201<br/>Avocat mistral:7b<br/>+ Backup Embedding CPU"]:::m2
     end
@@ -505,7 +535,7 @@ flowchart TB
 - **IA & LLM (Machine 1)** : embedding `bge-m3` (dense + sparse appris) sur **CPU Xeon (principal)**, en complément de BM25 (lexical exact via Qdrant) ; RX 580 en **fallback léger uniquement** (OpenCL si besoin)
 - **Orchestration Agents** : **LangGraph** (choix tranché — graphe d'état explicite, parallélisme natif, checkpointing)
 - **Vector Store & DB** : **Qdrant** (hybrid search natif), PostgreSQL, Redis
-- **API & Backend** : FastAPI, nginx (reverse proxy LXC 102)
+- **API & Backend** : FastAPI, **pfSense (reverse proxy, TLS termination, DNAT)**
 - **Frontend** : **Obsidian Vault** (pattern Karpathy) — pages markdown maintenues par le cluster, visualisation via Obsidian (Electron)
 - **Observabilité** : Prometheus, Grafana, Loki
 
@@ -520,13 +550,14 @@ flowchart TB
 ```bash
 # 1. LXC Proxmox
 cd infrastructure/proxmox
-bash create-lxc-master.sh   # M1 : LXC 100 (Orchestrator), 101 (Vector DB), 102 (Gateway)
-bash create-lxc-gpu.sh      # M2 : LXC 103 (Monitoring), 200 (GPU passthrough), 201 (Workers)
+bash create-lxc-master.sh   # M1 : LXC 100 (Orchestrator), 101 (Vector DB), 103 (Monitoring), 104 (pfSense VM)
+bash create-lxc-gpu.sh      # M2 : LXC 103 (Monitoring), 105 (OMV), 200 (GPU passthrough), 201 (Workers)
 
 # 2. Stacks Docker
 cd infrastructure/docker
 docker compose -f docker-compose.vector-db.yml up -d     # LXC 101
 docker compose -f docker-compose.orchestrator.yml up -d  # LXC 100
+docker compose -f docker-compose.omv.yml up -d           # LXC 105
 
 # 3. BC-250 baremetal
 cd infrastructure/bc250
@@ -586,10 +617,8 @@ Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rie
 
 ## ⚠️ Points de Vigilance DevOps (Risques Maîtrisés)
 
-| Risque | Impact | Mitigation |
-|---|---|---|
-| **SPOF : Machine 1 (Master)** | Qdrant + API + Wiki + Évaluateur + NFS = tout s'arrête si M1 tombe | Cold save périodique (Qdrant snapshot + wiki vault) vers stockage externe. NFS export read-only possible depuis M2. |
-| **Résilience M2** | Monitoring hébergé sur M2 → si M2 tombe, perte du monitoring | Prometheus en pull peut scraper M1/M3 directement. Aucun impact sur la prod (M1/M3 continuent de tourner). |
+| **SPOF : Machine 1 (Master)** | Qdrant + API + Wiki + Évaluateur + NFS = tout s'arrête si M1 tombe | Cold save périodique (Qdrant snapshot + wiki vault + configs) vers OMV M2 → HDD 2TB. pfSense VM sur M1. |
+| **Résilience M2** | Monitoring hébergé sur M2 → si M2 tombe, perte du monitoring | Prometheus en pull peut scraper M1/M3 directement. Aucun impact sur la prod (M1/M3 continuent de tourner). OMV backup continue si M1 up. |
 | **Latence NFS sur évaluation** | Relay file = point de synchronisation bloquant | MTU 9000 + 10 GbE = <1 ms RTT. Timeout 120 s Juge → Avocat. Acceptable. |
 | **BC-250 baremetal = pas de snapshot/rollback** | Mise à jour noyau/BIOS risquée | Tests sur VM simulée d'abord. Backup config `/etc` + BIOS P3.00 sur USB. |
 | **RTX 4000 8 GB limite dure** | Pas de place pour un modèle > 7B quantifié | Choix validé : Juge/Avocat 7B max. Si besoin 14B → seul le BC-250 peut. |
@@ -601,9 +630,9 @@ Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rie
 1. **Lock les versions modèles** — Ajouter dans `.env` : `OLLAMA_MODEL_JUDGE=qwen3.5:7b@sha256:xxx` etc.
 2. **Health checks obligatoires** — `/health` sur chaque service (Ollama, Qdrant, API) → Prometheus scrape.
 3. **Secrets management** — Pas de tokens/API keys en dur. `sops` + `.env.encrypted` ou Vault (Phase 7).
-4. **Cold save Qdrant + wiki** — `qdrant snapshot create` + borg/rsync vers stockage externe (manuel ou cron).
+4. **Cold save Qdrant + wiki + configs** — `qdrant snapshot create` + rsync → OMV M2 → borg repo HDD 2TB (cron 02:00-05:00).
 5. **Test de charge pré-prod** — `hey` / `locust` sur `/api/v1/query` avec 10-50 RPS avant mise en prod.
-6. **Runbook incident** — Documenter : « BC-250 ne boot plus », « RTX 4000 OOM », « NFS stale handle », « Qdrant corruption ».
+6. **Runbook incident** — Documenter : « BC-250 ne boot plus », « RTX 4000 OOM », « NFS stale handle », « Qdrant corruption », « OMV HDD failure ».
 
 ---
 

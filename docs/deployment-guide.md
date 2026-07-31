@@ -6,8 +6,8 @@ Plan d'installation pas-à-pas pour les 3 machines du cluster.
 
 ## Sommaire
 
-1. [Machine 1 — Control Plane (Proxmox, LXC 100-102)](#machine-1--control-plane)
-2. [Machine 2 — Compute & Storage Plane (Proxmox, LXC 103, 200-201)](#machine-2--gpu-worker--services-compute--storage-plane)
+1. [Machine 1 — Control Plane (Proxmox, LXC 100-101, 103, VM 104)](#machine-1--control-plane)
+2. [Machine 2 — Compute & Storage Plane (Proxmox, LXC 103, 105, 200-201)](#machine-2--gpu-worker--services-compute--storage-plane)
 3. [Machine 3 — BC-250 Baremetal (Debian Testing/Sid)](#machine-3--bc-250-baremetal)
 4. [Déploiement Docker & Services](#4-déploiement-docker--services)
 5. [Téléchargement des Modèles](#5-téléchargement-des-modèles)
@@ -19,12 +19,12 @@ Plan d'installation pas-à-pas pour les 3 machines du cluster.
 
 **Matériel** : Dual Xeon E5-2699 v3 (36c/72t), 32 GB DDR4 ECC, 1 TB NVMe, Proxmox VE 9.3
 
-| LXC | IP | vCPU | RAM | Disque | Rôle |
-|-----|----|------|-----|--------|------|
+| LXC/VM | IP | vCPU | RAM | Disque | Rôle |
+|--------|----|------|-----|--------|------|
 | 100 | 10.10.0.100 | 8 | 10 GB | 50 GB | Orchestrator + Wiki Agent (Docker) |
 | 101 | 10.10.0.101 | 6 | 8 GB | 80 GB | Vector DB (Docker : Qdrant, Postgres, Redis) |
-| 102 | 10.10.0.102 | 1 | 512 MB | 8 GB | API Gateway (nginx) |
-| 104 | — | 1 | 512 MB | — | pfSense (VM, optionnel) |
+| 103 | 10.10.0.103 | 4 | 2 GB | 50 GB | Monitoring (Prometheus, Grafana, Loki) |
+| 104 | — | 1 | 512 MB | — | pfSense (VM, reverse proxy + firewall + NAT) |
 
 ### Ordre d'exécution
 
@@ -80,17 +80,7 @@ curl http://localhost:6333/health
 curl http://localhost:6333/collections
 ```
 
-#### 1.5 Post-installation LXC 102 (API Gateway)
-
-```bash
-pct enter 102
-apt update && apt install -y nginx
-# Copier nginx.conf depuis infrastructure/docker/nginx.conf
-cp /path/to/infrastructure/docker/nginx.conf /etc/nginx/nginx.conf
-systemctl enable --now nginx
-```
-
-#### 1.6 Hôte M1 — NFS export + Ollama CPU
+#### 1.5 Hôte M1 — NFS export + Ollama CPU + Monitoring (LXC 103)
 
 ```bash
 # NFS relay pour l'évaluation séquentielle
@@ -107,6 +97,9 @@ ollama pull nomic-embed-text-v2-moe
 ollama pull qwen3.5:3b
 ```
 
+> Note : Le Monitoring (LXC 103 — Prometheus/Grafana/Loki) est déployé sur Machine 2, pas sur M1.
+> Voir section 2.3 du guide Machine 2.
+
 ---
 
 ## Machine 2 — GPU Worker + Services (Compute & Storage Plane)
@@ -116,6 +109,7 @@ ollama pull qwen3.5:3b
 | LXC | IP | vCPU | RAM | Disque | Rôle |
 |-----|----|------|-----|--------|------|
 | 103 | 10.10.0.103 | 4 | 2 GB | 50 GB | Monitoring (Prometheus, Grafana, Loki) |
+| 105 | 10.10.0.105 | 2 | 4 GB | 20 GB | **OMV Backup** (Docker - HDD 2TB passthrough) |
 | 200 | 10.10.0.200 | 6 | 8 GB | 30 GB | Inference GPU (passthrough RTX 4000, privilégié) |
 | 201 | 10.10.0.201 | 4 | 8 GB | 30 GB | Workers Agents (Avocat + Backup Embedding CPU) |
 
@@ -144,7 +138,31 @@ cd infrastructure/proxmox
 bash create-lxc-gpu.sh
 ```
 
-### 2.3 Post-installation LXC 200 (Inference GPU)
+### 2.3 Post-installation LXC 103 (Monitoring)
+
+```bash
+pct enter 103
+
+# Docker
+curl -fsSL https://get.docker.com | sh
+
+# Prometheus
+docker run -d --name prometheus --restart unless-stopped \
+  -p 9090:9090 -v /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus:latest
+
+# Grafana
+docker run -d --name grafana --restart unless-stopped \
+  -p 3000:3000 -e GF_SECURITY_ADMIN_PASSWORD=CHANGE_ME \
+  grafana/grafana:latest
+
+# Loki
+docker run -d --name loki --restart unless-stopped \
+  -p 3100:3100 -v /etc/loki/config.yaml:/etc/loki/config.yaml \
+  grafana/loki:latest
+```
+
+### 2.4 Post-installation LXC 200 (Inference GPU)
 
 ```bash
 pct enter 200
@@ -180,72 +198,56 @@ echo "10.10.0.1:/data/shared /data/shared nfs rw,hard,intr,noatime 0 0" >> /etc/
 mount -a
 ```
 
-### 2.4 Post-installation LXC 201 (Workers Agents)
+### 2.5 Post-installation LXC 105 (OMV Backup)
 
 ```bash
-pct enter 201
+pct enter 105
 
-curl -fsSL https://ollama.com/install.sh | sh
-mkdir -p /etc/systemd/system/ollama.service.d
-cat > /etc/systemd/system/ollama.service.d/override.conf << EOF
-[Service]
-Environment=OLLAMA_HOST=0.0.0.0
-Environment=OLLAMA_MAX_LOADED_MODELS=1
-EOF
-systemctl daemon-reload && systemctl restart ollama
-
-ollama pull mistral-small-3.2:7b   # Avocat
-ollama pull bge-m3                 # Backup embedding CPU
-
-# NFS mount relay
-mkdir -p /data/shared
-echo "10.10.0.1:/data/shared /data/shared nfs rw,hard,intr,noatime 0 0" >> /etc/fstab
-mount -a
-```
-
-### 2.5 Post-installation LXC 103 (Monitoring)
-
-```bash
-pct enter 103
-
-# Docker
+# Docker + OMV Container
+apt update && apt install -y curl ca-certificates
 curl -fsSL https://get.docker.com | sh
 
-# Prometheus
-docker run -d --name prometheus --restart unless-stopped \
-  -p 9090:9090 -v /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
-  prom/prometheus:latest
+# Create OMV directory and mount HDD passthrough
+mkdir -p /srv/backup
+# HDD should be passed through from host: pct set 105 -mp0 /dev/disk/by-id/<HDD-ID>,mp=/srv/backup
 
-# Grafana
-docker run -d --name grafana --restart unless-stopped \
-  -p 3000:3000 -e GF_SECURITY_ADMIN_PASSWORD=CHANGE_ME \
-  grafana/grafana:latest
+# Deploy OMV via Docker
+docker run -d \
+  --name openmediavault \
+  --restart=unless-stopped \
+  -p 80:80 -p 443:443 \
+  -v /srv/backup:/srv/backup \
+  -v /omv/config:/app/openmediavault/config \
+  -v /omv/data:/var/lib/openmediavault \
+  --device /dev/sda:/dev/sda \  # Example - adjust to actual HDD device
+  --privileged \
+  linuxserver/openmediavault
 
-# Loki
-docker run -d --name loki --restart unless-stopped \
-  -p 3100:3100 -v /etc/loki/config.yaml:/etc/loki/config.yaml \
-  grafana/loki:latest
+# Access OMV web interface at http://10.10.0.105
+# Initial setup: create admin user, configure SSH access, set up shared folders
+
+# Configure Borg repository
+apt update && apt install -y borgbackup ssh
+mkdir -p /var/log/borg
+
+# SSH key for pulling from M1 and BC250 (generate on OMV, copy to targets)
+ssh-keygen -t ed25519 -f /root/.ssh/omb_backup -N ""
+
+# Borg repository initialization (run once)
+borg init --encryption=repokey /srv/backup/borg-repo
 ```
 
-### 2.6 Cold save (depuis M1, pas de tier dédié)
-
-Le stack est reproductible depuis ce repo (scripts d'install + `ollama pull`) : seules les données non reproductibles sont sauvegardées, à savoir l'index Qdrant et le wiki généré. Pas de VM/LXC de backup dédiée : le cold save tourne directement depuis l'hôte M1, vers un stockage externe (LUKS).
+### 2.6 Cron OMV Backup (heures creuses IA)
 
 ```bash
-# Sur M1 (hôte ou LXC 101)
-apt install -y borgbackup
-
-# Qdrant snapshot (atomique)
-/usr/local/bin/qdrant-snapshot.sh
-
-# Cold save manuel ou cron, vers le stockage externe monté (ex: /mnt/cold)
-borg create --compression lz4 /mnt/cold/repo::backup-$(date +%F) \
-  /data/wiki /var/lib/qdrant/snapshots
-
-# Optionnel : cron hors heures IA
-cat > /etc/cron.d/cold-save << 'EOF'
-0 3 * * 0 root /usr/local/bin/qdrant-snapshot.sh && /usr/local/bin/borg-backup.sh
-EOF
+# Edit crontab on OMV (via SSH or WebGUI > Scheduled Jobs)
+0 2 * * * /usr/bin/borg pull --log-json root@10.10.0.1:/var/lib/qdrant/snapshots /srv/backup/borg-repo::qdrant-{hostname}-{now:%Y-%m-%d_%H-%M-%S} >> /var/log/borg/qdrant_pull.log 2>&1
+30 2 * * * /usr/bin/rsync -avz --delete root@10.10.0.1:/data/wiki/ /srv/backup/wiki/ >> /var/log/borg/wiki_sync.log 2>&1
+30 2 * * * /usr/bin/rsync -avz --delete root@10.10.0.1:/etc/ /srv/backup/configs/m1/ >> /var/log/borg/config_sync.log 2>&1
+30 2 * * * /usr/bin/rsync -avz --delete root@10.10.0.2:/etc/ /srv/backup/configs/m2/ >> /var/log/borg/config_sync.log 2>&1
+30 2 * * * /usr/bin/rsync -avz --delete root@10.10.0.3:/etc/ /srv/backup/configs/m3/ >> /var/log/borg/config_sync.log 2>&1
+0 3 * * * /usr/bin/borg create --compression lz2 /srv/backup/borg-repo::backup-{now:%Y-%m-%d_%H-%M-%S} /srv/backup/wiki/ /srv/backup/configs/ /srv/backup/ollama-cache/ >> /var/log/borg/borg_create.log 2>&1
+0 5 * * 0 /usr/bin/borg prune -v --list /srv/backup/borg-repo --keep-daily=14 --keep-monthly=3 >> /var/log/borg/borg_prune.log 2>&1
 ```
 
 ---
@@ -364,9 +366,30 @@ cd infrastructure/docker
 docker compose -f docker-compose.orchestrator.yml up -d
 ```
 
-### 4.3 Config nginx API Gateway (LXC 102)
+### 4.3 Reverse Proxy & TLS (pfSense VM 104)
 
-Le reverse proxy `nginx.conf` existe déjà dans `infrastructure/docker/nginx.conf`. Il route `/api/v1/*` vers `fastapi-api:8000`, `/health` et `/ready` vers l'API.
+pfSense (VM 104 sur M1) gère le reverse proxy, la terminaison TLS et le NAT. Configurez-le via l'interface web :
+
+1. **Interface LAN (VLAN 10)** : IP `10.10.0.254/24`
+2. **Firewall rule** : Autoriser `TCP 80/443` depuis VLAN 40 (Client) → DNAT vers `10.10.0.100:8000` (LXC 100)
+3. **TLS** : Générer ou importer un certificat (Let's Encrypt pour LAN, ou auto-signé via pfSense CA)
+4. **NAT outbound** : Autoriser M1/M2/M3 à sortir vers Internet (VLAN 20) pour updates/modèles
+
+```bash
+# Sur M1 hôte : exporter la configuration pfSense
+# Via WebUI : Diagnostics → Backup/Restore → Exporter la config
+# Versionner dans infrastructure/proxmox/pfsense-config.xml
+```
+
+### 4.4 Stack OMV Backup (LXC 105)
+
+```bash
+# Depuis l'hôte Proxmox M2
+pct enter 105
+docker compose -f /srv/omv/docker-compose.yml up -d
+```
+
+> Voir section 2.5 pour le détail de l'installation OMV + HDD passthrough + borg.
 
 ---
 
@@ -413,11 +436,11 @@ ollama pull qwen3.5:3b@sha256:...              # Monitoring / fallback
 # Depuis n'importe quel nœud du VLAN 10 (10.10.0.0/24) :
 curl http://10.10.0.100:8000/api/v1/health     # LXC 100 FastAPI
 curl http://10.10.0.101:6333/health            # LXC 101 Qdrant
-curl http://10.10.0.102/health                 # LXC 102 nginx
 curl http://10.10.0.103:9090                    # LXC 103 Prometheus
 curl http://10.10.0.103:3000                    # LXC 103 Grafana
+curl http://10.10.0.105:80                      # LXC 105 OMV Web UI
 curl http://10.10.0.200:11434/api/tags         # LXC 200 Ollama GPU
-curl http://10.10.0.201:11434/api/tags         # LXC 201 Ollama GPU
+curl http://10.10.0.201:11434/api/tags         # LXC 201 Ollama CPU
 curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
 ```
 
@@ -425,8 +448,8 @@ curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
 
 | Service | URL |
 |---------|-----|
-| API Gateway (publique) | `http://10.10.0.102/api/v1/` |
-| FastAPI (interne) | `http://10.10.0.100:8000/api/v1/` |
+| API (publique, via pfSense DNAT) | `https://<domain>:443/api/v1/` |
+| API (interne) | `http://10.10.0.100:8000/api/v1/` |
 | Qdrant | `http://10.10.0.101:6333` |
 | PostgreSQL | `10.10.0.101:5432` |
 | Redis | `10.10.0.101:6379` |
@@ -437,6 +460,7 @@ curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
 | Prometheus | `http://10.10.0.103:9090` |
 | Grafana | `http://10.10.0.103:3000` |
 | Loki | `http://10.10.0.103:3100` |
+| OMV Backup | `http://10.10.0.105:80` |
 | NFS relay | `10.10.0.1:/data/shared` → `/data/shared` |
 
 ---

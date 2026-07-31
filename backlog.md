@@ -4,14 +4,14 @@
 - [ ] 0.1 Structure `src/` complète (agents, tools, core, api, services)
 - [ ] 0.2 Config centralisée `.env` + `settings.py` (Pydantic Settings) — **single source of truth**
 - [x] 0.3 Docker Compose VectorDB (**Qdrant** + PostgreSQL + Redis) — **aligné Qdrant, restart policies ajoutées**
-- [x] 0.4 Docker Compose Orchestrator (FastAPI + LangGraph workers + Wiki Agent + nginx) — **build.context corrigé**
+- [x] 0.4 Docker Compose Orchestrator (FastAPI + LangGraph workers + Wiki Agent) — **build.context corrigé** *(nginx retiré, pfSense gère reverse proxy)*
 - [x] 0.5 Scripts Proxmox LXC (master + GPU passthrough RTX 4000)
 - [ ] 0.6 **Créer `docs/claude-md-template.md` → template CLAUDE.md pour wiki (frontmatter OKF v0.2)**
 - [ ] 0.7 **Créer `scripts/okf-lint.py` : validation frontmatter OKF + détection stale/orphelins/contradictions**
 - [ ] 0.8 **Endpoints OKF wrapper : `/api/v1/okf/validate`, `/api/v1/okf/list`, `/api/v1/okf/show`**
 - [ ] 0.9 Créer `infrastructure/proxmox/create-lxc-wiki-agent.sh` (LXC 100 complet)
-- [x] 0.10 Créer `infrastructure/docker/orchestrator.yml` + `nginx.conf` + 3 Dockerfiles (api, wiki-agent, langgraph) — **fix Poetry→pip install .**
-- [ ] 0.11 Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback)
+- [x] 0.10 Créer `infrastructure/docker/orchestrator.yml` + `nginx.conf` (pour dev) + 3 Dockerfiles (api, wiki-agent, langgraph) — **fix Poetry→pip install .**
+- [ ] 0.11 Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback) — **implémenté : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé**
 - [ ] 0.12 Test d'ingestion bout-en-bout : source → embed M1 → index Qdrant → wiki pages → index.md/log.md
 - [ ] 0.13 **Configurer mTLS pour API interne (certs auto-signés via pfSense CA) — BLOQUANT PROD**
 - [ ] 0.14 **Prometheus exporter custom wiki-agent** (metrics: `wiki_pages_total`, `ingest_duration_seconds`, `query_latency_seconds`, `llm_calls_total`)
@@ -21,10 +21,14 @@
 - [x] 0.18 **Script `scripts/smoke_test_frontend_api.py`** (32 scénarios) — **32/32 PASSED**
 - [ ] 0.19 **API Versioning** : stratégie URL path `/api/v1/` + header `Accept` dès Phase 1.5
 - [ ] 0.20 **Concurrency lock vault Obsidian** : NFS `no_root_squash` + `fcntl` locking OU git sidecar (voir 0.15)
-- [ ] 0.21 **Backup Qdrant** : `qdrant snapshot create` cron quotidien → stocké sur M2 (64GB dispo)
-- [ ] 0.22 **Runbooks incidents** : "BC250 ne boot plus", "RTX 4000 OOM", "NFS stale handle", "Qdrant corruption"
+- [ ] 0.21 **Backup Qdrant** : `qdrant snapshot create` cron quotidien → stocké sur OMV M2 (HDD 2TB)
+- [ ] 0.22 **Runbooks incidents** : "BC250 ne boot plus", "RTX 4000 OOM", "NFS stale handle", "Qdrant corruption", "OMV HDD failure"
 - [ ] 0.23 **Kernel upgrade hook BC250** : script `rebuild-cu-unlock.sh` déclenché par `apt` hook `kernel-postinst` + `dracut -f`
 - [x] 0.24 **BC250 config centralisée** : 15 variables dans `settings.py` + `.env.example` (CU count, core unlock, TTM, governor, GRUB triplet, Mesa, kernel, scripts paths)
+- [ ] 0.25 **Créer `infrastructure/proxmox/create-lxc-omv.sh`** (LXC 105 OMV Backup avec passthrough HDD 2TB)
+- [ ] 0.26 **Créer `infrastructure/docker/docker-compose.omv.yml`** (stack OMV via Docker)
+- [ ] 0.27 **Documenter passage HDD 2TB en passthrough vers LXC 105** (`pct set 105 -mp0 /dev/disk/by-id/...,mp=/srv/backup`)
+- [ ] 0.28 **Configurer secrets OMV** : clés SSH, borg repo, variables d'environnement dans `.env`
 
 ## Analyse post-audit (30/07/2026)
 
@@ -104,20 +108,20 @@
 
 | Nœud | Rôle | CPU / RAM | GPU / Accélérateur | Stockage | Virtualisation |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Machine 1** | **Master** (Orchestration, API, VectorDB, Evaluator, Embedding CPU, Relay NFS) | 2× Xeon E5-2699 v4 / **32 GB ECC** | AMD Radeon RX 580 (8 GB) | 1 TB NVMe | Proxmox VE 9.3 (LXC 100, 101, 102, 104*) |
-| **Machine 2** | **GPU Worker + Services** (Reranker, Judge, Avocat, Backup Embedding CPU, Monitoring, Backup) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | **1 TB NVMe** + HDD physique | Proxmox VE 9.3 (LXC 103, 105, 200 privilégié GPU, 201) |
+| **Machine 1** | **Master** (Orchestration, API, VectorDB, Evaluator, Embedding CPU, Relay NFS, Monitoring) | 2× Xeon E5-2699 v4 / **32 GB ECC** | AMD Radeon RX 580 (8 GB) | 1 TB NVMe | Proxmox VE 9.3 (LXC 100, 101, 103, VM 104) |
+| **Machine 2** | **GPU Worker + Services** (Reranker, Judge, Avocat, Backup Embedding CPU, **OMV Backup**) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | **1 TB NVMe** + **HDD 2TB physique** | Proxmox VE 9.3 (LXC 105, 200 privilégié GPU, 201) |
 | **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Fast-check) | Zen 2 6c/12t / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU débloquées) | Debian Testing/Sid baremetal (Ollama Vulkan natif) |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
-\* LXC 104 = pfSense, uniquement si pas d'appliance dédiée.
+* VM 104 = pfSense (reverse proxy + firewall + NAT).
 
 **Réseau** : Machine 1 dispose de 2 ports 10 Gb/s + 1 port 1 Gb/s (carte familiale) — backbone 10 Gb/s inter-nœuds recommandé.
 
 **NFS Relay** : Machine 1 exporte `/data/shared` → monté sur Machine 2 `/data/shared` (fichier `evaluation-relay.json` partagé pour pipeline Juge→Avocat→Évaluateur).
 
-**Répartition LXC prévue** :
-- Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `102` API Gateway (Nginx)
-- Machine 2 : `103` Monitoring (Prometheus/Grafana/Loki), `105` OMV Backup (HDD physique), `200` Inference GPU (passthrough RTX 4000), `201` Workers Agents (Juge, Avocat, backup embedding)
+**Répartition LXC/VM prévue** :
+- Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `103` Monitoring (Prometheus/Grafana/Loki), `104` pfSense (VM — reverse proxy + firewall + NAT)
+- Machine 2 : `105` **OMV Backup (HDD 2TB passthrough)**, `200` Inference GPU (passthrough RTX 4000), `201` Workers Agents (Avocat + Backup Embedding CPU)
 - Machine 3 : Ollama Vulkan natif (pas de LXC)
 
 ## Modèles Recommandés par Machine (30/07/2026 - validé échange)
@@ -525,7 +529,7 @@ Le cluster tient sur 3 machines hétérogènes sans compromis majeur. Le seul "h
 
 ---
 
-### 29/07/2026 — Plan Backup 3-2-1 (OMV + HDD 2TB cold) — **TRANCHÉ**
+### 29/07/2026 — Plan Backup 2-1 (OMV LXC 105 + HDD 2TB cold) — **TRANCHÉ (rétabli 31/07/2026)**
 
 **Topologie stockage** :
 | Niveau | Support | Contenu | Fréquence | Outil |
@@ -533,47 +537,37 @@ Le cluster tient sur 3 machines hétérogènes sans compromis majeur. Le seul "h
 | **Prod (NVMe)** | M1: 1 TB | Proxmox, LXCs, Qdrant, Wiki | — | — |
 | | M2: 1 TB | Proxmox, LXCs, Ollama cache, Monitoring | — | — |
 | | BC250: 475 GB | OS Debian, Modèles (9-11 GB) | — | — |
-| **Backup (HDD physique M2)** | HDD dans M2 géré par OMV LXC 105 | Qdrant snapshots, Wiki rsync, Configs M1/M2/BC250, Ollama models cache | Quotidien (cron hors heures IA) | borg/kopia pull |
+| **Backup (HDD 2TB dans M2)** | HDD géré par OMV LXC 105 (Docker) | Qdrant snapshots, Wiki rsync, Configs M1/M2/BC250, Ollama models cache | Quotidien (cron 02:00-05:00) | borg pull + rsync → borg create |
 
-**Règle 2-1** : 2 copies (Prod + OMV) · 2 médias (NVMe + HDD) · 1 off-site (rotation HDD)
+**Règle 2-1** : 2 copies (Prod NVMe + OMV HDD) · 2 médias (NVMe + HDD) · **Pas d'off-site planifié**.
 
 **Flux backup** :
 ```
-OMV (M2 LXC 105) ──borg pull──► M1 (1 TB)
-    │                  ──rsync pull──► BC250
-    │
-    └──► HDD physique local (borg create --compression lz4)
+OMV (M2 LXC 105) ──borg pull──► M1 (Qdrant snapshot + wiki + configs)
+     │                  ──rsync pull──► BC250 (configs + Ollama cache)
+     │
+     └──► HDD 2TB local (borg create --compression lz4, repo LUKS)
 ```
 
 **Planning d'exécution (heures creuses IA — pipeline inactif)** :
 | Fenêtre | Tâche | Note |
 |---------|-------|------|
-| **02:00** | Qdrant snapshot | Backup atomique VectorDB |
-| **02:30** | Rsync wiki + configs | Configs Ollama, scripts, .env |
-| **03:00** | Borg create | Sauvegarde dédupliquée complète |
-| **05:00 (dim)** | Purge vieux snapshots | Rétention rolling 14j/3m |
+| **02:00** | Qdrant snapshot | Backup atomique VectorDB (pull OMV) |
+| **02:30** | Rsync wiki + configs | Wiki vault, configs M1/M2/BC250, Ollama cache |
+| **03:00** | Borg create | Sauvegarde dédupliquée chiffrée → HDD 2TB |
+| **05:00 (dim)** | Borg prune | Rétention keep-daily 14, keep-monthly 3 |
 
 **Actions** :
-- [ ] Installer HDD physique dans M2, le monter dans LXC 105 `/srv/backup`
-- [ ] Déployer OMV (Debian + OMV) sur M2 LXC 105
-- [ ] Configurer borg/kopia repo sur HDD (LUKS + clé hors cluster)
-- [ ] Cron quotidien (02:00-06:00) : Qdrant snapshot → OMV → borg create
+- [ ] Installer HDD 2TB dans M2, passthrough vers LXC 105 `/srv/backup`
+- [ ] Déployer OMV via Docker (`openmediavault/omv`) sur M2 LXC 105
+- [ ] Configurer borg repo sur HDD (LUKS + repokey)
+- [ ] Clés SSH OMV→M1 (Qdrant snapshot + wiki + configs) + OMV→BC250 (configs + cache)
+- [ ] Cron OMV quotidien (02:00-05:00) : snapshot → rsync → borg create → prune dim
 - [ ] Documenter restore procedure dans `infrastructure/backup/restore.md`
 
 Prêt pour Phase 0 (squelette + config + Docker Compose).
 
 ---
-
-### 31/07/2026 — Backup 3-2-1 (OMV) annulé → Cold save simple — **TRANCHÉ (annule et remplace l'entrée du 29/07/2026 ci-dessus)**
-
-**Décision** : pas de tier OMV/LXC 105, pas de règle 2-1/3-2-1. Le stack (OS, LXC, modèles) est reproductible depuis ce repo — inutile de le sauvegarder. Les archives des données sources existent déjà par ailleurs.
-
-**Ce qui est sauvegardé** : Qdrant snapshot + wiki vault (`/data/wiki`) uniquement — les seules données non reproductibles.
-
-**Comment** : borg/rsync manuel ou cron, déclenché directement depuis M1, vers un stockage externe (LUKS). Pas de VM/LXC dédiée, pas de rotation multi-support, pas d'off-site planifié.
-
-**Impact** : LXC 105 retiré de `infrastructure/proxmox/create-lxc-gpu.sh`, `README.md`, `docs/architecture.md`, `docs/diagrams/`, `docs/deployment-guide.md`.
-
 
 ### 31/07/2026 — Filtre anti-injection Niveau 1 (regex) — **GREEN**
 
@@ -589,6 +583,29 @@ Prêt pour Phase 0 (squelette + config + Docker Compose).
 **Contexte** : plan utilisateur (MCP + anti-injection). Le filtre est prioritaire car le risque existe dès que l'ingestion tourne. Le MCP reste différé (dépend de WikiAgent concret + mTLS Phase 0.13) — voir ROADMAP.md section Sécurité.
 
 **Fichiers touchés** : `src/tools/injection_filter.py` (pattern `forget` corrigé), `tests/test_injection_filter.py` (créé)
+
+
+### 31/07/2026 — OMV Backup restauré (M2 LXC 105) + diagrams/docs mis à jour — **TRANCHÉ**
+
+**Décision** : le cold save "simple" (borg/rsync manuel depuis M1 vers stockage externe) est **remplacé** par un backup **OMV sur Machine 2 (LXC 105)** — HDD 2TB physique déjà installé, passthrough vers le LXC, OMV déployé via Docker (`openmediavault/omv`). Rotation **2-1 locale uniquement** (NVMe prod + HDD M2), **pas d'off-site planifié**.
+
+**Flux** : OMV (LXC 105, cron 02:00-05:00) → borg pull M1 (Qdrant snapshot + wiki + configs) + rsync BC250 (configs + cache Ollama) → borg create → HDD 2TB (LUKS, repokey) → prune dim (keep-daily 14, keep-monthly 3).
+
+**Fait (docs)** :
+- [x] README.md : section Cold Save réécrite (OMV LXC 105), diagrammes Mermaid mis à jour (cluster, topologie réseau, topologie physique)
+- [x] docs/diagrams/04-backup-cold.md : flux OMV → HDD 2TB (snapshot/rsync/borg/prune)
+- [x] docs/diagrams/05-network-topology.md : LXC 105 OMV + HDD 2TB dans VLAN 10, flux borg
+- [x] docs/diagrams/06-physical-topology.md : LXC 105 OMV sur M2, pfSense reverse proxy (nginx retiré)
+- [x] docs/deployment-guide.md : section Machine 2 ajoutée (LXC 105 OMV via Docker, HDD passthrough, cron borg), nginx LXC 102 retiré (pfSense reverse proxy), section 4.3 pfSense + 4.4 OMV
+- [x] ROADMAP.md : Sprint 1 tasks 1.11-1.14 (LXC 105, docker-compose.omv.yml, HDD passthrough, borg repo + clés SSH)
+- [x] backlog.md : Phase 0 tasks 0.25-0.28 ajoutées (create-lxc-omv.sh, docker-compose.omv.yml, passthrough HDD, secrets OMV), section Backup 2-1 rétablie, nginx retiré de l'architecture LXC 100
+
+**Actions restantes (infra, à faire)** :
+- [ ] 0.25 Créer `infrastructure/proxmox/create-lxc-omv.sh` (LXC 105)
+- [ ] 0.26 Créer `infrastructure/docker/docker-compose.omv.yml`
+- [ ] 0.27 Passthrough HDD 2TB → LXC 105 (`pct set 105 -mp0 /dev/disk/by-id/...,mp=/srv/backup`)
+- [ ] 0.28 Clés SSH OMV→M1/M3 + borg init + cron 02:00-05:00
+- [ ] 7.10 Écrire `infrastructure/backup/restore.md`
 
 
 ## 29/07/2026 — Architecture LXC 100 (Orchestrator + Wiki Agent) + Schema CLAUDE.md — **NOUVEAU**
@@ -635,7 +652,6 @@ mp3: /data/models,volume=data-shared/models,shared=1,ro=1
 │                    LXC 100 - Orchestrator                   │
 ├─────────────────────────────────────────────────────────────┤
 │  🐳 Docker Compose (orchestrator.yml)                      │
-│  ├── nginx:80/443            ← Reverse proxy + TLS local   │
 │  ├── fastapi-api:8000        ← API /api/v1 (ingest, query) │
 │  ├── langgraph-orchestrator  ← Workflow ingestion + query  │
 │  └── wiki-agent              ← LLM Wiki maintenance loop   │
@@ -647,6 +663,8 @@ mp3: /data/models,volume=data-shared/models,shared=1,ro=1
 │  └── healthcheck             ← /health pour Prometheus     │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**Reverse Proxy / TLS** : pfSense (VM 104 sur M1) — termine TLS, DNAT 443 → LXC 100:8000. Pas de nginx dédié.
 
 ### 4. Flux d'appel LLM Local (via Ollama API)
 

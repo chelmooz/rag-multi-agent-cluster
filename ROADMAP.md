@@ -14,6 +14,10 @@
 | 1.8 | `mypy src` → 0 bloquantes | `src/` |
 | 1.9 | Corriger IPs `.env.example` : `10.10.0.1` → `10.10.0.101` (Qdrant/Postgres/Redis) | `.env.example` |
 | 1.10 | Ajouter volume NFS `/data/shared` dans `docker-compose.orchestrator.yml` | `infrastructure/docker/` |
+| 1.11 | Créer LXC 105 OMV (update create-lxc-gpu.sh) | `infrastructure/proxmox/` |
+| 1.12 | Déployer OMV via Docker dans LXC 105 (docker-compose.omv.yml) | `infrastructure/docker/` |
+| 1.13 | Configurer passthrough HDD 2TB vers LXC 105 `/srv/backup` | `infrastructure/proxmox/` |
+| 1.14 | Configurer borg repo HDD + clés SSH OMV→M1/M3 | `infrastructure/backup/` |
 
 ## Sprint 2 — Backend métier (cœur du projet)
 

@@ -11,7 +11,7 @@ flowchart TB
 
     subgraph VLAN20["VLAN 20 · WAN — 192.168.1.0/24"]
         Internet["🌐 Internet<br/>Updates OS / modèles LLM"]:::wan
-        pfSense["🛡️ pfSense — Passerelle<br/>VM Proxmox M1 (LXC 104) ou appliance dédiée<br/>Routes inter-VLAN + NAT sortant"]:::wan
+        pfSense["🛡️ pfSense — Passerelle<br/>VM Proxmox M1 (VM 104)<br/>Routes inter-VLAN + NAT sortant + DNAT"]:::wan
     end
 
     subgraph VLAN40["VLAN 40 · Client — 192.168.10.0/24"]
@@ -23,14 +23,14 @@ flowchart TB
     end
 
     subgraph VLAN10["VLAN 10 · Cluster — 10.10.0.0/24 — backbone 10G · MTU 9000 (jumbo frames, +15% débit)"]
-        M1["M1 — Master · 10.10.0.1<br/>2× Xeon E5-2699v4 / 32GB ECC<br/>LXC 100 Orchestrator+Wiki · LXC 101 Qdrant<br/>LXC 102 API Gateway · LXC 103 Monitoring<br/>LXC 104 pfSense (option)<br/>Export NFS /data/shared"]:::m1
-        M2["M2 — GPU Worker · 10.10.0.2<br/>Xeon E5-2698v4 / 64GB ECC · RTX 4000 8GB<br/>LXC 200 Inference GPU (Reranker+Juge)<br/>LXC 201 Workers Agents (Avocat+Backup Embedding)<br/>Mount NFS /data/shared"]:::m2
+        M1["M1 — Master · 10.10.0.1<br/>2× Xeon E5-2699v4 / 32GB ECC<br/>LXC 100 Orchestrator+Wiki · LXC 101 Qdrant<br/>LXC 103 Monitoring · VM 104 pfSense<br/>Export NFS /data/shared"]:::m1
+        M2["M2 — GPU Worker · 10.10.0.2<br/>Xeon E5-2698v4 / 64GB ECC · RTX 4000 8GB<br/>LXC 105 OMV Backup (HDD 2TB)<br/>LXC 200 Inference GPU (Reranker+Juge)<br/>LXC 201 Workers Agents (Avocat+Backup Embedding)<br/>Mount NFS /data/shared"]:::m2
         M3["M3 — BC-250 Baremetal<br/>Zen 2 6c/12t · 16GB GDDR6 unifiée<br/>40 CU débloquées · Vulkan/Mesa (RADV)<br/>Générateur · Text-to-SQL · Vision · Fast-check<br/>Ollama Vulkan natif (pas de LXC)"]:::m3
         Relay["relay.json<br/>TTL 300s"]:::relay
     end
 
-    subgraph COLDBOX["Cold save"]
-        HDD["Stockage externe (LUKS)<br/>borg/rsync manuel ou cron · qdrant snapshot + wiki vault<br/>OS/modèles reproductibles, non sauvegardés"]:::cold
+    subgraph COLDBOX["Cold save (OMV M2 → HDD 2TB)"]
+        HDD["Stockage HDD 2TB (LUKS)<br/>borg repo · Qdrant snapshot + wiki vault + configs<br/>cron 02:00-05:00 · retention 14j/3m"]:::cold
     end
 
     Internet <--> |NAT sortant| pfSense
@@ -43,5 +43,5 @@ flowchart TB
     M2 -->|Ollama/Qdrant| M3
     M1 -.->|TCP 2049| Relay
     M2 -.->|TCP 2049| Relay
-    M1 -->|borg/rsync cron| HDD
+    M1 -->|borg/rsync cron| M2
 ```
