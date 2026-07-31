@@ -20,7 +20,7 @@
 
 - [Vue d'ensemble](#-vue-densemble)
 - [Architecture du Système](#️-architecture-du-système)
-- [Plan de Backup (3-2-1)](#-plan-de-backup-3-2-1)
+- [Plan de Backup (2-1)](#-plan-de-backup-2-1)
 - [Topologie Réseau & Sécurité](#-topologie-réseau--sécurité)
 - [Intégration avec Obsidian (pattern Karpathy)](#-intégration-avec-obsidian-pattern-karpathy)
 - [Fonctionnalités Clés](#-fonctionnalités-clés)
@@ -55,10 +55,10 @@ Voir aussi le schéma complet dans [`docs/architecture.svg`](docs/architecture.s
 |---|---|---|
 | 🔵 | Frontend / Entrées-Sorties | Client (Obsidian) |
 | 🩵 | Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS | **M1** Master |
-| 🟢 | Reranker, Juge, Avocat, Backup Embedding CPU | **M2** GPU Worker |
+| 🟢 | Reranker, Juge, Avocat, Backup Embedding CPU, Monitoring, Backup | **M2** GPU Worker + Services |
 | 🟠 | Générateur, Text-to-SQL, Vision, Fast-check | **M3** BC-250 Baremetal |
 | 🩷 | `relay.json` (NFS partagé M1↔M2) | Évaluation séquentielle |
-| 🟡 | Backup Cold / Passerelle | Off-site, pfSense |
+| 🟡 | Backup / Passerelle | M2 (HDD OMV), Off-site, pfSense |
 
 **Conventions de flèches** : `──▶` flux synchrone · `┄┄▶` asynchrone, feedback ou backup.
 
@@ -78,19 +78,19 @@ L'ingestion n'est **jamais dans le chemin critique** d'une requête : chunking, 
 
 ---
 
-## 🔐 Plan de Backup (3-2-1)
+## 🔐 Plan de Backup (2-1)
 
 ### Architecture
 
-![Backup 3-2-1](docs/diagrams/04-backup-321.svg)
+![Backup 2-1](docs/diagrams/04-backup-21.svg)
 
-### Règle 3-2-1
+### Règle 2-1
 
 | Règle | Implémentation |
 |---|---|
-| **3 copies** | Prod + OMV Live + HDD Cold |
-| **2 médias** | NVMe + HDD mécanique |
-| **1 off-site** | Rotation physique HDD 2 TB |
+| **2 copies** | Prod (NVMe) + OMV Backup (HDD physique sur M2) |
+| **1 média** | NVMe + HDD (médias distincts) |
+| **1 off-site** | Rotation physique HDD (manuel) |
 
 ### Outils & Rétention
 
@@ -99,8 +99,16 @@ L'ingestion n'est **jamais dans le chemin critique** d'une requête : chunking, 
 | borg | Sauvegarde dédupliquée, chiffrée, compression LZ4 |
 | rsync | Sync configs Ollama, wiki, scripts |
 | qdrant snapshot | Backup atomique VectorDB (cron quotidien) |
-| LUKS | Chiffrement HDD (clés hors cluster) |
-| OMV | Interface NFS/SMB, scheduling cron |
+| OMV | Interface NFS/SMB, scheduling cron, gestion HDD |
+
+### Planning d'exécution (heures creuses IA)
+
+| Fenêtre | Tâche | Note |
+|---------|-------|------|
+| **02:00** | Qdrant snapshot | Backup atomique VectorDB |
+| **02:30** | Rsync wiki + configs | Configs Ollama, scripts, .env |
+| **03:00** | Borg create | Sauvegarde dédupliquée complète |
+| **05:00 (dim)** | Purge vieux snapshots | Rétention rolling 14j/3m |
 
 ---
 
@@ -125,7 +133,7 @@ L'ingestion n'est **jamais dans le chemin critique** d'une requête : chunking, 
 - **Mount M2** : `/data/shared` sur `10.10.0.1:/data/shared` (fstab, `_netdev`)
 - **Fichier** : `evaluation-relay.json` (verrou fichier atomique, TTL 300 s)
 
-> ⚠️ **Note** : Le README Qwen mentionnait l'export depuis la VM OMV, mais le NFS pour l'évaluation est exporté par l'hôte M1 (`10.10.0.1`) pour simplicité et performance. L'OMV (LXC 105) gère le backup cold, pas le relay temps-réel.
+> ⚠️ **Note** : Le NFS pour l'évaluation est exporté par l'hôte M1 (`10.10.0.1`) pour simplicité et performance. L'OMV (LXC 105 sur M2) gère le backup avec HDD physique local, pas le relay temps-réel. Les sauvegardes s'exécutent en dehors des heures d'utilisation IA (cron 02:00-06:00).
 
 ### Règles Firewall (pfSense) — Flux autorisés
 
@@ -224,8 +232,8 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 
 | Nœud | Rôle | CPU / RAM | GPU / Accélérateur | Virtualisation |
 |---|---|---|---|---|
-| **Machine 1** | **Master** (Orchestration, API, VectorDB, Monitoring, Évaluateur, Embedding CPU, Relay NFS) | 2× Xeon E5-2699 v4 / **32 GB ECC** | **AMD Radeon RX 580** (8 GB) — fallback léger uniquement | Proxmox VE 9.3 (LXC 100, 101, 102, 103, 104*, 105) |
-| **Machine 2** | **GPU Worker** (Inference, Reranking, Juge, Avocat, Backup Embedding CPU) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | Proxmox VE 9.3 (LXC 200 privilégié GPU, 201) |
+| **Machine 1** | **Master** (Orchestration, API, VectorDB, Évaluateur, Embedding CPU, Relay NFS) | 2× Xeon E5-2699 v4 / **32 GB ECC** | **AMD Radeon RX 580** (8 GB) — fallback léger uniquement | Proxmox VE 9.3 (LXC 100, 101, 102, 104*) |
+| **Machine 2** | **GPU Worker + Services** (Inference, Reranking, Juge, Avocat, Backup Embedding CPU, Monitoring, Backup) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | Proxmox VE 9.3 (LXC 103, 105, 200 privilégié GPU, 201) |
 | **Machine 3** | **BC-250 Baremetal** (Générateur, Text-to-SQL, Vision, Fast-check) | Carte minage BIOS modifiée · Puce PS5 (BC-250, Zen 2, 6c/12t) · **40 CU débloquées** | **16 GB GDDR6 unifiée** CPU+GPU · ~12 GB dispo pour IA (512 MB carve-out dynamique) | **BIOS P3.00+ patché · VRAM dynamique 512 MB** · Debian Testing/Sid (baremetal, Ollama Vulkan natif) |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
@@ -235,12 +243,12 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 
 | Machine | Disque | Usage |
 |---|---|---|
-| M1 (Master) | 1 TB NVMe | Proxmox + LXCs + Qdrant + Wiki + **OMV LXC 105** (500 GB dédié backup live) |
-| M2 (GPU Worker) | 256 GB NVMe | Proxmox + LXCs + cache Ollama |
+| M1 (Master) | 1 TB NVMe | Proxmox + LXCs + Qdrant + Wiki + Relay NFS |
+| M2 (GPU Worker + Services) | 1 TB NVMe | Proxmox + LXCs + cache Ollama + **Monitoring LXC 103** |
+| | HDD physique (à installer) | **OMV LXC 105** — sauvegarde dédupliquée, rétention rolling |
 | M3 (BC-250) | 475 GB NVMe | OS Debian + Modèles |
-| Backup Cold | 2 TB HDD mécanique (USB/SATA, LUKS) | Archive dédupliquée, rétention 30j/12m/3y |
 
-> ⚠️ **OMV : VM ou LXC ?** Le backlog indique LXC 105, mais OMV se déploie classiquement en VM (disque virtio). La décision finale : **LXC 105 avec disque virtio dédié 500 GB** pour simplicité Proxmox. Si problèmes performance → migration VM.
+> ⚠️ **OMV LXC 105** est déployé sur **Machine 2** avec un HDD physique monté dans `/srv/backup`. Le disque virtio 500 Go initial sur M1 est migré via rsync/vzdump lors de la transition. Voir `docs/deployment-guide.md` pour la procédure.
 
 ### ⚡ Règle d'or BC-250
 
@@ -260,10 +268,11 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 | Machine 1 | `100` | Orchestrator + Wiki Agent |
 | | `101` | Vector DB (Qdrant) |
 | | `102` | API Gateway (nginx) |
-| | `103` | Monitoring (Prometheus/Grafana/Loki) |
 | | `104` | pfSense (option, si pas d'appliance dédiée) |
-| | `105` | OMV Backup (500 GB disque virtio dédié) |
-| Machine 2 | `200` | Inference GPU (passthrough RTX 4000) — Reranker + Juge |
+| | | **~18.5 GB / 32 GB utilisés** (6 GB libérés) |
+| Machine 2 | `103` | Monitoring (Prometheus/Grafana/Loki) |
+| | `105` | OMV Backup (HDD physique, cron hors heures IA) |
+| | `200` | Inference GPU (passthrough RTX 4000) — Reranker + Juge |
 | | `201` | Workers Agents — Avocat + Backup Embedding CPU |
 | Machine 3 | — | Ollama Vulkan natif (pas de LXC) |
 
@@ -271,8 +280,8 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 
 | Machine | IP (VLAN 10) | Rôle | Hardware | Services |
 |---------|-------------|------|----------|----------|
-| **M1** (Master) | `10.10.0.1` | Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS | 2× Xeon E5-2699 v4 32c/64t, 32 GB ECC, 1 TB NVMe | Qdrant (LXC 101 :6333), Ollama CPU (embedding nomic), nginx API Gateway (LXC 102 :80/443), pfSense (LXC 104), OMV Backup (LXC 105) |
-| **M2** (GPU Worker) | `10.10.0.2` | Reranker, Juge, Avocat, Backup Embedding CPU | Xeon 20c/40t, 256 GB NVMe, RTX 4000 (CUDA) | Ollama GPU — Judge qwen3.5:7b / Avocat mistral-3.2:7b (LXC 200-201 :11434), NFS mount depuis M1 |
+| **M1** (Master) | `10.10.0.1` | Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS | 2× Xeon E5-2699 v4 32c/64t, 32 GB ECC, 1 TB NVMe | Qdrant (LXC 101 :6333), Ollama CPU (nomic-embed + évaluateur), nginx API Gateway (LXC 102 :80/443), pfSense (LXC 104) |
+| **M2** (GPU Worker + Services) | `10.10.0.2` | Reranker, Juge, Avocat, Backup Embedding CPU, **Monitoring, Backup** | Xeon 20c/40t, 64 GB ECC, **1 TB NVMe**, RTX 4000 (CUDA) + HDD physique | Ollama GPU (LXC 200-201 :11434), Prometheus/Grafana/Loki (LXC 103), OMV Backup (LXC 105, HDD) |
 
 **Endpoints :** Ollama M1 = `http://10.10.0.1:11434`, Ollama M2 = `http://10.10.0.2:11434`, Qdrant = `http://10.10.0.1:6333`, Gateway = `10.10.0.1:80/443`
 
@@ -305,8 +314,8 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 ```bash
 # 1. LXC Proxmox
 cd infrastructure/proxmox
-bash create-lxc-master.sh   # M1 : LXC 100 (Orchestrator), 101 (Vector DB), 102 (Gateway), 103 (Monitoring), 105 (OMV)
-bash create-lxc-gpu.sh      # M2 : LXC 200 (GPU passthrough), 201 (Workers)
+bash create-lxc-master.sh   # M1 : LXC 100 (Orchestrator), 101 (Vector DB), 102 (Gateway)
+bash create-lxc-gpu.sh      # M2 : LXC 103 (Monitoring), 105 (OMV), 200 (GPU passthrough), 201 (Workers)
 
 # 2. Stacks Docker
 cd infrastructure/docker
@@ -373,7 +382,8 @@ Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rie
 
 | Risque | Impact | Mitigation |
 |---|---|---|
-| **SPOF : Machine 1 (Master)** | Qdrant + API + Wiki + Évaluateur + NFS = tout s'arrête si M1 tombe | Backup Qdrant snapshot quotidien sur M2. NFS export read-only possible depuis M2. |
+| **SPOF : Machine 1 (Master)** | Qdrant + API + Wiki + Évaluateur + NFS = tout s'arrête si M1 tombe | Backup Qdrant snapshot quotidien sur M2 (HDD OMV). NFS export read-only possible depuis M2. |
+| **Résilience M2** | Monitoring + Backup hébergés sur M2 → si M2 tombe, perte monitoring et backup | Prometheus en pull peut scraper M1/M3 directement. Backup OMV inaccessible mais données prod survivent sur M1. |
 | **Latence NFS sur évaluation** | Relay file = point de synchronisation bloquant | MTU 9000 + 10 GbE = <1 ms RTT. Timeout 120 s Juge → Avocat. Acceptable. |
 | **BC-250 baremetal = pas de snapshot/rollback** | Mise à jour noyau/BIOS risquée | Tests sur VM simulée d'abord. Backup config `/etc` + BIOS P3.00 sur USB. |
 | **RTX 4000 8 GB limite dure** | Pas de place pour un modèle > 7B quantifié | Choix validé : Juge/Avocat 7B max. Si besoin 14B → seul le BC-250 peut. |
@@ -385,7 +395,7 @@ Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rie
 1. **Lock les versions modèles** — Ajouter dans `.env` : `OLLAMA_MODEL_JUDGE=qwen3.5:7b@sha256:xxx` etc.
 2. **Health checks obligatoires** — `/health` sur chaque service (Ollama, Qdrant, API) → Prometheus scrape.
 3. **Secrets management** — Pas de tokens/API keys en dur. `sops` + `.env.encrypted` ou Vault (Phase 7).
-4. **Backup Qdrant** — `qdrant snapshot create` cron quotidien → stocké sur M2 (64 GB dispo).
+4. **Backup Qdrant** — `qdrant snapshot create` cron quotidien (02:00) → stocké sur HDD OMV M2.
 5. **Test de charge pré-prod** — `hey` / `locust` sur `/api/v1/query` avec 10-50 RPS avant mise en prod.
 6. **Runbook incident** — Documenter : « BC-250 ne boot plus », « RTX 4000 OOM », « NFS stale handle », « Qdrant corruption ».
 

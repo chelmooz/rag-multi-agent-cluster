@@ -30,11 +30,11 @@
   </text>
   <rect x="60" y="90" width="15" height="15" fill="#e0f2fe" stroke="#9ca3af" />
   <text x="85" y="102" class="text" text-anchor="start">
-    <tspan x="85" dy="0em">🩵 M1 Master (Orchestration, API, VectorDB, Embedding CPU, Évaluateur, NFS)</tspan>
+    <tspan x="85" dy="0em">🩵 M1 Control Plane (Orchestration, API, VectorDB, Embedding CPU, Évaluateur)</tspan>
   </text>
   <rect x="60" y="115" width="15" height="15" fill="#dcfce7" stroke="#9ca3af" />
   <text x="85" y="127" class="text" text-anchor="start">
-    <tspan x="85" dy="0em">🟢 M2 GPU Worker (Reranker, Juge, Avocat, Backup Embedding)</tspan>
+    <tspan x="85" dy="0em">🟢 M2 Compute & Storage (Reranker, Juge, Avocat, Monitoring, Backup)</tspan>
   </text>
   <rect x="60" y="140" width="15" height="15" fill="#ffedd5" stroke="#9ca3af" />
   <text x="85" y="152" class="text" text-anchor="start">
@@ -46,7 +46,7 @@
   </text>
   <rect x="60" y="190" width="15" height="15" fill="#fef3c7" stroke="#9ca3af" />
   <text x="85" y="202" class="text" text-anchor="start">
-    <tspan x="85" dy="0em">🟡 Backup Cold / Passerelle (Off-site, pfSense)</tspan>
+    <tspan x="85" dy="0em">🟡 Passerelle (pfSense, NAT, Firewall Inter-VLAN)</tspan>
   </text>
   <text x="860" y="77" class="title" text-anchor="start">
     <tspan x="860" dy="0em">Conventions :</tspan>
@@ -71,9 +71,9 @@
     <tspan x="180" dy="1.3em">NAT · Firewall · Inter-VLAN</tspan>
     <tspan x="180" dy="1.3em">DNAT → 10.10.0.1:443</tspan>
   </text>
-  <rect x="380" y="220" width="520" height="450" rx="12" stroke="#0ea5e9" fill="rgba(240, 249, 255, 0.5)" class="container-rect" />
+  <rect x="380" y="220" width="520" height="370" rx="12" stroke="#0ea5e9" fill="rgba(240, 249, 255, 0.5)" class="container-rect" />
   <text x="395" y="245" class="text title" text-anchor="start" fill="#0c4a6e">
-    <tspan x="395" dy="0em">🖥️ M1 — MASTER | 2× Xeon E5-2699 v4 • 32 GB ECC • RX 580 • 2×10GbE + 1GbE</tspan>
+    <tspan x="395" dy="0em">🖥️ M1 — CONTROL PLANE | 2× Xeon E5-2699 v4 • 32 GB ECC • 1 TB NVMe</tspan>
   </text>
   <rect x="410" y="280" width="210" height="90" rx="8" ry="8" fill="#e0f2fe" stroke="#0ea5e9" class="rect" />
   <text x="515" y="310" class="text" text-anchor="middle" fill="#0c4a6e">
@@ -99,25 +99,13 @@
     <tspan x="765" dy="1.3em">qwen3.5:3b · CPU</tspan>
     <tspan x="765" dy="1.3em">Synthèse finale</tspan>
   </text>
-  <rect x="410" y="520" width="210" height="90" rx="8" ry="8" fill="#e0f2fe" stroke="#0ea5e9" class="rect" />
-  <text x="515" y="550" class="text" text-anchor="middle" fill="#0c4a6e">
-    <tspan x="515" dy="0em">📦 OMV Backup Live</tspan>
-    <tspan x="515" dy="1.3em">500 GB virtio dédié</tspan>
-    <tspan x="515" dy="1.3em">NFS/SMB · LXC 105</tspan>
+  <rect x="410" y="520" width="460" height="40" rx="5" ry="5" fill="#fef3c7" stroke="#d97706" class="rect" />
+  <text x="640" y="545" class="text" text-anchor="middle" fill="#78350f">
+    <tspan x="640" dy="0em">🌐 API Gateway (nginx LXC 102) · pfSense optionnel (LXC 104)</tspan>
   </text>
-  <rect x="660" y="520" width="210" height="90" rx="8" ry="8" fill="#fce7f3" stroke="#db2777" class="rect" />
-  <text x="765" y="550" class="text" text-anchor="middle" fill="#831843">
-    <tspan x="765" dy="0em">📄 relay.json (NFS)</tspan>
-    <tspan x="765" dy="1.3em">/data/shared</tspan>
-    <tspan x="765" dy="1.3em">Évaluation séquentielle</tspan>
-  </text>
-  <rect x="410" y="620" width="460" height="40" rx="5" ry="5" fill="#fef3c7" stroke="#d97706" class="rect" />
-  <text x="640" y="645" class="text" text-anchor="middle" fill="#78350f">
-    <tspan x="640" dy="0em">🌐 API Gateway (nginx LXC 102) • Monitoring (Prom/Grafana/Loki LXC 103) • pfSense optionnel (LXC 104)</tspan>
-  </text>
-  <rect x="960" y="220" width="520" height="450" rx="12" stroke="#22c55e" fill="rgba(240, 253, 244, 0.5)" class="container-rect" />
+  <rect x="960" y="220" width="520" height="470" rx="12" stroke="#22c55e" fill="rgba(240, 253, 244, 0.5)" class="container-rect" />
   <text x="975" y="245" class="text title" text-anchor="start" fill="#14532d">
-    <tspan x="975" dy="0em">🎮 M2 — GPU WORKER | Xeon E5-2698 v4 • 64 GB ECC • RTX 4000 8GB • 10GbE + 1GbE</tspan>
+    <tspan x="975" dy="0em">🎮 M2 — COMPUTE & STORAGE | Xeon E5-2698 v4 • 64 GB ECC • 1 TB NVMe + HDD • RTX 4000</tspan>
   </text>
   <rect x="990" y="280" width="210" height="90" rx="8" ry="8" fill="#dcfce7" stroke="#22c55e" class="rect" />
   <text x="1095" y="310" class="text" text-anchor="middle" fill="#14532d">
@@ -143,45 +131,56 @@
     <tspan x="1345" dy="1.3em">nomic-v2-moe · CPU</tspan>
     <tspan x="1345" dy="1.3em">Xeon 20c/40t</tspan>
   </text>
-  <text x="990" y="540" class="text" text-anchor="start" fill="#166534">
+  <rect x="990" y="520" width="210" height="70" rx="8" ry="8" fill="#cbd5e1" stroke="#22c55e" class="rect" />
+  <text x="1095" y="545" class="text" text-anchor="middle" fill="#14532d">
+    <tspan x="1095" dy="0em">📊 Monitoring</tspan>
+    <tspan x="1095" dy="1.3em">Prom/Grafana/Loki</tspan>
+    <tspan x="1095" dy="1.3em">LXC 103</tspan>
+  </text>
+  <rect x="1240" y="520" width="210" height="70" rx="8" ry="8" fill="#cbd5e1" stroke="#22c55e" class="rect" />
+  <text x="1345" y="545" class="text" text-anchor="middle" fill="#14532d">
+    <tspan x="1345" dy="0em">📦 OMV Backup</tspan>
+    <tspan x="1345" dy="1.3em">HDD physique · cron 02:00</tspan>
+    <tspan x="1345" dy="1.3em">LXC 105</tspan>
+  </text>
+  <text x="990" y="630" class="text" text-anchor="start" fill="#166534">
     <tspan x="990" dy="0em">⚡ Séquentiel sur RTX 4000 : 1 seul modèle chargé à la fois</tspan>
-    <tspan x="990" dy="1.3em">(unload → load ~5 GB)</tspan>
+    <tspan x="990" dy="1.3em">(unload → load ~5 GB) · Backup cron en dehors des heures IA</tspan>
+  </text>
+  <rect x="960" y="660" width="520" height="30" rx="5" ry="5" fill="#fce7f3" stroke="#db2777" class="rect" />
+  <text x="1220" y="680" class="text" text-anchor="middle" fill="#831843">
+    <tspan x="1220" dy="0em">📄 relay.json (NFS /data/shared) — Évaluation séquentielle</tspan>
   </text>
   <path d="M 180 350 L 180 420" marker-end="url(#arrowhead)" class="arrow" />
   <path d="M 300 470 L 380 470" marker-end="url(#arrowhead)" class="arrow" />
   <path d="M 900 320 L 960 320" marker-end="url(#arrowhead)" class="arrow" />
-  <path d="M 1095 370 L 1095 565 L 870 565" marker-end="url(#arrowhead-m2)" class="arrow-m2" />
-  <path d="M 900 550 L 960 330 L 960 300" marker-end="url(#arrowhead-async)" class="arrow-async" />
-  <rect x="1000" y="720" width="440" height="70" rx="8" ry="8" fill="#fef3c7" stroke="#d97706" class="rect" />
-  <text x="1220" y="755" class="text title" text-anchor="middle" fill="#78350f">
-    <tspan x="1220" dy="0em">🧊 COLD BACKUP • HDD 2 TB USB/SATA • LUKS</tspan>
-    <tspan x="1220" dy="1.3em">Dédupliqué LZ4 • Rotation physique off-site</tspan>
-  </text>
-  <rect x="380" y="800" width="1100" height="320" rx="12" stroke="#f97316" fill="rgba(255, 247, 237, 0.5)" class="container-rect" />
-  <text x="395" y="825" class="text title" text-anchor="start" fill="#7c2d12">
+  <path d="M 1095 370 L 1095 490 L 870 490" marker-end="url(#arrowhead-m2)" class="arrow-m2" />
+  <path d="M 900 470 L 960 350 L 960 300" marker-end="url(#arrowhead-async)" class="arrow-async" />
+  <rect x="380" y="740" width="1100" height="320" rx="12" stroke="#f97316" fill="rgba(255, 247, 237, 0.5)" class="container-rect" />
+  <text x="395" y="765" class="text title" text-anchor="start" fill="#7c2d12">
     <tspan x="395" dy="0em">⚡ M3 — BC-250 BAREMETAL | Zen 2 6c/12t • 40 CU RDNA2 débloqués • 16 GB GDDR6 unifiée • Vulkan-only • 1GbE</tspan>
   </text>
-  <rect x="410" y="870" width="380" height="150" rx="8" ry="8" fill="#ffedd5" stroke="#f97316" class="rect" />
-  <text x="600" y="915" class="text" text-anchor="middle" fill="#7c2d12">
+  <rect x="410" y="810" width="380" height="150" rx="8" ry="8" fill="#ffedd5" stroke="#f97316" class="rect" />
+  <text x="600" y="855" class="text" text-anchor="middle" fill="#7c2d12">
     <tspan x="600" dy="0em">🤖 Générateur</tspan>
     <tspan x="600" dy="1.3em">qwen3.5:14b (Q4_K_M ~9GB)</tspan>
     <tspan x="600" dy="1.3em">ou 35b-a3b MoE (IQ2_M ~11GB)</tspan>
     <tspan x="600" dy="1.3em">Ollama Vulkan natif · CPU AU REPOS</tspan>
   </text>
-  <rect x="820" y="870" width="320" height="150" rx="8" ry="8" fill="#ffedd5" stroke="#f97316" class="rect" />
-  <text x="980" y="915" class="text" text-anchor="middle" fill="#7c2d12">
+  <rect x="820" y="810" width="320" height="150" rx="8" ry="8" fill="#ffedd5" stroke="#f97316" class="rect" />
+  <text x="980" y="855" class="text" text-anchor="middle" fill="#7c2d12">
     <tspan x="980" dy="0em">🔀 Variantes</tspan>
     <tspan x="980" dy="1.3em">Text-to-SQL (qwen3-coder-30b)</tspan>
     <tspan x="980" dy="1.3em">Vision (llava-next:13b / qwen2.5-vl)</tspan>
     <tspan x="980" dy="1.3em">Fast-check (granite-4.0-h-tiny)</tspan>
   </text>
-  <text x="1160" y="900" class="text" text-anchor="start" fill="#7c2d12">
+  <text x="1160" y="840" class="text" text-anchor="start" fill="#7c2d12">
     <tspan x="1160" dy="0em">⚡ RÈGLE D'OR BC-250</tspan>
     <tspan x="1160" dy="1.3em">Le CPU est le serviteur du GPU.</tspan>
     <tspan x="1160" dy="1.3em">Toute charge CPU = vol de bande passante</tspan>
     <tspan x="1160" dy="1.3em">mémoire au Générateur 14B.</tspan>
     <tspan x="1160" dy="1.3em">Embedding = M1 CPU (principal) / M2 CPU (backup).</tspan>
   </text>
-  <path d="M 515 670 L 515 800" marker-end="url(#arrowhead)" class="arrow" />
-  <path d="M 1220 790 L 1220 800" marker-end="url(#arrowhead-async)" class="arrow-async" />
+  <path d="M 640 560 L 640 740" marker-end="url(#arrowhead)" class="arrow" />
+  <path d="M 1200 690 L 1200 740" marker-end="url(#arrowhead-async)" class="arrow-async" />
 </svg>

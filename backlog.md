@@ -102,10 +102,10 @@
 
 ## Infrastructure Matérielle Validée (selon README.md)
 
-| Nœud | Rôle | CPU / RAM | GPU / Accélérateur | Virtualisation |
-| :--- | :--- | :--- | :--- | :--- |
-| **Machine 1** | **Master** (Orchestration, API, VectorDB, Monitoring, Evaluator, Embedding CPU, **Relay NFS**) | 2× Xeon E5-2699 v4 / **32 GB ECC** | **AMD Radeon RX 580** (8 GB) | Proxmox VE 9.3 (LXC 100, 101, 102, 103, 104*, 105) |
-| **Machine 2** | **GPU Worker** (Reranker, Judge, Avocat, Backup Embedding CPU) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | Proxmox VE 9.3 (LXC 200 privilégié GPU, 201) |
+| Nœud | Rôle | CPU / RAM | GPU / Accélérateur | Stockage | Virtualisation |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Machine 1** | **Master** (Orchestration, API, VectorDB, Evaluator, Embedding CPU, Relay NFS) | 2× Xeon E5-2699 v4 / **32 GB ECC** | AMD Radeon RX 580 (8 GB) | 1 TB NVMe | Proxmox VE 9.3 (LXC 100, 101, 102, 104*) |
+| **Machine 2** | **GPU Worker + Services** (Reranker, Judge, Avocat, Backup Embedding CPU, Monitoring, Backup) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | **1 TB NVMe** + HDD physique | Proxmox VE 9.3 (LXC 103, 105, 200 privilégié GPU, 201) |
 | **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Fast-check) | Zen 2 6c/12t / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU débloquées) | Debian Testing/Sid baremetal (Ollama Vulkan natif) |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
@@ -116,8 +116,8 @@
 **NFS Relay** : Machine 1 exporte `/data/shared` → monté sur Machine 2 `/data/shared` (fichier `evaluation-relay.json` partagé pour pipeline Juge→Avocat→Évaluateur).
 
 **Répartition LXC prévue** :
-- Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `102` API Gateway (Nginx), `103` Monitoring (Prometheus/Grafana/Loki)
-- Machine 2 : `200` Inference GPU (passthrough RTX 4000), `201` Workers Agents (Juge, Avocat, backup embedding)
+- Machine 1 : `100` Orchestrator, `101` Vector DB (Qdrant), `102` API Gateway (Nginx)
+- Machine 2 : `103` Monitoring (Prometheus/Grafana/Loki), `105` OMV Backup (HDD physique), `200` Inference GPU (passthrough RTX 4000), `201` Workers Agents (Juge, Avocat, backup embedding)
 - Machine 3 : Ollama Vulkan natif (pas de LXC)
 
 ## Modèles Recommandés par Machine (30/07/2026 - validé échange)
@@ -530,27 +530,34 @@ Le cluster tient sur 3 machines hétérogènes sans compromis majeur. Le seul "h
 **Topologie stockage** :
 | Niveau | Support | Contenu | Fréquence | Outil |
 |--------|---------|---------|-----------|-------|
-| **Prod (NVMe)** | M1: 1 TB | Proxmox, LXCs, Qdrant, Wiki, **OMV VM** | — | — |
-| | M2: 256 GB | Proxmox, LXCs, Ollama cache BC250 | — | — |
+| **Prod (NVMe)** | M1: 1 TB | Proxmox, LXCs, Qdrant, Wiki | — | — |
+| | M2: 1 TB | Proxmox, LXCs, Ollama cache, Monitoring | — | — |
 | | BC250: 475 GB | OS Debian, Modèles (9-11 GB) | — | — |
-| **Backup Live (NVMe)** | OMV VM sur M1 (disque 500 GB dans 1 TB) | Qdrant snapshots, Wiki rsync, Configs M1/M2/BC250, Ollama models cache | Quotidien (cron) | borg/kopia pull |
-| **Tier 3 Cold (HDD)** | HDD mécanique 2 TB (USB/SATA, LUKS) | Archive dédupliquée, rétention 30j/12m/3y | Hebdo | borg push depuis OMV |
+| **Backup (HDD physique M2)** | HDD dans M2 géré par OMV LXC 105 | Qdrant snapshots, Wiki rsync, Configs M1/M2/BC250, Ollama models cache | Quotidien (cron hors heures IA) | borg/kopia pull |
 
-**Règle 3-2-1** : 3 copies (Prod + OMV + HDD) · 2 médias (NVMe + HDD) · 1 off-site (rotation HDD)
+**Règle 2-1** : 2 copies (Prod + OMV) · 2 médias (NVMe + HDD) · 1 off-site (rotation HDD)
 
 **Flux backup** :
 ```
-OMV (M1) ──borg pull──► M2 (256 GB) ──rsync pull──► BC250
+OMV (M2 LXC 105) ──borg pull──► M1 (1 TB)
+    │                  ──rsync pull──► BC250
     │
-    └──► HDD 2TB (borg create --compression lz4, LUKS)
+    └──► HDD physique local (borg create --compression lz4)
 ```
 
+**Planning d'exécution (heures creuses IA — pipeline inactif)** :
+| Fenêtre | Tâche | Note |
+|---------|-------|------|
+| **02:00** | Qdrant snapshot | Backup atomique VectorDB |
+| **02:30** | Rsync wiki + configs | Configs Ollama, scripts, .env |
+| **03:00** | Borg create | Sauvegarde dédupliquée complète |
+| **05:00 (dim)** | Purge vieux snapshots | Rétention rolling 14j/3m |
+
 **Actions** :
-- [ ] Ajouter disque virtio 500 GB à la config Proxmox M1 pour OMV VM
-- [ ] Déployer OMV VM (Debian + OMV) sur M1
-- [ ] Configurer borg/kopia repo sur HDD 2TB (LUKS + clé hors cluster)
-- [ ] Cron quotidien : Qdrant snapshot → OMV → borg create
-- [ ] Cron hebdo : borg push HDD 2TB + rotation physique
+- [ ] Installer HDD physique dans M2, le monter dans LXC 105 `/srv/backup`
+- [ ] Déployer OMV (Debian + OMV) sur M2 LXC 105
+- [ ] Configurer borg/kopia repo sur HDD (LUKS + clé hors cluster)
+- [ ] Cron quotidien (02:00-06:00) : Qdrant snapshot → OMV → borg create
 - [ ] Documenter restore procedure dans `infrastructure/backup/restore.md`
 
 Prêt pour Phase 0 (squelette + config + Docker Compose).
@@ -577,7 +584,7 @@ Prêt pour Phase 0 (squelette + config + Docker Compose).
 | **Onboot** | 1 |
 | **Start** | 1 |
 
-### 2. Mounts NFS (depuis OMV VM LXC 105 sur M1)
+### 2. Mounts NFS (depuis l'hôte M1, export NFS relay)
 
 | Mount Point (LXC 100) | Source NFS (10.10.0.1:/data/shared/...) | Usage | Mode |
 |----------------------|------------------------------------------|-------|------|
