@@ -289,7 +289,7 @@ flowchart TB
     end
 
 subgraph VLAN10["VLAN 10 · Cluster — 10.10.0.0/24 — backbone 10G · MTU 9000 (jumbo frames, +15% débit)"]
-        M1["M1 — Master · 10.10.0.1<br/>2× Xeon E5-2699v4 / 32GB ECC<br/>LXC 100 Orchestrator+Wiki · LXC 101 Qdrant<br/>LXC 102 API Gateway · LXC 103 Monitoring<br/>LXC 104 pfSense (option)<br/>Export NFS /data/shared"]:::m1
+        M1["M1 — Master · 10.10.0.1<br/>2× Xeon E5-2699v4 / 32GB ECC<br/>LXC 100 Orchestrator+Wiki · LXC 101 Qdrant<br/>LXC 103 Monitoring · VM 104 pfSense (reverse proxy)<br/>Export NFS /data/shared"]:::m1
         M2["M2 — GPU Worker · 10.10.0.2<br/>Xeon E5-2698v4 / 64GB ECC · RTX 4000 8GB<br/>LXC 103 Monitoring · LXC 105 OMV Backup<br/>LXC 200 Inference GPU (Reranker+Juge)<br/>LXC 201 Workers Agents (Avocat+Backup Embedding)<br/>Mount NFS /data/shared · HDD 2TB passthrough"]:::m2
         M3["M3 — BC-250 Baremetal<br/>Zen 2 6c/12t · 16GB GDDR6 unifiée<br/>40 CU débloquées · Vulkan/Mesa (RADV)<br/>Générateur · Text-to-SQL · Vision · Fast-check<br/>Ollama Vulkan natif (pas de LXC)"]:::m3
         Relay["relay.json<br/>TTL 300s"]:::relay
@@ -329,7 +329,7 @@ subgraph VLAN10["VLAN 10 · Cluster — 10.10.0.0/24 — backbone 10G · MTU 900
 - **Mount M2** : `/data/shared` sur `10.10.0.1:/data/shared` (fstab, `_netdev`)
 - **Fichier** : `evaluation-relay.json` (verrou fichier atomique, TTL 300 s)
 
-> ⚠️ **Note** : Le NFS pour l'évaluation est exporté par l'hôte M1 (`10.10.0.1`) pour simplicité et performance. Le cold save (Qdrant snapshot + wiki vault) est déclenché directement depuis M1, pas de tier de backup dédié.
+> ⚠️ **Note** : Le NFS pour l'évaluation est exporté par l'hôte M1 (`10.10.0.1`) pour simplicité et performance. Le cold save est assuré par **OMV LXC 105 sur Machine 2** (HDD 2TB passthrough, borg pull depuis M1/M3, cron 02:00-05:00).
 
 ### Règles Firewall (pfSense) — Flux autorisés
 
@@ -441,8 +441,8 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 
 | Machine | Disque | Usage |
 |---|---|---|
-| M1 (Master) | 1 TB NVMe | Proxmox + LXCs + Qdrant + Wiki + Relay NFS + cold save (externe) |
-| M2 (GPU Worker + Services) | 1 TB NVMe | Proxmox + LXCs + cache Ollama + **Monitoring LXC 103** |
+| M1 (Master) | 1 TB NVMe | Proxmox + LXCs + Qdrant + Wiki + Relay NFS |
+| M2 (GPU Worker + Services) | 1 TB NVMe + **HDD 2TB** | Proxmox + LXCs + cache Ollama + **Monitoring LXC 103** + **OMV Backup LXC 105 (cold save)** |
 | M3 (BC-250) | 475 GB NVMe | OS Debian + Modèles |
 
 ### ⚡ Règle d'or BC-250
@@ -493,7 +493,7 @@ flowchart TB
 
     WAN["🌐 WAN / Internet<br/>VLAN 20 · 192.168.1.0/24<br/>Updates · Pull modèles"]:::wan
     GW["🛡️ pfSense GW<br/>VM M1 LXC 104 ou appliance dédiée<br/>NAT + Firewall + Inter-VLAN<br/>192.168.1.1 / 10.10.0.254"]:::fw
-    Client["🧠 CLIENT · Obsidian Vault<br/>VLAN 40 · 192.168.10.0/24<br/>Graph View · HTTPS 443 → pfSense DNAT → LXC 102"]:::client
+    Client["🧠 CLIENT · Obsidian Vault<br/>VLAN 40 · 192.168.10.0/24<br/>Graph View · HTTPS 443 → pfSense DNAT → LXC 100"]:::client
 
 subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · 2×10GbE+1GbE mgmt"]
         LXC100["🎯 LXC 100<br/>Orchestrator + Wiki Agent<br/>LangGraph + FastAPI"]:::m1
@@ -512,17 +512,19 @@ subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · 2×10G
         Ollama["🤖 Ollama Vulkan natif<br/>Générateur qwen3.5:14b/35b MoE<br/>Text-to-SQL · Vision · Fast-check<br/>CPU au repos pendant inférence"]:::m3
     end
 
-    Cold["🧊 COLD SAVE<br/>Stockage externe (LUKS)<br/>borg/rsync manuel ou cron : Qdrant snapshot + wiki vault<br/>OS/modèles reproductibles, non sauvegardés"]:::cold
+    Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2) → HDD 2TB (LUKS)<br/>borg pull M1/M3 → borg create cron<br/>Qdrant snapshot + wiki vault + configs"]:::cold
 
     WAN --> GW
     GW -->|NAT + inter-VLAN| Client
-    Client -->|HTTPS 443| LXC102
+    Client -->|HTTPS 443 → DNAT| LXC100
     LXC100 --> LXC101
     LXC101 -->|reranking| LXC200
     LXC100 -.->|relay.json NFS| LXC201
     LXC201 -.->|relay.json NFS| LXC100
     LXC100 -->|génération| Ollama
-    LXC101 -->|cold save périodique| Cold
+    LXC105 -->|borg create 03:00| Cold
+    LXC100 -.->|snapshot + rsync 02:00| LXC105
+    LXC101 -.->|snapshot 02:00| LXC105
 ```
 
 ---

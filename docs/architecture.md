@@ -88,8 +88,8 @@ flowchart TB
     subgraph Machine1["Machine 1: Master · 2× Xeon 2699 v4 / 32GB ECC"]
         M1_100["LXC 100: Orchestrator + Wiki"]:::m1
         M1_101["LXC 101: Qdrant VectorDB"]:::m1
-        M1_102["LXC 102: API Gateway (Nginx)"]:::m1
         M1_103["LXC 103: Prometheus/Grafana"]:::m1
+        M1_104["VM 104: pfSense (reverse proxy + firewall)"]:::m1
         M1_vault["/data/wiki vault"]:::m1
         M1_models["Modèles CPU (M1)<br/>Embedding: nomic-v2-moe 768d Q8_0 (primary)<br/>Evaluator: qwen3.5:3b Q4_K_M"]:::m1
         M1_wiki["Agent Wiki Maintainer<br/>Ingest / Query / Lint / Index.md + Log.md"]:::m1
@@ -105,7 +105,7 @@ flowchart TB
         M3_warn["⚠ RÈGLE D'OR BC250<br/>CPU = serviteur du GPU<br/>Aucune charge CPU (embedding, batch) quand le GPU infère"]:::warn
     end
 
-    Cold["💾 Cold save<br/>Stockage externe (LUKS)<br/>borg/rsync manuel ou cron — Qdrant + wiki vault<br/>OS/modèles reproductibles, non sauvegardés"]:::cold
+    Cold["🧊 Cold save<br/>OMV LXC 105 (M2) → HDD 2TB (LUKS)<br/>borg pull M1/M3 + rsync — Qdrant + wiki + configs<br/>cron 02:00-05:00 · retention 14j/3m"]:::cold
 
     M1_100 --> M1_101
     M1_wiki --> M1_vault
@@ -114,5 +114,6 @@ flowchart TB
     M2_201 -.->|relay.json| M1_100
     M1_100 -.->|génération| M3_models
     M2_200 -.->|contexte enrichi| M3_models
-    M1_101 --> Cold
+    M1_101 -.->|snapshot 02:00| Cold
+    M1_100 -.->|rsync 02:30| Cold
 ```

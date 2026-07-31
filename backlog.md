@@ -465,7 +465,7 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 | 10.10.0.0/24 | 10.10.0.0/24 | TCP 11434 | Ollama API (M2, M3) |
 | 10.10.0.0/24 | 10.10.0.0/24 | TCP 2049/NFS | Relay évaluation + vault wiki |
 | 10.10.0.2 | 10.10.0.1 | TCP 2049 | Mount NFS M1→M2 |
-| 192.168.10.0/24 | 10.10.0.1 | TCP 80/443 | Client → API Gateway (nginx LXC 102) |
+| 192.168.10.0/24 | 10.10.0.1 | TCP 80/443 | Client → pfSense (reverse proxy → LXC 100:8000) |
 | 10.10.0.0/24 | 192.168.1.0/24 | TCP 80/443 | Sortie modèles/updates (via pfSense NAT) |
 | 172.16.0.0/24 | *any* | SSH/HTTPS | Admin Proxmox/IPMI (isolé) |
 

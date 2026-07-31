@@ -473,9 +473,9 @@ curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
 |-----|------|-----|-------|
 | 100 | 8 | 10 GB | Orchestrator + Wiki Agent |
 | 101 | 6 | 8 GB | Vector DB |
-| 102 | 1 | 512 MB | API Gateway |
-| 104 (VM) | 1 | 512 MB | pfSense (optionnel) |
-| **Total** | **16** | **~19 GB** | **~13 GB libre pour Proxmox + burst** |
+| 103 | 4 | 2 GB | Monitoring (Prometheus/Grafana/Loki) |
+| 104 (VM) | 1 | 512 MB | pfSense (reverse proxy + firewall + NAT) |
+| **Total** | **19** | **~21 GB** | **~11 GB libre pour Proxmox + burst** |
 
 
 
@@ -484,9 +484,10 @@ curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
 | LXC | vCPU | RAM | VRAM GPU | Usage |
 |-----|------|-----|----------|-------|
 | 103 | 4 | 2 GB | — | Monitoring (Prometheus/Grafana/Loki) |
+| 105 | 2 | 4 GB | — | **OMV Backup (HDD 2TB passthrough, borg)** |
 | 200 | 6 | 8 GB | 8 GB (passthrough) | Judge + Reranker |
 | 201 | 4 | 8 GB | — | Avocat + Backup Embedding |
-| **Total** | **14** | **18 GB** | **8 GB VRAM** | **cache modèles + cold save ponctuel** |
+| **Total** | **16** | **22 GB** | **8 GB VRAM** | **cache modèles + cold save OMV (HDD 2TB)** |
 
 ### Machine 3 (BC-250, 16 GB GDDR6 unifiée)
 

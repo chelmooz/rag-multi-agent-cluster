@@ -15,7 +15,7 @@ flowchart TB
         Qdrant["💾 Qdrant VectorDB<br/>BM25 + Vectoriel 768d · LXC 101"]:::m1
         Embed["🔢 Embedding CPU<br/>nomic-embed-text-v2-moe<br/>768d · Xeon 32c/64t"]:::m1
         Eval["✅ Évaluateur<br/>qwen3.5:3b · CPU · Synthèse finale"]:::m1
-        Gate["🌐 API Gateway (nginx LXC 102) · Monitoring (LXC 103) · pfSense optionnel (LXC 104)"]:::backup
+        Gate["🌐 pfSense VM 104 (reverse proxy + firewall) · Monitoring (LXC 103) · OMV Backup (LXC 105)"]:::backup
     end
 
     subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE"]
@@ -31,7 +31,7 @@ flowchart TB
     end
 
     Relay["📄 relay.json (NFS partagé M1↔M2)<br/>/data/shared · Évaluation séquentielle"]:::relay
-    Cold["🧊 COLD SAVE<br/>borg/rsync manuel ou cron<br/>Qdrant snapshot + wiki vault → stockage externe<br/>OS/modèles = reproductibles, non sauvegardés"]:::backup
+    Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2) → HDD 2TB (LUKS)<br/>borg pull M1/M3 + rsync · cron 02:00-05:00<br/>Qdrant snapshot + wiki vault + configs · retention 14j/3m"]:::backup
 
     Client -->|HTTPS 443| GW --> Orch
     Orch --> Qdrant --> Embed
