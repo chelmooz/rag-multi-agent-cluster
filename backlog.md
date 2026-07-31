@@ -5,7 +5,7 @@
 - [ ] 0.2 Config centralisée `.env` + `settings.py` (Pydantic Settings) — **single source of truth**
 - [x] 0.3 Docker Compose VectorDB (**Qdrant** + PostgreSQL + Redis) — **aligné Qdrant, restart policies ajoutées**
 - [x] 0.4 Docker Compose Orchestrator (FastAPI + LangGraph workers + Wiki Agent + nginx) — **build.context corrigé**
-- [ ] 0.5 Scripts Proxmox LXC (master + GPU passthrough RTX 4000)
+- [x] 0.5 Scripts Proxmox LXC (master + GPU passthrough RTX 4000)
 - [ ] 0.6 **Créer `docs/claude-md-template.md` → template CLAUDE.md pour wiki (frontmatter OKF v0.2)**
 - [ ] 0.7 **Créer `scripts/okf-lint.py` : validation frontmatter OKF + détection stale/orphelins/contradictions**
 - [ ] 0.8 **Endpoints OKF wrapper : `/api/v1/okf/validate`, `/api/v1/okf/list`, `/api/v1/okf/show`**

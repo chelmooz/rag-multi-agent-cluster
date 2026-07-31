@@ -1,0 +1,445 @@
+# Guide de Déploiement — Cluster RAG Multi-Agents
+
+Plan d'installation pas-à-pas pour les 3 machines du cluster.
+
+---
+
+## Sommaire
+
+1. [Machine 1 — Master (Proxmox, LXC 100-105)](#machine-1--master)
+2. [Machine 2 — GPU Worker (Proxmox, LXC 200-201)](#machine-2--gpu-worker)
+3. [Machine 3 — BC-250 Baremetal (Debian Testing/Sid)](#machine-3--bc-250-baremetal)
+4. [Déploiement Docker & Services](#4-déploiement-docker--services)
+5. [Téléchargement des Modèles](#5-téléchargement-des-modèles)
+6. [Vérification du Cluster](#6-vérification-du-cluster)
+
+---
+
+## Machine 1 — Master
+
+**Matériel** : Dual Xeon E5-2699 v3 (36c/72t), 32 GB DDR4 ECC, Proxmox VE 9.3
+
+| LXC | IP | vCPU | RAM | Disque | Rôle |
+|-----|----|------|-----|--------|------|
+| 100 | 10.10.0.100 | 8 | 10 GB | 50 GB | Orchestrator + Wiki Agent (Docker) |
+| 101 | 10.10.0.101 | 6 | 8 GB | 80 GB | Vector DB (Docker : Qdrant, Postgres, Redis) |
+| 102 | 10.10.0.102 | 1 | 512 MB | 8 GB | API Gateway (nginx) |
+| 103 | 10.10.0.103 | 4 | 4 GB | 50 GB | Monitoring (Prometheus, Grafana, Loki) |
+| 104 | — | 1 | 512 MB | — | pfSense (VM, optionnel) |
+| 105 | 10.10.0.105 | 2 | 2 GB | 500 GB | OMV Backup |
+
+### Ordre d'exécution
+
+#### 1.1 Préparer l'hôte Proxmox
+
+```bash
+# Template Debian 12
+pveam update
+pveam download local debian-12-standard_12.7-1_amd64.tar.zst
+
+# Créer le bridge VLAN 10 (cluster backbone)
+pvesh create /nodes/proxmox/network --type bridge --iface vmbr10 \
+  --bridge_ports <interface_10g> --autostart 1 --vlan_aware 1 \
+  --cidr 10.10.0.1/24
+```
+
+#### 1.2 Créer les LXC
+
+```bash
+cd infrastructure/proxmox
+bash create-lxc-master.sh
+```
+
+#### 1.3 Post-installation LXC 100 (Orchestrator)
+
+```bash
+pct enter 100
+
+# Docker
+apt update && apt install -y curl ca-certificates
+curl -fsSL https://get.docker.com | sh
+
+# NFS mount
+mkdir -p /data/wiki /data/raw /data/index /data/shared
+echo "10.10.0.1:/data/shared /data/shared nfs rw,hard,intr,noatime,noexec 0 0" >> /etc/fstab
+mount -a
+
+# Lancer la stack orchestrator
+cd /path/to/infrastructure/docker
+docker compose -f docker-compose.orchestrator.yml up -d
+```
+
+#### 1.4 Post-installation LXC 101 (Vector DB)
+
+```bash
+pct enter 101
+curl -fsSL https://get.docker.com | sh
+cd /path/to/infrastructure/docker
+docker compose -f docker-compose.vector-db.yml up -d
+
+# Vérifier
+curl http://localhost:6333/health
+curl http://localhost:6333/collections
+```
+
+#### 1.5 Post-installation LXC 102 (API Gateway)
+
+```bash
+pct enter 102
+apt update && apt install -y nginx
+# Copier nginx.conf depuis infrastructure/docker/nginx.conf
+cp /path/to/infrastructure/docker/nginx.conf /etc/nginx/nginx.conf
+systemctl enable --now nginx
+```
+
+#### 1.6 Post-installation LXC 103 (Monitoring)
+
+```bash
+pct enter 103
+curl -fsSL https://get.docker.com | sh
+
+docker run -d --name prometheus --restart unless-stopped \
+  -p 9090:9090 -v /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus:latest
+
+docker run -d --name grafana --restart unless-stopped \
+  -p 3000:3000 -e GF_SECURITY_ADMIN_PASSWORD=CHANGE_ME \
+  grafana/grafana:latest
+
+docker run -d --name loki --restart unless-stopped \
+  -p 3100:3100 -v /etc/loki/config.yaml:/etc/loki/config.yaml \
+  grafana/loki:latest
+```
+
+#### 1.7 Hôte M1 — NFS export + Ollama CPU
+
+```bash
+# NFS relay pour l'évaluation séquentielle
+apt install -y nfs-kernel-server
+mkdir -p /data/shared
+chmod 777 /data/shared
+echo "/data/shared 10.10.0.0/24(rw,sync,no_subtree_check,no_root_squash)" >> /etc/exports
+exportfs -a
+systemctl enable --now nfs-server
+
+# Ollama CPU (embedding + évaluateur)
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull nomic-embed-text-v2-moe
+ollama pull qwen3.5:3b
+```
+
+---
+
+## Machine 2 — GPU Worker
+
+**Matériel** : Xeon E5-2698 v3 (16c/32t), 64 GB ECC, RTX 4000 8 GB VRAM, Proxmox VE 9.3
+
+| LXC | IP | vCPU | RAM | Disque | Rôle |
+|-----|----|------|-----|--------|------|
+| 200 | 10.10.0.200 | 6 | 8 GB | 30 GB | Inference GPU (passthrough RTX 4000, privilégié) |
+| 201 | 10.10.0.201 | 4 | 8 GB | 30 GB | Workers Agents (Avocat + Backup Embedding CPU) |
+
+### 2.1 Config GPU passthrough sur l'hôte Proxmox
+
+```bash
+# Activer IOMMU
+sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=".*"/GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt"/' /etc/default/grub
+update-grub
+
+# Modules VFIO
+echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd" > /etc/modules
+update-initramfs -u -k all
+
+# Isoler le RTX 4000
+lspci -nn | grep -i nvidia   # trouver l'ID PCI, ex: 10de:1b80
+echo "options vfio-pci ids=10de:1b80 disable_vga=1" > /etc/modprobe.d/vfio.conf
+
+reboot
+```
+
+### 2.2 Créer les LXC
+
+```bash
+cd infrastructure/proxmox
+bash create-lxc-gpu.sh
+```
+
+### 2.3 Post-installation LXC 200 (Inference GPU)
+
+```bash
+pct enter 200
+
+# Drivers NVIDIA CUDA
+apt update && apt install -y curl gnupg
+wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb
+dpkg -i cuda-keyring_1.1-1_all.deb
+apt update
+apt install -y cuda-drivers-545   # version compatible RTX 4000
+
+# Vérifier
+nvidia-smi
+
+# Ollama CUDA
+curl -fsSL https://ollama.com/install.sh | sh
+mkdir -p /etc/systemd/system/ollama.service.d
+cat > /etc/systemd/system/ollama.service.d/override.conf << EOF
+[Service]
+Environment=OLLAMA_HOST=0.0.0.0
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=OLLAMA_MAX_LOADED_MODELS=1
+EOF
+systemctl daemon-reload && systemctl restart ollama
+
+# Models
+ollama pull qwen3.5:7b        # Judge (~5 GB Q4_K_M)
+ollama pull bge-reranker-v2-m3
+
+# NFS mount relay
+mkdir -p /data/shared
+echo "10.10.0.1:/data/shared /data/shared nfs rw,hard,intr,noatime 0 0" >> /etc/fstab
+mount -a
+```
+
+### 2.4 Post-installation LXC 201 (Workers Agents)
+
+```bash
+pct enter 201
+
+curl -fsSL https://ollama.com/install.sh | sh
+mkdir -p /etc/systemd/system/ollama.service.d
+cat > /etc/systemd/system/ollama.service.d/override.conf << EOF
+[Service]
+Environment=OLLAMA_HOST=0.0.0.0
+Environment=OLLAMA_MAX_LOADED_MODELS=1
+EOF
+systemctl daemon-reload && systemctl restart ollama
+
+ollama pull mistral-small-3.2:7b   # Avocat
+ollama pull bge-m3                 # Backup embedding CPU
+
+# NFS mount relay
+mkdir -p /data/shared
+echo "10.10.0.1:/data/shared /data/shared nfs rw,hard,intr,noatime 0 0" >> /etc/fstab
+mount -a
+```
+
+---
+
+## Machine 3 — BC-250 Baremetal
+
+**Matériel** : AMD BC-250 (Zen 2, 40 CU unlock, 16 GB GDDR6 unifiée), Debian Testing/Sid
+
+### 3.1 Installation OS de base
+
+```bash
+# Installer Debian Testing/Sid avec paramètre boot: nomodeset
+# Partition : /boot 1G, / 100G, swap 16G, reste pour /var/lib/ollama
+# Après installation, retirer nomodeset
+
+apt update && apt upgrade -y
+apt install -y linux-headers-$(uname -r) build-essential curl git \
+  mesa-utils vulkan-tools glmark2
+```
+
+### 3.2 Stack Vulkan (Mesa/RADV)
+
+```bash
+cd infrastructure/bc250
+bash setup-vulkan-stack.sh
+
+# Vérification
+vulkaninfo --summary | grep -i "GFX1013\|deviceName"
+# Attendu : Mesa 25.1+, RADV GFX1013
+```
+
+### 3.3 TTM pages_limit (critique — modèles 14B+)
+
+```bash
+echo 4194304 | sudo tee /sys/module/ttm/parameters/pages_limit
+echo 4194304 | sudo tee /sys/module/ttm/parameters/page_pool_size
+echo "options ttm pages_limit=4194304 page_pool_size=4194304" | tee /etc/modprobe.d/ttm-gpu-memory.conf
+
+# Vérifier persistance post-reboot
+cat /sys/module/ttm/parameters/pages_limit
+# DOIT afficher 4194304
+```
+
+### 3.4 GRUB
+
+```bash
+sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=".*"/GRUB_CMDLINE_LINUX_DEFAULT="amdgpu.gttsize=14750 ttm.pages_limit=3959290 ttm.page_pool_size=3959290 amdgpu.sg_display=0"/' /etc/default/grub
+update-grub
+```
+
+### 3.5 Unlock 40 CU (optionnel, +32 à +61 % tok/s)
+
+```bash
+bash enable-40cu-unlock.sh
+# Clone, build, enable, reboot
+# Vérifier : sudo dmesg | grep active_cu_number → 40
+```
+
+### 3.6 Unlock 8 cores CPU (optionnel, volatil après cold boot)
+
+```bash
+bash enable-cpu-core-unlock.sh
+# Vérifier : lscpu | grep CPU(s) → 16
+```
+
+### 3.7 Gouverneur GPU (1500 MHz / 900 mV)
+
+```bash
+# Installer cyan-skillfish-governor-smu
+# Config dans /etc/cyan-skillfish-governor-smu/config.toml
+systemctl enable --now cyan-skillfish-governor-smu.service
+```
+
+### 3.8 Ollama Vulkan
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+mkdir -p /etc/systemd/system/ollama.service.d
+cat > /etc/systemd/system/ollama.service.d/override.conf << EOF
+[Service]
+Environment=OLLAMA_VULKAN=1
+Environment=OLLAMA_FLASH_ATTENTION=1
+Environment=OLLAMA_KV_CACHE_TYPE=q4_0
+Environment=OLLAMA_CONTEXT_LENGTH=65536
+Environment=OLLAMA_MAX_LOADED_MODELS=1
+Environment=OLLAMA_HOST=0.0.0.0
+OOMScoreAdjust=-1000
+EOF
+systemctl daemon-reload && systemctl restart ollama
+```
+
+### 3.9 NFS mount
+
+```bash
+mkdir -p /data/shared /data/wiki
+echo "10.10.0.1:/data/shared /data/shared nfs rw,hard,intr,noatime 0 0" >> /etc/fstab
+echo "10.10.0.1:/data/wiki /data/wiki nfs ro,hard,intr,noatime 0 0" >> /etc/fstab
+mount -a
+```
+
+---
+
+## 4 Déploiement Docker & Services
+
+### 4.1 Stack Vector DB (LXC 101)
+
+```bash
+cd infrastructure/docker
+docker compose -f docker-compose.vector-db.yml up -d
+```
+
+### 4.2 Stack Orchestrator (LXC 100)
+
+```bash
+cd infrastructure/docker
+docker compose -f docker-compose.orchestrator.yml up -d
+```
+
+### 4.3 Config nginx API Gateway (LXC 102)
+
+Le reverse proxy `nginx.conf` existe déjà dans `infrastructure/docker/nginx.conf`. Il route `/api/v1/*` vers `fastapi-api:8000`, `/health` et `/ready` vers l'API.
+
+---
+
+## 5 Téléchargement des Modèles
+
+### Machine 2 — LXC 200 (RTX 4000, CUDA)
+
+```bash
+ollama pull qwen3.5:7b@sha256:...
+ollama pull bge-reranker-v2-m3@sha256:...
+```
+
+### Machine 2 — LXC 201 (CPU, fallback)
+
+```bash
+ollama pull mistral-small-3.2:7b@sha256:...
+ollama pull bge-m3@sha256:...
+```
+
+### Machine 3 — BC-250 (Vulkan)
+
+```bash
+ollama pull qwen3.5:14b@sha256:...            # Générateur (~9 GB)
+ollama pull qwen3.5-35b-a3b@sha256:...        # Générateur alternatif (~11 GB)
+ollama pull qwen3-coder-30b-a3b@sha256:...    # Text-to-SQL
+ollama pull llava-next:13b@sha256:...          # Vision
+ollama pull granite-4.0-h-tiny@sha256:...      # Fast-check
+```
+
+### Machine 1 — Hôte (CPU)
+
+```bash
+ollama pull nomic-embed-text-v2-moe@sha256:... # Embedding
+ollama pull qwen3.5:3b@sha256:...              # Monitoring / fallback
+```
+
+> ⚠️ Fixer les digests SHA256 dans `.env` pour garantir la reproductibilité.
+
+---
+
+## 6 Vérification du Cluster
+
+```bash
+# Depuis n'importe quel nœud du VLAN 10 (10.10.0.0/24) :
+curl http://10.10.0.100:8000/api/v1/health     # LXC 100 FastAPI
+curl http://10.10.0.101:6333/health            # LXC 101 Qdrant
+curl http://10.10.0.102/health                 # LXC 102 nginx
+curl http://10.10.0.200:11434/api/tags         # LXC 200 Ollama GPU
+curl http://10.10.0.201:11434/api/tags         # LXC 201 Ollama GPU
+curl http://10.10.0.3:11434/api/tags           # M3 BC-250 Ollama Vulkan
+```
+
+### Endpoints de référence
+
+| Service | URL |
+|---------|-----|
+| API Gateway (publique) | `http://10.10.0.102/api/v1/` |
+| FastAPI (interne) | `http://10.10.0.100:8000/api/v1/` |
+| Qdrant | `http://10.10.0.101:6333` |
+| PostgreSQL | `10.10.0.101:5432` |
+| Redis | `10.10.0.101:6379` |
+| Ollama M2 GPU | `http://10.10.0.200:11434` |
+| Ollama M2 CPU | `http://10.10.0.201:11434` |
+| Ollama M3 BC-250 | `http://10.10.0.3:11434` |
+| Ollama M1 CPU (host) | `http://10.10.0.1:11434` |
+| Prometheus | `http://10.10.0.103:9090` |
+| Grafana | `http://10.10.0.103:3000` |
+| Loki | `http://10.10.0.103:3100` |
+| NFS relay | `10.10.0.1:/data/shared` → `/data/shared` |
+
+---
+
+## Allocation mémoire / vCPU (rappel)
+
+### Machine 1 (Dual Xeon E5-2699 v3, 32 GB)
+
+| LXC | vCPU | RAM | Usage |
+|-----|------|-----|-------|
+| 100 | 8 | 10 GB | Orchestrator + Wiki Agent |
+| 101 | 6 | 8 GB | Vector DB |
+| 102 | 1 | 512 MB | API Gateway |
+| 103 | 4 | 4 GB | Monitoring |
+| 104 (VM) | 1 | 512 MB | pfSense (optionnel) |
+| 105 | 2 | 2 GB | OMV Backup |
+| **Total** | **22** | **~25 GB** | **~5 GB libre pour Proxmox + burst** |
+
+### Machine 2 (Xeon E5-2698 v3, 64 GB, RTX 4000 8 GB VRAM)
+
+| LXC | vCPU | RAM | VRAM GPU | Usage |
+|-----|------|-----|----------|-------|
+| 200 | 6 | 8 GB | 8 GB (passthrough) | Judge + Reranker |
+| 201 | 4 | 8 GB | — | Avocat + Backup Embedding |
+| **Total** | **10** | **16 GB** | **8 GB VRAM** | **48 GB libre pour cache modèles + backups** |
+
+### Machine 3 (BC-250, 16 GB GDDR6 unifiée)
+
+Pas de LXC — Ollama Vulkan natif. Mémoire GDDR6 partagée CPU/GPU (max ~12 GB dispo pour IA, le reste pour le système).
+
+---
+
+*Document généré le 31/07/2026 — Phase 0 du projet.*

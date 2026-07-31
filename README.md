@@ -298,99 +298,35 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 
 ## 🚀 Guide d'Installation
 
-> Les scripts référencés ci-dessous sont des **stubs à compléter** — voir [ROADMAP.md](ROADMAP.md) pour l'état d'avancement de chacun.
+> Le guide complet et détaillé se trouve dans **[`docs/deployment-guide.md`](docs/deployment-guide.md)** — commandes pas-à-pas pour les 3 machines, post-install, LXC, Docker, Ollama.
 
-### 1. Prérequis
-
-- Cluster Proxmox VE 9.3 configuré
-- Machine baremetal Debian Testing/Sid avec puce AMD BC-250
-- Accès root à toutes les machines
-- (Optionnel) poste client pour le vault Obsidian
-
-### 2. Configuration du nœud BC-250 (baremetal)
-
-Ce nœud ne peut pas être virtualisé, il doit tourner en natif.
-
-✅ BIOS déjà flashé : P3.00+ community-patched, VRAM dynamique 512 MB configurée (carve-out UMA).
-Voir [BIOS Flashing Guide](https://elektricm.github.io/amd-bc250-docs/bios/flashing/) si besoin de refaire.
-
-Paramètre boot install : `nomodeset` (à retirer après installation de Mesa).
+### Résumé
 
 ```bash
-cd infrastructure/bc250
-./setup-vulkan-stack.sh    # Mesa/Vulkan (pas ROCm — voir avertissement en tête de README)
-./enable-40cu-unlock.sh    # optionnel : débloque les 16 CU masqués en usine (24 → 40)
-```
-
-Puis configurer Ollama pour le backend Vulkan (variables clés, voir `.env.example`) :
-
-```bash
-sudo mkdir -p /etc/systemd/system/ollama.service.d
-cat <<EOF | sudo tee /etc/systemd/system/ollama.service.d/override.conf
-[Service]
-Environment=OLLAMA_VULKAN=1
-Environment=OLLAMA_FLASH_ATTENTION=1
-Environment=OLLAMA_KV_CACHE_TYPE=q4_0
-Environment=OLLAMA_CONTEXT_LENGTH=65536
-Environment=OLLAMA_MAX_LOADED_MODELS=1
-OOMScoreAdjust=-1000
-EOF
-sudo systemctl daemon-reload && sudo systemctl restart ollama
-```
-
-> ⚠️ **Piège documenté** : vérifier **après reboot** que `ttm.pages_limit` tient à `4194304` (`systemd-tmpfiles` peut l'écraser au boot).
-
-### 3. Déploiement des LXC Proxmox
-
-```bash
+# 1. LXC Proxmox
 cd infrastructure/proxmox
-sudo ./create-lxc-master.sh   # LXC 100, 101, 102, 103, 104*, 105
-sudo ./create-lxc-gpu.sh      # LXC 200 (passthrough GPU), 201
-```
+bash create-lxc-master.sh   # M1 : LXC 100 (Orchestrator), 101 (Vector DB), 102 (Gateway), 103 (Monitoring), 105 (OMV)
+bash create-lxc-gpu.sh      # M2 : LXC 200 (GPU passthrough), 201 (Workers)
 
-### 4. Lancement de la stack Docker
-
-Sur le LXC Master (Orchestrator) :
-
-```bash
+# 2. Stacks Docker
 cd infrastructure/docker
-docker compose -f docker-compose.orchestrator.yml up -d
-docker compose -f docker-compose.vector-db.yml up -d
+docker compose -f docker-compose.vector-db.yml up -d     # LXC 101
+docker compose -f docker-compose.orchestrator.yml up -d  # LXC 100
+
+# 3. BC-250 baremetal
+cd infrastructure/bc250
+bash setup-vulkan-stack.sh
+bash enable-40cu-unlock.sh   # optionnel
+
+# 4. Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen3.5:14b          # Générateur (M3)
+ollama pull qwen3.5:7b           # Judge (M2)
+ollama pull mistral-small-3.2:7b # Avocat (M2)
+ollama pull nomic-embed-text-v2-moe  # Embedding (M1)
 ```
 
-### 5. Configuration du vault Obsidian (client)
-
-```bash
-mkdir -p ~/rag-wiki-vault
-# Monter le vault sur le LXC Master (NFS/SMB) pour que le cluster y écrive
-# Ouvrir Obsidian → "Open folder as vault" → sélectionner ~/rag-wiki-vault
-```
-
-### 6. Téléchargement des modèles (versions validées backlog 29/07/2026)
-
-```bash
-# Sur Machine 2 (RTX 4000) — LXC 200/201
-ollama pull qwen3.5:7b@sha256:...             # Juge
-ollama pull mistral:7b@sha256:...             # Avocat (mistral-small-3.2:7b n'existe pas → mistral:7b ou mistral-nemo)
-ollama pull bge-reranker-v2-m3@sha256:...     # Reranker
-# Backup embedding CPU sur M2 (64 GB RAM inutilisée)
-ollama pull bge-m3@sha256:...
-
-# Sur Machine 3 (BC-250) — Ollama Vulkan natif
-ollama pull qwen3.5:14b@sha256:...            # Générateur principal (Q4_K_M ~9 GB)
-ollama pull qwen3.5-35b-a3b@sha256:...        # Générateur alternatif MoE (IQ2_M ~11 GB)
-ollama pull qwen3-coder-30b-a3b@sha256:...    # Text-to-SQL / Code (IQ2_M)
-ollama pull bge-m3@sha256:...                 # Embedding dense+sparse (pour variantes)
-ollama pull llava-next:13b@sha256:...         # Vision (Phase 5.2)
-ollama pull qwen2.5-vl@sha256:...             # Vision alt (Phase 5.2)
-ollama pull granite-4.0-h-tiny@sha256:...     # Fast-check lexical (Phase 5.4)
-
-# Sur Machine 1 (secours / embedding léger)
-ollama pull nomic-embed-text@sha256:...       # Embedding secours
-ollama pull qwen2.5:3b@sha256:...             # Monitoring / fallback
-```
-
-> 🔒 **Reproductibilité** : fixer les digests SHA256 dans `.env` / `docker-compose` — `ollama pull model@sha256:...` évite les surprises de tags mobiles.
+> Voir [`docs/deployment-guide.md`](docs/deployment-guide.md) pour les commandes complètes, les allocations mémoire/vCPU, la config GPU passthrough, et les scripts de post-installation.
 
 ---
 
