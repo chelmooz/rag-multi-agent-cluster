@@ -44,6 +44,7 @@ flowchart TB
     JugeLLM["Juge (LLM)<br/>qwen3.5:7b — RTX 4000 M2"]:::m2
     Avocat["Avocat du diable<br/>mistral-small-3.2:7b — M2"]:::m2
     Evaluateur["Évaluateur<br/>qwen3.5:3b CPU — M1"]:::m1
+    Relay["📄 relay.json<br/>Handoff séquentiel — 1 seul modèle<br/>chargé à la fois sur RTX 4000"]:::op
     ReponseFinale["Réponse finale<br/>Retour à l'utilisateur"]:::final
 
     Schema -.->|gouverne| WikiPersist -.-> Sources
@@ -65,10 +66,12 @@ flowchart TB
     Rerank --> Contexte
     Rerank --> CourtTerme
     Contexte --> ModeleGen
-    ModeleGen --> JugeLLM
-    ModeleGen --> Avocat
-    JugeLLM --> Evaluateur
-    Avocat --> Evaluateur
+    ModeleGen -.->|relay.json ①, réponse brute| Relay
+    Relay -.-> JugeLLM
+    JugeLLM -.->|relay.json ②, unload VRAM| Relay
+    Relay -.-> Avocat
+    Avocat -.->|relay.json ③, unload VRAM| Relay
+    Relay -.-> Evaluateur
     Evaluateur --> ReponseFinale
     Evaluateur -.->|feedback| Planif
     ReponseFinale -.->|compounding, archivage| WikiPersist
@@ -111,7 +114,8 @@ flowchart TB
     M1_wiki --> M1_vault
     M1_100 -.->|reranking| M2_200
     M1_101 -.->|recherche| M2_200
-    M2_201 -.->|relay.json| M1_100
+    M2_200 -.->|relay.json ① Juge| M2_201
+    M2_201 -.->|relay.json ② Avocat| M1_100
     M1_100 -.->|génération| M3_models
     M2_200 -.->|contexte enrichi| M3_models
     M1_101 -.->|snapshot 02:00| Cold
