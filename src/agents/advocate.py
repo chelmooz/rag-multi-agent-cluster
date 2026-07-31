@@ -1,8 +1,8 @@
 """Avocat du diable Agent — cherche activement les failles/contradictions/hallucinations.
 
-Modèle : mistral-small-3.2:7b Q4_K_M (~5GB)
+Modèle : hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M (~5GB)
 Pipeline : séquentiel après Judge.
-           1. Charge mistral-3.2:7b
+           1. Charge hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M
            2. Lit relay.json complet (query + response + critique Judge)
            3. Cherche activement les failles, biais, hallucinations
            4. Écrit advocate.score + advocate.faille → relay.json

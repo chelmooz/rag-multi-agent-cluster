@@ -20,8 +20,8 @@ flowchart TB
 
     subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE mgmt"]
         LXC105["📦 LXC 105<br/>OMV Backup · HDD 2TB passthrough<br/>borg repo + cron pull + restore UI"]:::m2
-        LXC200["⚡ LXC 200 (GPU passthrough)<br/>Reranker bge-v2-m3 + Juge qwen3.5:7b<br/>CUDA · RTX 4000"]:::m2
-        LXC201["🤖 LXC 201<br/>Avocat mistral:7b<br/>+ Backup Embedding CPU"]:::m2
+        LXC200["⚡ LXC 200 (GPU passthrough)<br/>Reranker bge-v2-m3 + Juge DeepSeek-R1-Distill-Llama-8B<br/>CUDA · RTX 4000"]:::m2
+        LXC201["🤖 LXC 201<br/>Avocat Ministral-8B-Instruct-2410<br/>+ Backup Embedding CPU"]:::m2
     end
 
     subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]

@@ -1,8 +1,8 @@
 """Judge Agent — évalue la qualité de la réponse sur Machine 2 RTX 4000.
 
-Modèle : qwen3.5:7b Q4_K_M (~5GB)
+Modèle : hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M (~5GB)
 Pipeline : séquentiel après Generator, avant Avocat.
-           1. Charge qwen3.5:7b
+           1. Charge hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M
            2. Lit relay.json (réponse du Generator)
            3. Évalue qualité, précision, hallucinations
            4. Écrit judge.score + judge.critique → relay.json

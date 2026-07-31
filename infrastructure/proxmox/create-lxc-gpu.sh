@@ -64,7 +64,7 @@ info "Devices GPU configurés pour LXC 200."
 # ============================================================
 # LXC 200 — Inference GPU (privilégié, passthrough RTX 4000)
 # vCPU: 6  RAM: 8 GB  Disque: 30 GB  IP: 10.10.0.200/24
-# Modèles: Judge (qwen3.5:7b) + Reranker (bge-reranker-v2-m3)
+# Modèles: Judge (hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M) + Reranker (bge-reranker-v2-m3)
 # ============================================================
 info "LXC 200 — Inference GPU"
 if pct status 200 &>/dev/null; then
@@ -91,7 +91,7 @@ cat /var/lib/lxc/200/devices.conf >> /etc/pve/lxc/200.conf
 # ============================================================
 # LXC 201 — Workers Agents (Avocat + Backup Embedding CPU)
 # vCPU: 4  RAM: 8 GB  Disque: 30 GB  IP: 10.10.0.201/24
-# Modèles: Advocate (mistral-small-3.2:7b) + Embedding CPU (bge-m3)
+# Modèles: Advocate (hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M) + Embedding CPU (bge-m3)
 # ============================================================
 info "LXC 201 — Workers Agents"
 if pct status 201 &>/dev/null; then

@@ -82,8 +82,8 @@
 
 ## Phase 3 — Génération + Évaluation Multi-Agents
 - [ ] 3.1 Generator (qwen3.5:14b Q4_K_M ou qwen3.5-35b-a3b IQ2_M sur BC250 Vulkan)
-- [ ] 3.2 Judge (qwen3.5:7b Q4_K_M sur RTX 4000 - Machine 2 LXC 200) — **séquentiel, unload après écriture relay**
-- [ ] 3.3 Devil's Advocate (mistral-small-3.2:7b Q4_K_M sur RTX 4000 - Machine 2 LXC 201) — **séquentiel après Judge, lit relay**
+- [ ] 3.2 Judge (hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M sur RTX 4000 - Machine 2 LXC 200) — **séquentiel, unload après écriture relay**
+- [ ] 3.3 Devil's Advocate (hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M sur RTX 4000 - Machine 2 LXC 201) — **séquentiel après Judge, lit relay**
 - [ ] 3.4 Evaluator (qwen3.5:3b / granite-3.2:2b Q4_K_M sur Machine 1 CPU) — **lit relay.json complet, synthèse finale**
 - [ ] 3.5 **Évaluateur écrit `verified: human-reviewed` dans frontmatter pages validées (OKF trust tier)**
 - [ ] 3.6 **Ollama model unload séquentiel** : `ollama unload` + vérif VRAM libérée entre Judge → Avocat
@@ -150,8 +150,8 @@
 | Rôle | Modèle | Quant | VRAM estimée | Raison |
 |------|--------|-------|--------------|--------|
 | **Reranker** | `bge-reranker-v2-m3` | Q4_K_M | ~4-6 GB | Tient dans RTX 4000 |
-| **Judge** | `qwen3.5:7b` | Q4_K_M | ~5 GB | Éval qualité, fort raisonnement |
-| **Avocat du diable** | `mistral-small-3.2:7b` | Q4_K_M | ~5 GB | Approche différente → diversité |
+| **Judge** | `hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M` | Q4_K_M | ~5 GB | Éval qualité, fort raisonnement |
+| **Avocat du diable** | `hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M` | Q4_K_M | ~5 GB | Approche différente → diversité |
 | **Embedding batch (backup)** | `nomic-embed-text-v2-moe` | Q8_0 (CPU) | - | 64GB RAM + 40 threads inutilisés si Machine 1 saturée |
 
 > **Note** : 64GB ECC permet de charger **tous les buffers simultanément** (reranker + judge + avocat + ingestion) sans swap.
@@ -379,7 +379,7 @@ Le Master LXC 100 a **2 × Xeon 2699** (16c/32t chacun, 32GB ECC) contre 6c/12t 
 
 ### 29/07/2026 — Pipeline Séquentiel Juge → Avocat sur Machine 2 (RTX 4000 8GB) — **TRANCHÉ**
 
-**Problème** : Judge (qwen3.5:7b ~5GB) + Avocat (mistral-small-3.2:7b ~5GB) = **~10GB VRAM** > **8GB RTX 4000**. Impossible de les faire tourner en parallèle.
+**Problème** : Judge (hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M ~5GB) + Avocat (hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M ~5GB) = **~10GB VRAM** > **8GB RTX 4000**. Impossible de les faire tourner en parallèle.
 
 **Solution** : Exécution **séquentielle** sur le même GPU (LXC 200/201 partagé) avec **unload explicite** du modèle précédent avant chargement du suivant.
 
@@ -387,9 +387,9 @@ Le Master LXC 100 a **2 × Xeon 2699** (16c/32t chacun, 32GB ECC) contre 6c/12t 
 ```
 Generator (BC250 M3) → réponse écrite dans relay.json
   ↓
-Juge (M2 RTX 4000) → charge qwen3.5:7b → évalue → écrit relay.json → **unload modèle**
+Juge (M2 RTX 4000) → charge hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M → évalue → écrit relay.json → **unload modèle**
   ↓
-Avocat (M2 RTX 4000) → charge mistral-3.2:7b → lit relay + réponse → évalue → écrit relay → **unload**
+Avocat (M2 RTX 4000) → charge hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M → lit relay + réponse → évalue → écrit relay → **unload**
   ↓
 Évaluateur (M1 CPU) → lit relay complet → synthèse → réponse utilisateur
 ```
@@ -516,7 +516,7 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 | **NFS latency sur évaluation** | Relay file = point de synchronisation bloquant | → MTU 9000 + 10GbE = <1ms RTT. Timeout 120s Juge → Avocat. Acceptable. |
 | **BC250 baremetal = pas de snapshot/rollback** | Mise à jour noyau/BIOS risquée | → Tests sur VM simulée d'abord. Backup config `/etc` + BIOS P3.00 sur USB. |
 | **RTX 4000 8GB limite dure** | Pas de place pour modèle > 7B quantifié | → Choix validé : Judge/Avocat 7B max. Si besoin 14B → seul BC250 peut. |
-| **Modèles non verrouillés (tags Ollama)** | `qwen3.5:7b` pull = version mobile → reproductibilité | → Fixer digests SHA256 dans `.env` / `docker-compose`. `ollama pull qwen3.5:7b@sha256:...` |
+| **Modèles non verrouillés (tags Ollama)** | `hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M` pull = version mobile → reproductibilité | → Fixer digests SHA256 dans `.env` / `docker-compose`. `ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M@sha256:...` |
 | **Obsidian vault lock concurrency** | Client + Cluster écrivent simultanément | → NFS `no_root_squash` + file locking (fcntl). Ou versioning git sidecar. |
 | **Secrets management absent** | `.env.example` a des `CHANGE_ME` — pas de solution prod | → Phase 7 : `sops` + `.env.encrypted` ou HashiCorp Vault |
 | **VectorDB incohérence** | `docker-compose.vector-db.yml` = Chroma, README = Qdrant | → **Corriger maintenant** : Qdrant (hybrid search natif) |
@@ -528,7 +528,7 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 
 ### 🔧 Recommandations immédiates (DevOps)
 
-1. **Lock les versions modèles** — Ajouter dans `.env` : `OLLAMA_MODEL_JUDGE=qwen3.5:7b@sha256:xxx` etc.
+1. **Lock les versions modèles** — Ajouter dans `.env` : `OLLAMA_MODEL_JUDGE=hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M@sha256:xxx` etc.
 2. **Health checks obligatoires** — `/health` sur chaque service (Ollama, Qdrant, API) — consultation via `curl`/Glances, ~~Prometheus scrape~~ retiré.
 3. **Secrets management** — Pas de tokens/API keys en dur. `sops` + `.env.encrypted` ou Vault (Phase 7).
 4. **Backup Qdrant** — `qdrant snapshot create` cron quotidien → stocké sur M2 (64GB dispo).

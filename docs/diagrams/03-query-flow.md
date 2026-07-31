@@ -27,8 +27,8 @@ flowchart TB
 
     subgraph P4["PHASE 4 · Évaluation multi-agents — séquentielle sur M2"]
         Relay["📄 relay.json<br/>NFS M1↔M2"]:::relay
-        Judge["① ⚖️ Juge 7b — M2<br/>Qualité + Cohérence"]:::m2
-        Advocate["② 😈 Avocat 7b — M2<br/>Failles + Hallucinations"]:::m2
+        Judge["① ⚖️ Juge 8b — M2<br/>Qualité + Cohérence"]:::m2
+        Advocate["② 😈 Avocat 8b — M2<br/>Failles + Hallucinations"]:::m2
         Evaluator["③ ✅ Évaluateur 3b — M1<br/>Synthèse des deux avis"]:::m1
     end
 

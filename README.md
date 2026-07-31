@@ -102,8 +102,8 @@ subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · RX 580
 
 subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE"]
         Rerank["📊 Reranker<br/>bge-reranker-v2-m3 · CUDA · LXC 200"]:::m2
-        Judge["⚖️ Juge ①<br/>qwen3.5:7b · CUDA · Qualité + Cohérence"]:::m2
-        Advocate["😈 Avocat ②<br/>mistral:7b · CUDA · Failles + Hallucinations"]:::m2
+        Judge["⚖️ Juge ①<br/>DeepSeek-R1-Distill-Llama-8B · CUDA · Qualité + Cohérence"]:::m2
+        Advocate["😈 Avocat ②<br/>Ministral-8B-Instruct-2410 · CUDA · Failles + Hallucinations"]:::m2
         BackupEmbed["🔢 Backup Embedding<br/>nomic-v2-moe · CPU · Xeon 20c/40t"]:::m2
         OMV["📦 OMV Backup<br/>HDD 2TB · borg/rsync · LXC 105"]:::m2
     end
@@ -196,8 +196,8 @@ flowchart TB
 
     subgraph P4["PHASE 4 · Évaluation multi-agents — séquentielle sur M2"]
         Relay["📄 relay.json<br/>NFS M1↔M2"]:::relay
-        Judge["① ⚖️ Juge 7b — M2<br/>Qualité + Cohérence"]:::m2
-        Advocate["② 😈 Avocat 7b — M2<br/>Failles + Hallucinations"]:::m2
+        Judge["① ⚖️ Juge 8b — M2<br/>Qualité + Cohérence"]:::m2
+        Advocate["② 😈 Avocat 8b — M2<br/>Failles + Hallucinations"]:::m2
         Evaluator["③ ✅ Évaluateur 3b — M1<br/>Synthèse des deux avis"]:::m1
     end
 
@@ -518,8 +518,8 @@ subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · 2×10G
 
     subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE mgmt"]
         LXC105["📦 LXC 105<br/>OMV Backup · HDD 2TB passthrough<br/>borg repo + cron pull"]:::m2
-        LXC200["⚡ LXC 200 (GPU passthrough)<br/>Reranker bge-v2-m3 + Juge qwen3.5:7b<br/>CUDA · RTX 4000"]:::m2
-        LXC201["🤖 LXC 201<br/>Avocat mistral:7b<br/>+ Backup Embedding CPU"]:::m2
+        LXC200["⚡ LXC 200 (GPU passthrough)<br/>Reranker bge-v2-m3 + Juge DeepSeek-R1-Distill-Llama-8B<br/>CUDA · RTX 4000"]:::m2
+        LXC201["🤖 LXC 201<br/>Avocat Ministral-8B-Instruct-2410<br/>+ Backup Embedding CPU"]:::m2
     end
 
     subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
@@ -584,8 +584,8 @@ bash enable-40cu-unlock.sh   # optionnel
 # 4. Ollama
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3.5:14b          # Générateur (M3)
-ollama pull qwen3.5:7b           # Judge (M2)
-ollama pull mistral-small-3.2:7b # Avocat (M2)
+ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M           # Judge (M2)
+ollama pull hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M # Avocat (M2)
 ollama pull nomic-embed-text-v2-moe  # Embedding (M1)
 ```
 
@@ -639,12 +639,12 @@ Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rie
 | **Latence NFS sur évaluation** | Relay file = point de synchronisation bloquant | MTU 9000 + 10 GbE = <1 ms RTT. Timeout 120 s Juge → Avocat. Acceptable. |
 | **BC-250 baremetal = pas de snapshot/rollback** | Mise à jour noyau/BIOS risquée | Tests sur VM simulée d'abord. Backup config `/etc` + BIOS P3.00 sur USB. |
 | **RTX 4000 8 GB limite dure** | Pas de place pour un modèle > 7B quantifié | Choix validé : Juge/Avocat 7B max. Si besoin 14B → seul le BC-250 peut. |
-| **Modèles non verrouillés (tags Ollama)** | `pull qwen3.5:7b` = version mobile → reproductibilité | Fixer digests SHA256 dans `.env` / `docker-compose`. `ollama pull qwen3.5:7b@sha256:...` |
+| **Modèles non verrouillés (tags Ollama)** | `pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M` = version mobile → reproductibilité | Fixer digests SHA256 dans `.env` / `docker-compose`. `ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M@sha256:...` |
 | **Concurrency lock vault Obsidian** | Client + cluster écrivent simultanément | NFS `no_root_squash` + file locking (fcntl). Ou versioning git sidecar. |
 
 ### Recommandations immédiates
 
-1. **Lock les versions modèles** — Ajouter dans `.env` : `OLLAMA_MODEL_JUDGE=qwen3.5:7b@sha256:xxx` etc.
+1. **Lock les versions modèles** — Ajouter dans `.env` : `OLLAMA_MODEL_JUDGE=hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M@sha256:xxx` etc.
 2. **Health checks obligatoires** — `/health` sur chaque service (Ollama, Qdrant, API) — consultation via `curl`/Glances, Prometheus retiré (D9).
 3. **Secrets management** — Pas de tokens/API keys en dur. `sops` + `.env.encrypted` ou Vault (Phase 7).
 4. **Cold save Qdrant + wiki + configs** — `qdrant snapshot create` + rsync → OMV M2 → borg repo HDD 2TB (cron 02:00-05:00).

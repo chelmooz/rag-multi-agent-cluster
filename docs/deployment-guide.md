@@ -168,7 +168,7 @@ EOF
 systemctl daemon-reload && systemctl restart ollama
 
 # Models
-ollama pull qwen3.5:7b        # Judge (~5 GB Q4_K_M)
+ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M        # Judge (~5 GB Q4_K_M)
 ollama pull bge-reranker-v2-m3
 
 # NFS mount relay
@@ -377,14 +377,14 @@ docker compose -f /srv/omv/docker-compose.yml up -d
 ### Machine 2 — LXC 200 (RTX 4000, CUDA)
 
 ```bash
-ollama pull qwen3.5:7b@sha256:...
+ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M@sha256:...
 ollama pull bge-reranker-v2-m3@sha256:...
 ```
 
 ### Machine 2 — LXC 201 (CPU, fallback)
 
 ```bash
-ollama pull mistral-small-3.2:7b@sha256:...
+ollama pull hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M@sha256:...
 ollama pull bge-m3@sha256:...
 ```
 

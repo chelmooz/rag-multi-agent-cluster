@@ -20,8 +20,8 @@ flowchart TB
 
     subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE"]
         Rerank["📊 Reranker<br/>bge-reranker-v2-m3 · CUDA · LXC 200"]:::m2
-        Judge["⚖️ Juge ①<br/>qwen3.5:7b · CUDA · Qualité + Cohérence"]:::m2
-        Advocate["😈 Avocat ②<br/>mistral:7b · CUDA · Failles + Hallucinations"]:::m2
+        Judge["⚖️ Juge ①<br/>DeepSeek-R1-Distill-Llama-8B · CUDA · Qualité + Cohérence"]:::m2
+        Advocate["😈 Avocat ②<br/>Ministral-8B-Instruct-2410 · CUDA · Failles + Hallucinations"]:::m2
         BackupEmbed["🔢 Backup Embedding<br/>nomic-v2-moe · CPU · Xeon 20c/40t"]:::m2
     end
 
