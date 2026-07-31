@@ -910,3 +910,57 @@ Le transcript d'une session précédente (Claude) affirme avoir effectué de nom
 
 ---
 
+## 31/07/2026 — Session de planification pré-développement (2ᵉ échange IA)
+
+### Participants
+Utilisateur + agent opencode.
+
+### Contexte
+Le projet est en **pré-développement** — réflexion sur les actions à mener, pas de code métier exécutable. Le repo contient le squelette (FastAPI stubé, settings Pydantic, Dockerfiles, scripts Proxmox) mais tous les services métiers sont des `NotImplementedError`.
+
+Le cluster est **100% offline** : les IA (Ollama) tournent en local sur les 3 machines. La seule sortie internet passe par pfSense sur l'interface 1 Gb de Machine 1, exclusivement pour les mises à jour (OS, Mesa, paquets). Machines 2 et 3 sont branchées en direct sur les cartes 10 Gb de M1 (pas de switch intermédiaire).
+
+### Décisions actées
+
+| # | Décision | Raison exprimée | Impact |
+|---|----------|-----------------|--------|
+| D1 | **Pas d'API key applicative** | Tourne en local, pfSense = périmètre sécurité, pull des modèles déjà fait | Retrait de `require_api_key`, `api_key_header`, `MissingApiKeyConfigError` du backlog et de la roadmap. Pas de section auth dans `.env`. |
+| D2 | **Pas de CORS restrictif** | Accès localhost/LAN uniquement | `allow_origins=["*"]` conservé. Pas de `cors_allow_origins` paramétrable. |
+| D3 | **Pas de mTLS** (Phase 0.13 retirée) | pfSense gère le réseau inter-VLAN, aucune API exposée à internet | mTLS noté "optionnel futur", supprimé du backlog actif. |
+| D4 | **nginx retiré du stack** | Sur-ingénierie — pfSense fait firewall NAT + règles inter-VLAN, sert de seule porte d'entrée. Ajouter nginx en plus ne protège rien de plus et complexifie. | Suppression de `infrastructure/docker/nginx.conf` et du service nginx dans `docker-compose.orchestrator.yml`. FastAPI écouté directement. |
+| D5 | **Rate limit inutile** | pfSense gère le périmètre ; de tout façon on est en LAN local sans utilisateurs externes. | Aucun `limit_req`, `limit_req_zone` à ajouter. |
+| D6 | **Structure réseau confirmée** | M2 et M3 branchées en direct sur carte 10 Gb de M1, pas de switch. M1 sortie 1 Gb pfSense → internet pour updates. M2/M3 n'ont pas d'accès internet direct — tout le réseau inter-nœuds est en VLAN 10 (10.10.0.0/24). | Documentation réseau à auditer dans `README.md` et `docs/`. |
+| D7 | **Adoption plan 3 sprints** | Remplace la roadmap précédente (liste plate ~95 items), simplifié en sprints exécutables. | `ROADMAP.md` réécrit en `{Sprint 1 Hygiène/CI → Sprint 2 Backend métier → Sprint 3 Finalisation}`. |
+
+### Points techniques à documenter
+
+- **IP correction `.env.example`** : Qdrant/Postgres/Redis actuellement pointés sur `10.10.0.1` (gateway) → doivent pointer sur `10.10.0.101` (LXC 101 Vector DB). Cf. scripts Proxmox `create-lxc-master.sh`.
+- **Volume NFS `/data/shared` pour relay.json** : manquant dans `docker-compose.orchestrator.yml` — doit être ajouté pour que Judge soit avant le relay à travers le pipeline.
+- **BC250_CU_COUNT=24 par défaut** : 40 n'est valable qu'après l'exécution du script d'indistance, qui est encore non testé sur ordinal BAC.
+  - **Duplication postgres/redis** dans les deux `docker-compose.{vector-db,orchestrator}.yml` → port conflict si lancés sur le même hôte. À fusionner ou isoler en un seul réseau.
+- **`models/` dans `.repoignore` igno aussi `src/models/`** par erreur. Pattern `models/` doit devenir `/models/` pour ne pas cacher le package.
+
+### Décision de planification post-déploiement
+
+- **Plan 3 sprints** adopté comme référent unique (remplace ancienne roadmap `ROADMAP.md`).
+- `backlog.md` reste le document fait — toutes les décisions de cette session y sont archivées avec explications.
+- **Attention : Sprint 1 est ré exécutable tellt qu'il**, sans aucune dépendance aux derniers (pas d'entreprise, de code métier, etc.).
+
+### Questions résolues
+
+| # | Question | Réponse |
+|---|----------|---------|
+| Q1 | Ordre Sprint 1 vs reste ? | Sprint 1 bloquant — sprint dont la suite dépend. |
+| Q2 | `ROADMAP.md` redondant ? | Remplacé par le plan 3 sprints. L'ancien contenu migré n'est pas nécessaire. |
+| Q3 | `.env.encrypted` tout de suite ? | Non — pas de secrets.
+| Q4 | Redondance port postgres/redis compose ? | À résoudre avant Sprint 2. |
+| Q5 | Retour nginx vs direct uvicorn ? | uvicorn direct, nginx retiré. |
+
+### Audit demandé (Sprint 3.4)
+
+- Revoir `README.md` : retirer mentions api_key, mTLS, nginx, CORS restrictif.
+- Revoir `docs/architecture.md` + diagrammes Mermaid : corriger la strate réseau (plus de nginx, pfSense = proxy unique).
+- Corriger IPs dans les schémas pour refléter `10.10.0.101` (Vector DB).
+
+---
+
