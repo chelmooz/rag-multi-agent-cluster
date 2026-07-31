@@ -16,9 +16,12 @@ class TestHealth:
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 
-    def test_ready_returns_ready(self, client):
+    def test_ready_returns_structured(self, client):
         resp = client.get("/api/v1/ready")
-        assert resp.status_code == 200
+        assert resp.status_code in (200, 503)
+        body = resp.json()
+        assert "status" in body
+        assert "checks" in body
 
 
 class TestQueryEndpoint:

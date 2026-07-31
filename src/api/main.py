@@ -5,16 +5,22 @@ Architecture :
 - Configuration centralisée via src.core.settings
 - Health/Readiness probes pour Prometheus/K8s
 """
+import asyncio
 from contextlib import asynccontextmanager
 
+import asyncpg
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from redis.asyncio import Redis
 
 from src.core.settings import get_settings
 
 settings = get_settings()
+
+_TIMEOUT = 3.0
 
 
 class QueryRequest(BaseModel):
@@ -34,15 +40,66 @@ class HealthResponse(BaseModel):
     environment: str = settings.log_level.lower()
 
 
+async def _check_ollama(url: str) -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+            r = await c.get(f"{url.rstrip('/')}/api/tags")
+            return {"status": "ok" if r.status_code == 200 else "error", "detail": r.status_code}
+    except Exception as e:
+        return {"status": "error", "detail": type(e).__name__}
+
+
+async def _check_qdrant(url: str) -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+            r = await c.get(f"{url.rstrip('/')}/health")
+            return {"status": "ok" if r.status_code == 200 else "error", "detail": r.status_code}
+    except Exception as e:
+        return {"status": "error", "detail": type(e).__name__}
+
+
+async def _check_postgres(dsn: str) -> dict:
+    try:
+        conn = await asyncio.wait_for(asyncpg.connect(dsn), timeout=_TIMEOUT)
+        await conn.close()
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "detail": type(e).__name__}
+
+
+async def _check_redis(url: str) -> dict:
+    try:
+        r = Redis.from_url(url, socket_connect_timeout=_TIMEOUT)
+        await asyncio.wait_for(r.ping(), timeout=_TIMEOUT)
+        await r.aclose()
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "detail": type(e).__name__}
+
+
+async def _run_checks() -> dict:
+    checks = {
+        "qdrant": _check_qdrant(str(settings.qdrant_url)),
+        "ollama_m1": _check_ollama(str(settings.ollama_m1_url)),
+        "ollama_m2": _check_ollama(str(settings.ollama_m2_url)),
+        "ollama_m3": _check_ollama(str(settings.ollama_m3_url)),
+        "postgresql": _check_postgres(settings.postgres_dsn),
+        "redis": _check_redis(settings.redis_url),
+    }
+    results = {}
+    for name, coro in checks.items():
+        try:
+            results[name] = await asyncio.wait_for(coro, timeout=_TIMEOUT)
+        except asyncio.TimeoutError:
+            results[name] = {"status": "error", "detail": "timeout"}
+        except Exception as e:
+            results[name] = {"status": "error", "detail": type(e).__name__}
+    return results
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Gestion du cycle de vie de l'application."""
-    # Startup: init clients, warm pools, etc.
-    # TODO: init httpx AsyncClient pool avec retry/circuit-breaker (Phase 2.5)
-    # TODO: warmup Ollama clients M1/M2/M3 avec healthchecks (Phase 0.11)
     yield
-    # Shutdown: close pools, flush metrics
-    # TODO: close httpx client, flush Prometheus metrics
 
 
 app = FastAPI(
@@ -58,15 +115,15 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-# Convertir les NotImplementedError en 500 JSON (les stubs de phase 0)
+
 @app.exception_handler(NotImplementedError)
 async def not_implemented_handler(request: Request, exc: NotImplementedError):
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
-# CORS pour Obsidian / clients locaux
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: restreindre en prod via settings
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,23 +132,17 @@ app.add_middleware(
 
 @app.get(f"{settings.api_prefix}/health", response_model=HealthResponse, tags=["Health"])
 async def health() -> HealthResponse:
-    """Health check simple (liveness probe)."""
     return HealthResponse(status="ok")
 
 
 @app.get(f"{settings.api_prefix}/ready", tags=["Health"])
-async def ready() -> dict[str, str]:
-    """Readiness check (dépendances : Qdrant, Ollama, PostgreSQL, Redis).
-
-    Retourne 200 si toutes les dépendances sont accessibles, 503 sinon.
-    Utilisé par Prometheus / Kubernetes pour le trafic.
-    """
-    # TODO: implémenter checks réels (Phase 0.17)
-    # - Qdrant: GET /health
-    # - Ollama M1/M2/M3: GET /api/tags
-    # - PostgreSQL: pg_isready
-    # - Redis: PING
-    return {"status": "ready", "checks": "TODO"}
+async def ready() -> JSONResponse:
+    checks = await _run_checks()
+    all_ok = all(c["status"] == "ok" for c in checks.values())
+    return JSONResponse(
+        status_code=200 if all_ok else 503,
+        content={"status": "ready" if all_ok else "degraded", "checks": checks},
+    )
 
 
 @app.post(f"{settings.api_prefix}/query", response_model=QueryResponse, tags=["RAG"])

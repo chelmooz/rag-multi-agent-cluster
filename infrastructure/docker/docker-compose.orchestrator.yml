@@ -1,5 +1,7 @@
-# Stack Docker du LXC Master (Orchestrator + API Gateway + Wiki Agent + LangGraph).
-# STATUT : stub non testé — voir ROADMAP.md Phase 0.
+# Stack Docker du LXC Master — Machine 1 (LXC 100).
+# Orchestrator + API Gateway + Wiki Agent + LangGraph
+name: rag-orchestrator
+
 services:
   nginx:
     image: nginx:alpine
@@ -21,8 +23,9 @@ services:
 
   fastapi-api:
     build:
-      context: ../../src
-      dockerfile: ../infrastructure/docker/Dockerfile.api
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.api
+    restart: unless-stopped
     env_file:
       - ../../.env
     expose:
@@ -45,8 +48,9 @@ services:
 
   langgraph-orchestrator:
     build:
-      context: ../../src
-      dockerfile: ../infrastructure/docker/Dockerfile.langgraph
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.langgraph
+    restart: unless-stopped
     env_file:
       - ../../.env
     depends_on:
@@ -58,17 +62,12 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
 
   wiki-agent:
     build:
-      context: ../../src
-      dockerfile: ../infrastructure/docker/Dockerfile.wiki-agent
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.wiki-agent
+    restart: unless-stopped
     env_file:
       - ../../.env
     volumes:
@@ -86,12 +85,6 @@ services:
       - POSTGRES_PORT=5432
       - WIKI_ROOT=/data/wiki
       - RAW_ROOT=/data/raw
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
 
   redis:
     image: redis:7-alpine

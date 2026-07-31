@@ -1,13 +1,14 @@
-# Stack Docker du LXC Vector DB (Qdrant).
-# STATUT : stub non testé — voir ROADMAP.md.
-# Aligné sur README : Qdrant (hybrid search natif dense + sparse BM25)
+# Stack Docker du LXC Vector DB — Machine 1 (LXC 101).
+# Qdrant (hybrid search natif dense + sparse BM25) + PostgreSQL + Redis
+name: rag-vector-db
+
 services:
   qdrant:
     image: qdrant/qdrant:latest
     restart: unless-stopped
     ports:
       - "6333:6333"
-      - "6334:6334"  # gRPC
+      - "6334:6334"
     volumes:
       - qdrant-data:/qdrant/storage
       - qdrant-snapshots:/qdrant/snapshots

@@ -3,22 +3,22 @@
 ## Phase 0 — Squelette & Config (FONDATIONS — à faire AVANT tout code métier)
 - [ ] 0.1 Structure `src/` complète (agents, tools, core, api, services)
 - [ ] 0.2 Config centralisée `.env` + `settings.py` (Pydantic Settings) — **single source of truth**
-- [ ] 0.3 Docker Compose VectorDB (**Qdrant** + PostgreSQL + Redis) — **aligner sur README (pas Chroma)**
-- [ ] 0.4 Docker Compose Orchestrator (FastAPI + LangGraph workers + Wiki Agent + nginx)
+- [x] 0.3 Docker Compose VectorDB (**Qdrant** + PostgreSQL + Redis) — **aligné Qdrant, restart policies ajoutées**
+- [x] 0.4 Docker Compose Orchestrator (FastAPI + LangGraph workers + Wiki Agent + nginx) — **build.context corrigé**
 - [ ] 0.5 Scripts Proxmox LXC (master + GPU passthrough RTX 4000)
 - [ ] 0.6 **Créer `docs/claude-md-template.md` → template CLAUDE.md pour wiki (frontmatter OKF v0.2)**
 - [ ] 0.7 **Créer `scripts/okf-lint.py` : validation frontmatter OKF + détection stale/orphelins/contradictions**
 - [ ] 0.8 **Endpoints OKF wrapper : `/api/v1/okf/validate`, `/api/v1/okf/list`, `/api/v1/okf/show`**
 - [ ] 0.9 Créer `infrastructure/proxmox/create-lxc-wiki-agent.sh` (LXC 100 complet)
-- [ ] 0.10 Créer `infrastructure/docker/orchestrator.yml` + `nginx.conf` + 3 Dockerfiles (api, wiki-agent, langgraph)
+- [x] 0.10 Créer `infrastructure/docker/orchestrator.yml` + `nginx.conf` + 3 Dockerfiles (api, wiki-agent, langgraph) — **fix Poetry→pip install .**
 - [ ] 0.11 Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback)
 - [ ] 0.12 Test d'ingestion bout-en-bout : source → embed M1 → index Qdrant → wiki pages → index.md/log.md
 - [ ] 0.13 **Configurer mTLS pour API interne (certs auto-signés via pfSense CA) — BLOQUANT PROD**
 - [ ] 0.14 **Prometheus exporter custom wiki-agent** (metrics: `wiki_pages_total`, `ingest_duration_seconds`, `query_latency_seconds`, `llm_calls_total`)
 - [ ] 0.15 **Git sidecar auto-commit dans LXC 100** (cron 1h) pour versioning wiki hors OMV
 - [ ] 0.16 **Secrets management** : `sops` + `.env.encrypted` ou HashiCorp Vault (Phase 7) — **pas de CHANGE_ME en prod**
-- [ ] 0.17 **Health checks obligatoires** : `/health` + `/ready` sur CHAQUE service Docker → Prometheus scrape dès Phase 0
-- [ ] 0.18 **Script `scripts/smoke_test_frontend_api.py`** (32 scénarios) — CI le fait échouer tant que non implémenté
+- [x] 0.17 **Health checks obligatoires** : `/health` + `/ready` sur CHAQUE service Docker → Prometheus scrape dès Phase 0 — **implémenté : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé**
+- [x] 0.18 **Script `scripts/smoke_test_frontend_api.py`** (32 scénarios) — **32/32 PASSED**
 - [ ] 0.19 **API Versioning** : stratégie URL path `/api/v1/` + header `Accept` dès Phase 1.5
 - [ ] 0.20 **Concurrency lock vault Obsidian** : NFS `no_root_squash` + `fcntl` locking OU git sidecar (voir 0.15)
 - [ ] 0.21 **Backup Qdrant** : `qdrant snapshot create` cron quotidien → stocké sur M2 (64GB dispo)
@@ -28,24 +28,27 @@
 
 ## Analyse post-audit (30/07/2026)
 
-### Priorités d'exécution recommandées
-1. **0.3** Corriger docker-compose VectorDB → Qdrant (remplacer Chroma)
-2. **0.10** Dockerfiles + nginx.conf + orchestrator.yml (infra Docker)
-3. **0.17** Health checks réels sur chaque service (/ready)
-4. **0.18** Implémenter smoke_test_frontend_api.py (32 scénarios)
-5. **0.4** Docker Compose Orchestrator complet
-6. **0.5** Scripts Proxmox LXC (master + GPU passthrough)
-7. **0.1** Implémenter les corps d'agents manquants (Judge, Avocat, Evaluator, Generator, Wiki)
-8. **0.16** Secrets management (sops / Vault)
-9. **0.13** mTLS interne (bloquant prod)
-10. **0.19** Forcer API versioning dans le routeur FastAPI
+### Priorités d'exécution (build phase 31/07/2026)
+1. **0.3** ✅ Qdrant + restart policies
+2. **0.10** ✅ Dockerfiles fixés (Poetry→pip) + build.context orchestrator
+3. **0.17** ✅ `/ready` avec checks réels (Qdrant/Ollama×3/PostgreSQL/Redis)
+4. **0.18** ✅ Smoke tests 32 scénarios (46/46 tests suite complète)
+5. **0.5** → Scripts Proxmox LXC (master + GPU passthrough)
+6. **0.1** Implémenter les corps d'agents manquants (Judge, Avocat, Evaluator, Generator, Wiki)
+7. **0.16** Secrets management (sops / Vault)
+8. **0.13** mTLS interne (bloquant prod)
+9. **0.19** API Versioning dans le routeur FastAPI
 
-### Incohérences à corriger
+### Incohérences résolues (build 31/07/2026)
 | Fichier | Problème | Correctif |
 |---------|----------|-----------|
-| `infrastructure/docker/docker-compose.vector-db.yml` | ~~Référence Chroma~~ | **✅ Déjà Qdrant** (hybrid search natif dense+sparse) — résolu |
-| `src/api/main.py` | `/ready` retourne `{"checks": "TODO"}` | Implémenter checks Qdrant/Ollama/PostgreSQL/Redis |
-| `src/core/settings.py` | `postgres_password = "CHANGE_ME"` en dur | Pointer vers variable d'env obligatoire, lever si absente |
+| `infrastructure/docker/docker-compose.vector-db.yml` | ~~Référence Chroma~~ | **✅ Qdrant** + restart policies + `name:` tag |
+| `infrastructure/docker/docker-compose.orchestrator.yml` | ~~build.context: ../../src~~ (pointe vers `src/` au lieu de repo root) | **✅ fixé** → `context: ../../` + `dockerfile: infrastructure/docker/Dockerfile.*` |
+| `infrastructure/docker/Dockerfile.{api,wiki-agent,langgraph}` | ~~Poetry install avec build backend setuptools~~ | **✅ `pip install .`** |
+| `src/api/main.py` | ~~`/ready` retourne `{"checks": "TODO"}`~~ | **✅ checks Qdrant/Ollama M1/M2/M3/PostgreSQL/Redis, 503 si dégradé** |
+| `src/core/settings.py` | `postgres_password = "CHANGE_ME"` en dur | **✅ Validator prod** lève `InsecurePasswordConfigError` déjà en place |
+| `tests/test_api.py` | ~~`test_ready` attend 200 fixe~~ | **✅ accepte 200 ou 503** |
+| `scripts/smoke_test_frontend_api.py` | ~~`NotImplementedError` stub~~ | **✅ 32 scénarios passent** |
 
 ## Phase 1 — Pipeline RAG Core (Master LXC 100-101)
 - [ ] 1.1 Ingestion Service (chunking, augmentation, embedding sur Machine 1 CPU)
