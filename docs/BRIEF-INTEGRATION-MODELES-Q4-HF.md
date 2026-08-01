@@ -186,7 +186,7 @@ Extension du principe « Hugging Face exclusif » (contrainte de source du §int
 |---|---|---|---|---|---|
 | Embedding | M1 CPU | nomic-embed-text-v2-moe | `nomic-ai/nomic-embed-text-v2-moe-GGUF` | Q8_0 | 488 MiB |
 | Reranker | M2 RTX 4000 | bge-reranker-v2-m3 | `gpustack/bge-reranker-v2-m3-GGUF` | Q4_K_M | ~437 Mo |
-| Évaluateur | M1 CPU | Qwen3-4B | `Qwen/Qwen3-4B-GGUF` | Q4_K_M | ~2,5 Go |
+| Évaluateur | M1 CPU | Granite 4.1 8B | `ibm-granite/granite-4.1-8b-instruct-GGUF` | Q4_K_M | ~4,8 Go |
 | Générateur alternatif | M3 BC-250 | Qwen3-30B-A3B | `Qwen/Qwen3-30B-A3B-GGUF` | Q2_K | 11,3 Go |
 | Text-to-SQL | M3 BC-250 | Qwen3-Coder-30B-A3B | `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF` | Q2_K | ~11 Go |
 | Vision | M3 BC-250 | llava-v1.6-vicuna-13b | `cjpais/llava-v1.6-vicuna-13b-gguf` | Q4_K_M | 7,87 Go |
@@ -194,7 +194,7 @@ Extension du principe « Hugging Face exclusif » (contrainte de source du §int
 
 **Décisions de substitution** (modèles inexistants en réel sous les noms fictionnels du projet) :
 
-- **Évaluateur** : `qwen3.5:3b` n'existe pas → **Qwen3-4B officiel** (Q4_K_M ~2,5 Go, CPU M1).
+- **Évaluateur** : `qwen3.5:3b` n'existe pas → **Granite 4.1 8B** (Q4_K_M ~4,8 Go, CPU M1) — diversification de lignée vs Générateur Qwen3-14B (décision 02/08/2026).
 - **Générateur alternatif** : `qwen3.5-35b-a3b` → **Qwen3-30B-A3B officiel** ; Q2_K (11,3 Go) faute d'IQ2_M publié par Qwen.
 - **Text-to-SQL** : `qwen3-coder-30b-a3b` → **Qwen3-Coder-30B-A3B-Instruct** ; Q2_K retenu (IQ2_M non vérifié dans les repos GGUF), ~11 Go dans le budget 12 Go du BC-250.
 - **Vision** : `llava-next:13b` → **llava-v1.6-vicuna-13b** (Q4_K_M 7,87 Go, + mmproj géré par Ollama).

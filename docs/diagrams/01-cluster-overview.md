@@ -14,8 +14,8 @@ flowchart TB
         Orch["🎯 Orchestrateur<br/>FastAPI · LangGraph · LXC 100"]:::m1
         Qdrant["💾 Qdrant VectorDB<br/>BM25 + Vectoriel 768d · LXC 101"]:::m1
         Embed["🔢 Embedding CPU<br/>nomic-embed-text-v2-moe<br/>768d · Xeon 32c/64t"]:::m1
-        Eval["✅ Évaluateur<br/>Qwen3-4B · CPU · Synthèse finale"]:::m1
-        Gate["🌐 pfSense VM 104 (reverse proxy + firewall) · Monitoring natif Proxmox · OMV Backup (LXC 105)"]:::backup
+        Eval["✅ Évaluateur<br/>granite-4.1-8b · CPU · Synthèse finale"]:::m1
+        Gate["🌐 pfSense VM 104 (reverse proxy + firewall) · Monitoring natif Proxmox"]:::backup
     end
 
     subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 8GB · 10GbE+1GbE"]
@@ -23,15 +23,15 @@ flowchart TB
         Judge["⚖️ Juge ①<br/>DeepSeek-R1-Distill-Llama-8B · CUDA · Qualité + Cohérence"]:::m2
         Advocate["😈 Avocat ②<br/>Ministral-8B-Instruct-2410 · CUDA · Failles + Hallucinations"]:::m2
         BackupEmbed["🔢 Backup Embedding<br/>nomic-v2-moe · CPU · Xeon 20c/40t"]:::m2
+        Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2)<br/>HDD 2TB (LUKS) · borg pull<br/>Qdrant + wiki + configs<br/>cron 02:00-05:00"]:::backup
     end
 
-    subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
+    subgraph M3["⚡ M3 — BC-250 BAREMETAL · Fedora 43 · Zen 2 8c/16t (core unlock BIOS) · 40 CU RDNA2 · 16 GB GDDR6 (carve-out 512 MB) · Vulkan-only · 1GbE"]
         Gen["🤖 Générateur<br/>Qwen3-14B (Q4_K_M ~9GB)<br/>ou Qwen3-30B-A3B MoE (Q2_K ~11.3GB)<br/>Ollama Vulkan natif · CPU au repos"]:::m3
         Variants["🔀 Variantes<br/>Text-to-SQL (Qwen3-Coder-30B-A3B)<br/>Vision (llava-v1.6-vicuna-13b)<br/>Fast-check (granite-4.0-h-tiny)"]:::m3
     end
 
     Relay["📄 relay.json (NFS partagé M1↔M2)<br/>/data/shared · Évaluation séquentielle"]:::relay
-    Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2) → HDD 2TB (LUKS)<br/>borg pull M1/M3 + rsync · cron 02:00-05:00<br/>Qdrant snapshot + wiki vault + configs · retention 14j/3m"]:::backup
 
     Client -->|HTTPS 443| GW --> Orch
     Orch --> Qdrant --> Embed
@@ -43,9 +43,10 @@ flowchart TB
     Advocate -.->|②| Relay
     Relay -.-> Eval
     BackupEmbed -.-> Advocate
-    Qdrant -.->|cold save périodique| Cold
+    Cold -.->|borg pull M1/M3 + rsync| Orch
 
     %% RÈGLE D'OR BC-250 : le CPU est le serviteur du GPU.
     %% Toute charge CPU = vol de bande passante mémoire au Générateur 14B.
     %% Embedding = M1 CPU (principal) / M2 CPU (backup).
+    %% Core unlock 8c/16t + VRAM 512 MB = BIOS Forbidden-Darkness (persistant).
 ```

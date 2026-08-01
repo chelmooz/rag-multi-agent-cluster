@@ -96,7 +96,7 @@ subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · RX 580
         Orch["🎯 Orchestrateur<br/>FastAPI · LangGraph · LXC 100"]:::m1
         Qdrant["💾 Qdrant VectorDB<br/>BM25 + Vectoriel 768d · LXC 101"]:::m1
         Embed["🔢 Embedding CPU<br/>nomic-embed-text-v2-moe<br/>768d · Xeon 32c/64t"]:::m1
-        Eval["✅ Évaluateur<br/>Qwen3-4B · CPU · Synthèse finale"]:::m1
+        Eval["✅ Évaluateur<br/>Granite 4.1 8B · CPU · Synthèse finale"]:::m1
         GW["🛡️ pfSense GW<br/>Reverse Proxy + Firewall + NAT<br/>DNAT → LXC 100:8000"]:::backup
     end
 

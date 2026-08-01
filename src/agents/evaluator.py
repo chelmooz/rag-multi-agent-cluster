@@ -1,4 +1,6 @@
-"""Évaluateur Agent — synthèse finale sur Machine 1 CPU (hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M).
+"""Évaluateur Agent — synthèse finale sur Machine 1 CPU.
+
+Modèle : hf.co/ibm-granite/granite-4.1-8b-instruct-GGUF:Q4_K_M.
 
 Pipeline :
 1. Lit relay.json complet (response + Judge + Avocat)
@@ -10,6 +12,7 @@ Contrat de sortie : evaluator_output_v1 (voir docs/prompts-agents.md §3).
 Le frontmatter OKF v0.2 est écrit UNIQUEMENT ici (vault) — les sorties
 agents elles-mêmes n'utilisent pas OKF (minimalisme pour parsing fiable).
 """
+
 from __future__ import annotations
 
 from typing import Literal

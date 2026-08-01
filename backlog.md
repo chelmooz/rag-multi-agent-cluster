@@ -84,7 +84,7 @@
 - [ ] 3.1 Generator (hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M ou hf.co/Qwen/Qwen3-30B-A3B-GGUF:Q2_K sur BC250 Vulkan)
 - [ ] 3.2 Judge (hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M sur RTX 4000 - Machine 2 LXC 200) — **séquentiel, unload après écriture relay**
 - [ ] 3.3 Devil's Advocate (hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M sur RTX 4000 - Machine 2 LXC 201) — **séquentiel après Judge, lit relay**
-- [ ] 3.4 Evaluator (hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M / granite-3.2:2b Q4_K_M sur Machine 1 CPU) — **lit relay.json complet, synthèse finale**
+- [ ] 3.4 Evaluator (hf.co/ibm-granite/granite-4.1-8b-instruct-GGUF:Q4_K_M sur Machine 1 CPU) — **lit relay.json complet, synthèse finale**
 - [ ] 3.5 **Évaluateur écrit `verified: human-reviewed` dans frontmatter pages validées (OKF trust tier)**
 - [ ] 3.6 **Ollama model unload séquentiel** : `ollama unload` + vérif VRAM libérée entre Judge → Avocat
 
@@ -143,7 +143,7 @@
 | Rôle | Modèle | Quant | Raison |
 |------|--------|-------|--------|
 | **Embedding principal** | `hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0` (768d) | Q8_0 (CPU) | Xeon 32c/64t idle, batch offline |
-| **Évaluateur 4B** | `hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M` / `granite-3.2:2b` | Q4_K_M | Léger, CPU-only, synthèse + décision |
+| **Évaluateur** | `hf.co/ibm-granite/granite-4.1-8b-instruct-GGUF:Q4_K_M` | Q4_K_M | CPU M1, synthèse + décision, diversification lignée vs Générateur Qwen |
 | **Fallback léger** | `qwen2.5:3b` | Q4_K_M | Usage général de secours — sans pipeline monitoring/alerting dédié (retiré, cf. Phase 7) |
 
 ### Machine 2 — GPU Worker (64GB ECC, RTX 4000 8GB VRAM, Xeon 2698 v4 20c/40t)
@@ -692,7 +692,7 @@ Wiki Agent (LXC 100)
     │
     ├── Rerank/Judge/Avocat → http://10.10.0.2:11434 (Ollama M2 RTX 4000 CUDA)
     │
-    └── Evaluator → http://10.10.0.1:11434 (Ollama M1 CPU Qwen3-4B)
+    └── Evaluator → http://10.10.0.1:11434 (Ollama M1 CPU Granite 4.1 8B)
 ```
 
 ### 5. Schema CLAUDE.md / AGENTS.md — Template pour `/data/wiki/CLAUDE.md`
@@ -1476,6 +1476,51 @@ Phase 7.
   Judge → Advocate → Eval si EVALUATION_ENABLED]).
 
 ---
+
+## 02/08/2026 — M3 Fedora 43 + Évaluateur Granite (décisions matériel)
+
+### Contexte
+
+Utilisateur a validé **Fedora 43** comme OS du BC-250 (M3) après étude de la
+doc communautaire [elektricm/amd-bc250-docs](https://elektricm.github.io/amd-bc250-docs/)
+(Mesa 25.1+ en mainline, kernel 6.18.18 LTS recommandé, kernels
+6.15.0-6.15.6 et 6.17.8-6.17.10 cassés) et a demandé de documenter
+l'installation complète : adressage, services, drivers, modèles, BIOS
+Forbidden-Darkness (core unlock 6→8 + VRAM dynamique 512 MB) et script
+40 CU. A aussi tranché l'Évaluateur : **Granite** (diversification de lignée
+vs Générateur Qwen3-14B).
+
+### Fait
+
+- `docs/deployment-guide.md` : section Machine 3 entièrement réécrite —
+  §3.0 BIOS Forbidden-Darkness (repo + flash + vérifs), §3.1 Fedora 43
+  (install, adressage 10.10.0.3/24, partitionnement), §3.2 pin kernel
+  6.18.18 LTS (versionlock), §3.3 vérif Vulkan, §3.4 TTM pages_limit
+  3959290, §3.5 GRUB triplet, §3.6 unlock 40 CU, §3.7 gouverneur
+  (COPR filippor/bazzite), §3.8 Ollama Vulkan + modèles, §3.9 Glances
+  (décision D9), §3.10 NFS, §3.11 SSH + firewall.
+- `infrastructure/bc250/setup-vulkan-stack.sh` : réécrit pour Fedora 43
+  (dnf + COPR, plus d'experimental/apt).
+- `infrastructure/bc250/enable-40cu-unlock.sh` : §3 dépendances Fedora (dnf).
+- `infrastructure/bc250/enable-cpu-core-unlock.sh` : header → voie principale
+  = BIOS Forbidden-Darkness (script rw-r-r-0644 gardé en fallback).
+- `docs/diagrams/01-cluster-overview.md` : OMV LXC 105 déplacé dans M2
+  (alignement diagrammes 04/05/06), Évaluateur → Granite 4.1 8B, M3 →
+  Fedora 43 + core unlock 8c/16t BIOS, lien Cold save corrigé.
+- `src/core/settings.py` : `evaluator_model` → `hf.co/ibm-granite/
+  granite-4.1-8b-instruct-GGUF:Q4_K_M` ; `.env.example` idem.
+- `src/agents/evaluator.py` + `docs/prompts-agents.md` §3 + `README.md`
+  (2 diagrammes) + `docs/architecture.md` + `docs/deployment-guide.md`
+  (pull §5) + `docs/BRIEF-INTEGRATION-MODELES-Q4-HF.md` + `backlog.md`
+  : toutes les références Évaluateur Qwen3-4B → Granite 4.1 8B.
+- `ruff` : 0 erreur (noqa E501 ajouté sur ligne TTM settings.py) ;
+  `pytest` : 42/42 PASSED.
+
+### Prochaine étape
+
+- Phase C4 : pulls réels des modèles (digests SHA256 à remplir dans `.env`)
+- Déploiement Fedora 43 sur le BC-250 réel (guide §3 prêt).
+
 
 
 

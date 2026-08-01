@@ -8,7 +8,7 @@ Plan d'installation pas-à-pas pour les 3 machines du cluster.
 
 1. [Machine 1 — Control Plane (Proxmox, LXC 100-101, VM 104)](#machine-1--control-plane)
 2. [Machine 2 — Compute & Storage Plane (Proxmox, LXC 105, 200-201)](#machine-2--gpu-worker--services-compute--storage-plane)
-3. [Machine 3 — BC-250 Baremetal (Debian Testing/Sid)](#machine-3--bc-250-baremetal)
+3. [Machine 3 — BC-250 Baremetal (Fedora 43)](#machine-3--bc-250-baremetal)
 4. [Déploiement Docker & Services](#4-déploiement-docker--services)
 5. [Téléchargement des Modèles](#5-téléchargement-des-modèles)
 6. [Vérification du Cluster](#6-vérification-du-cluster)
@@ -93,7 +93,7 @@ systemctl enable --now nfs-server
 # Ollama CPU (embedding + évaluateur)
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0
-ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M
+ollama pull hf.co/ibm-granite/granite-4.1-8b-instruct-GGUF:Q4_K_M
 ```
 
 > Note : Plus de Monitoring LXC 103 (décision D9) — supervision via graphs natifs Proxmox + pfSense, et Glances sur BC-250 (cf. section 3).
@@ -233,79 +233,160 @@ borg init --encryption=repokey /srv/backup/borg-repo
 
 ## Machine 3 — BC-250 Baremetal
 
-**Matériel** : AMD BC-250 (Zen 2, 40 CU unlock, 16 GB GDDR6 unifiée), Debian Testing/Sid
+**Matériel** : AMD BC-250 (Zen 2, 8c/16t core unlock BIOS, 40 CU unlock, 16 GB GDDR6 unifiée), **Fedora 43**
 
-### 3.1 Installation OS de base
+> **Décision 02/08/2026** : OS M3 = **Fedora 43** (recommandé #1 par la doc
+> communautaire [elektricm/amd-bc250-docs](https://elektricm.github.io/amd-bc250-docs/)
+> — Mesa 25.1+ dans les repos mainline, kernel LTS, scripts packagés, le plus
+> testé). Debian Testing/Sid abandonné : Mesa depuis experimental + compilation
+> manuelle + Xanmod requis = maintenance inutile pour un nœud baremetal.
+
+### 3.0 BIOS — flash Forbidden-Darkness (OBLIGATOIRE, une seule fois)
+
+Avant toute installation OS, flasher le BIOS moddé. C'est lui qui rend
+**persistant** le core unlock 6→8 et configure le **carve-out VRAM dynamique
+512 MB** (rien à refaire après cold boot).
+
+| Élément | Détail |
+|---|---|
+| **Repo BIOS** | [Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script) |
+| **BIOS cible** | P3.00 moddé (flash UEFI) |
+| **Effet 1 — Core unlock** | 6c/12t → **8c/16t persistant** (flash BIOS, plus de script volatil SMU) |
+| **Effet 2 — VRAM dynamique** | **512 MB carve-out** dynamique (~12 GB dispo IA sur 16 GB unifiée) |
+| **Risque** | Flash BIOS = irréversible, pas de snapshot. Garder le BIOS stock P3.00 sur USB + backup config `/etc`. |
 
 ```bash
-# Installer Debian Testing/Sid avec paramètre boot: nomodeset
-# Partition : /boot 1G, / 100G, swap 16G, reste pour /var/lib/ollama
-# Après installation, retirer nomodeset
+# ⚠️ À faire une fois, hors ligne, avant d'installer Fedora.
+# Suivre le menu script du repo Forbidden-Darkness :
+git clone https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script.git
+cd AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script
+# Lire le README — procédure USB flash (dd l'ISO moddée sur une clé)
+# Sélectionner : core unlock 8c/16t + carve-out VRAM dynamique 512 MB
 
-apt update && apt upgrade -y
-apt install -y linux-headers-$(uname -r) build-essential curl git \
-  mesa-utils vulkan-tools glmark2
+# Vérification après flash (dans le setup BIOS) :
+#   - 8 cores / 16 threads visibles
+#   - VRAM dynamic 512 MB
 ```
 
-### 3.2 Stack Vulkan (Mesa/RADV)
+> ⚠️ **Ne pas utiliser** Smokeless_UMAF (dégâts permanents documentés) ni
+> `amd_iommu=on` dans les cmdlines GRUB.
+
+### 3.1 Installation Fedora 43
 
 ```bash
-cd infrastructure/bc250
-bash setup-vulkan-stack.sh
+# 1. Télécharger l'ISO Fedora 43 Workstation
+#    https://fedoraproject.org/workstation/download
 
-# Vérification
-vulkaninfo --summary | grep -i "GFX1013\|deviceName"
-# Attendu : Mesa 25.1+, RADV GFX1013
+# 2. Créer la clé USB bootable
+#    sudo dd if=Fedora-Workstation-Live-x86_64-43.iso of=/dev/sdX bs=1M status=progress
+
+# 3. Boot : sélectionner "Troubleshooting" → "Install in Basic Graphics Mode"
+#    (évite l'écran noir — no modele vidéo au boot)
+
+# 4. Partitionnement manuel (recommandé) :
+#    /boot/efi  1G   (esp)
+#    /boot      1G
+#    /          100G (btrfs/xfs — systèmes)
+#    swap       16G  (utile pour batch mémoire)
+#    /var/lib/ollama  reste (~357 GB NVMe) — modèles 14B/30B
+
+# 5. Réseau : configurer l'interface Ethernet 1GbE en statique
+#    IP 10.10.0.3/24 · GW 10.10.0.254 (pfSense) · DNS 10.10.0.254
+#    nmcli con mod <IFACE> ipv4.method manual \
+#      ipv4.addresses 10.10.0.3/24 ipv4.gateway 10.10.0.254 ipv4.dns 10.10.0.254
+
+# 6. Après installation : mises à jour
+sudo dnf update -y
+sudo dnf install -y mesa-vulkan-drivers vulkan-tools glmark2 \
+  kernel-headers kernel-devel gcc make curl git
 ```
 
-### 3.3 TTM pages_limit (critique — modèles 14B+)
+### 3.2 Kernel — pinner 6.18.18 LTS (CRITIQUE)
 
 ```bash
-echo 4194304 | sudo tee /sys/module/ttm/parameters/pages_limit
-echo 4194304 | sudo tee /sys/module/ttm/parameters/page_pool_size
-echo "options ttm pages_limit=4194304 page_pool_size=4194304" | tee /etc/modprobe.d/ttm-gpu-memory.conf
+# Kernels CASSES sur BC-250 (panics) : 6.15.0-6.15.6 et 6.17.8-6.17.10
+# 6.18.18 LTS = recommandé, stable.
+
+sudo dnf install -y kernel-6.18.18   # si non déjà installé par défaut
+sudo dnf versionlock add kernel kernel-core kernel-modules
+# (ou) /etc/dnf/plugins/versionlock.list + dnf config-manager --save --setopt=excludepkgs
+
+# Vérifier la version active :
+uname -r   # attendu : 6.18.18
+```
+
+### 3.3 Vérification stack Vulkan (Mesa/RADV)
+
+```bash
+vulkaninfo --summary | grep -i "deviceName\|apiVersion\|GFX1013"
+# Attendu : Mesa 25.1+ (Fedora 43 mainline), RADV GFX1013
+# Sinon : sudo dnf upgrade mesa-vulkan-drivers
+```
+
+### 3.4 TTM pages_limit (critique — modèles 14B+)
+
+```bash
+sudo sh -c 'echo options ttm pages_limit=3959290 page_pool_size=3959290 > /etc/modprobe.d/ttm-gpu-memory.conf'
+# (triplet GRUB ci-dessous fait pareil au boot — les deux sont gardés par sécurité)
 
 # Vérifier persistance post-reboot
 cat /sys/module/ttm/parameters/pages_limit
-# DOIT afficher 4194304
+# DOIT afficher 3959290
 ```
 
-### 3.4 GRUB
+### 3.5 GRUB — cmdline obligatoire
 
 ```bash
-sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=".*"/GRUB_CMDLINE_LINUX_DEFAULT="amdgpu.gttsize=14750 ttm.pages_limit=3959290 ttm.page_pool_size=3959290 amdgpu.sg_display=0"/' /etc/default/grub
-update-grub
+sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet amdgpu.gttsize=14750 ttm.pages_limit=3959290 ttm.page_pool_size=3959290 amdgpu.sg_display=0"/' /etc/default/grub
+sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+sudo reboot
 ```
 
-### 3.5 Unlock 40 CU (optionnel, +32 à +61 % tok/s)
+> Triplet : `amdgpu.gttsize=14750` (~15 GiB GTT) + `ttm.pages_limit/page_pool_size`
+> (3959290 pages = ~15 GiB). **Jamais** `amd_iommu=on` sur BC-250.
+
+### 3.6 Unlock 40 CU (duggasco, +32 à +61 % tok/s)
+
+> **Pré-requis** : stack Vulkan fonctionnelle (§3.3) et GRUB posé (§3.5).
+> Le core unlock 8c/16t est déjà fait par le BIOS (§3.0) — ce script ne
+> concerne QUE les Compute Units GPU (24 → 40).
 
 ```bash
-bash enable-40cu-unlock.sh
-# Clone, build, enable, reboot
-# Vérifier : sudo dmesg | grep active_cu_number → 40
+bash infrastructure/bc250/enable-40cu-unlock.sh
+# Patch : https://github.com/duggasco/bc250-40cu-unlock
+# (build module amdgpu patché, écrit config modprobe, reboot)
+
+# Vérification post-reboot (OBLIGATOIRE) :
+cat /sys/module/amdgpu/parameters/bc250_cc_write_mode   # → 3
+sudo dmesg | grep active_cu_number                      # → 40
+RADV_DEBUG=info vulkaninfo --summary 2>&1 | grep num_cu # → 40
 ```
 
-### 3.6 Unlock 8 cores CPU (optionnel, volatil après cold boot)
+> ⚠️ Chaque `dnf upgrade` du kernel écrase le patch — rebuild à prévoir
+> (`sudo ./scripts/bc250-enable-40cu.sh build` puis `enable`).
+
+### 3.7 Gouverneur GPU (cyan-skillfish-governor-smu — 1500 MHz / 900 mV)
 
 ```bash
-bash enable-cpu-core-unlock.sh
-# Vérifier : lscpu | grep CPU(s) → 16
-```
+# Fedora : packagé via COPR (pas de compilation manuelle)
+sudo dnf copr enable filippor/bazzite
+sudo dnf install -y cyan-skillfish-governor-smu
 
-### 3.7 Gouverneur GPU (1500 MHz / 900 mV)
+# Config safe-points (usage soutenu, pas d'overclock) :
+# /etc/cyan-skillfish-governor-smu/config.toml
+#   freq 1500 MHz / voltage 900 mV (cf. settings BC250_GOV_FREQ_MHZ/VOLTAGE_MV)
 
-```bash
-# Installer cyan-skillfish-governor-smu
-# Config dans /etc/cyan-skillfish-governor-smu/config.toml
-systemctl enable --now cyan-skillfish-governor-smu.service
+sudo systemctl enable --now cyan-skillfish-governor-smu.service
+sudo systemctl status cyan-skillfish-governor-smu.service
 ```
 
 ### 3.8 Ollama Vulkan
 
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
-mkdir -p /etc/systemd/system/ollama.service.d
-cat > /etc/systemd/system/ollama.service.d/override.conf << EOF
+
+sudo mkdir -p /etc/systemd/system/ollama.service.d
+sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null << 'EOF'
 [Service]
 Environment=OLLAMA_VULKAN=1
 Environment=OLLAMA_FLASH_ATTENTION=1
@@ -315,16 +396,67 @@ Environment=OLLAMA_MAX_LOADED_MODELS=1
 Environment=OLLAMA_HOST=0.0.0.0
 OOMScoreAdjust=-1000
 EOF
-systemctl daemon-reload && systemctl restart ollama
+
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+sudo systemctl enable ollama
+
+# Modèles M3 (Générateur + variantes) — digests SHA256 dans .env :
+ollama pull hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M@sha256:...            # Générateur ~9 GB
+ollama pull hf.co/Qwen/Qwen3-30B-A3B-GGUF:Q2_K@sha256:...          # Alt MoE ~11.3 GB
+ollama pull hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q2_K@sha256:...  # Text-to-SQL
+ollama pull hf.co/cjpais/llava-v1.6-vicuna-13b-gguf:Q4_K_M@sha256:...        # Vision
+ollama pull hf.co/ibm-granite/granite-4.0-h-tiny-GGUF:Q4_K_M@sha256:...      # Fast-check
 ```
 
-### 3.9 NFS mount
+### 3.9 Glances — monitoring BC-250 (décision D9)
 
 ```bash
-mkdir -p /data/shared /data/wiki
-echo "10.10.0.1:/data/shared /data/shared nfs rw,hard,intr,noatime 0 0" >> /etc/fstab
-echo "10.10.0.1:/data/wiki /data/wiki nfs ro,hard,intr,noatime 0 0" >> /etc/fstab
-mount -a
+# Glances remplace Prometheus/Grafana (D9) — le BC-250 n'a pas Proxmox
+sudo dnf install -y glances
+sudo systemctl enable --now glances \
+  --no-pager 2>/dev/null || true
+
+# Mode web exposé sur :61208 (écoute réseau)
+sudo tee /etc/systemd/system/glances-web.service > /dev/null << 'EOF'
+[Unit]
+Description=Glances web monitoring (BC-250)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/glances -w -p 61208 -B 0.0.0.0
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload && sudo systemctl enable --now glances-web.service
+# Vérifier : curl http://10.10.0.3:61208
+```
+
+### 3.10 NFS mount (relay évaluation + vault en lecture)
+
+```bash
+sudo dnf install -y nfs-utils
+sudo mkdir -p /data/shared /data/wiki
+echo "10.10.0.1:/data/shared /data/shared nfs rw,hard,intr,noatime 0 0" | sudo tee -a /etc/fstab
+echo "10.10.0.1:/data/wiki /data/wiki nfs ro,hard,intr,noatime 0 0" | sudo tee -a /etc/fstab
+sudo mount -a
+```
+
+### 3.11 SSH (MemoryManager — clés root)
+
+```bash
+# Autoriser la clé publique du LXC 100 (orchestrateur) pour le monitoring
+sudo mkdir -p /root/.ssh && sudo chmod 700 /root/.ssh
+echo "ssh-ed25519 AAAA... root@lxc100" | sudo tee -a /root/.ssh/authorized_keys
+sudo chmod 600 /root/.ssh/authorized_keys
+
+# Firewall Fedora : ouvrir Ollama + Glances sur VLAN 10
+sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=10.10.0.0/24 port port=11434 protocol=tcp accept'
+sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=10.10.0.0/24 port port=61208 protocol=tcp accept'
+sudo firewall-cmd --reload
 ```
 
 ---
@@ -402,7 +534,7 @@ ollama pull hf.co/ibm-granite/granite-4.0-h-tiny-GGUF:Q4_K_M@sha256:...  # Fast-
 
 ```bash
 ollama pull hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0@sha256:... # Embedding
-ollama pull hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M@sha256:...                   # Fallback léger
+ollama pull hf.co/ibm-granite/granite-4.1-8b-instruct-GGUF:Q4_K_M@sha256:...  # Évaluateur (diversification lignée)
 ```
 
 > ⚠️ Fixer les digests SHA256 dans `.env` pour garantir la reproductibilité.

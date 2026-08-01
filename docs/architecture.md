@@ -43,7 +43,7 @@ flowchart TB
     ModeleGen["Modèle génératif<br/>Qwen3-14B hf.co — M3"]:::m3
     JugeLLM["Juge (LLM)<br/>DeepSeek-R1-Distill-Llama-8B — RTX 4000 M2"]:::m2
     Avocat["Avocat du diable<br/>Ministral-8B-Instruct-2410 — M2"]:::m2
-    Evaluateur["Évaluateur<br/>Qwen3-4B CPU — M1"]:::m1
+    Evaluateur["Évaluateur<br/>Granite 4.1 8B CPU — M1"]:::m1
     Relay["📄 relay.json<br/>Handoff séquentiel — 1 seul modèle<br/>chargé à la fois sur RTX 4000"]:::op
     ReponseFinale["Réponse finale<br/>Retour à l'utilisateur"]:::final
 
@@ -94,7 +94,7 @@ flowchart TB
         M1_101["LXC 101: Qdrant VectorDB"]:::m1
         M1_104["VM 104: pfSense (reverse proxy + firewall)"]:::m1
         M1_vault["/data/wiki vault"]:::m1
-        M1_models["Modèles CPU (M1)<br/>Embedding: nomic-v2-moe 768d Q8_0 (primary)<br/>Evaluator: Qwen3-4B Q4_K_M"]:::m1
+        M1_models["Modèles CPU (M1)<br/>Embedding: nomic-v2-moe 768d Q8_0 (primary)<br/>Evaluator: Granite 4.1 8B Q4_K_M"]:::m1
         M1_wiki["Agent Wiki Maintainer<br/>Ingest / Query / Lint / Index.md + Log.md"]:::m1
     end
 

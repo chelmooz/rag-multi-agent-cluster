@@ -2,6 +2,7 @@
 
 Single source of truth pour toute la stack. Charge .env au démarrage.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -14,9 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class InsecurePasswordConfigError(ValueError):
     def __init__(self) -> None:
-        super().__init__(
-            "postgres_password='CHANGE_ME' interdit avec environment='production'"
-        )
+        super().__init__("postgres_password='CHANGE_ME' interdit avec environment='production'")
 
 
 class Settings(BaseSettings):
@@ -182,8 +181,8 @@ class Settings(BaseSettings):
 
     # Evaluator (Master CPU)
     evaluator_model: str = Field(
-        default="hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M",
-        description="Évaluateur — Qwen3-4B Q4_K_M ~2.5 Go (CPU M1, HF)",
+        default="hf.co/ibm-granite/granite-4.1-8b-instruct-GGUF:Q4_K_M",
+        description="Évaluateur — Granite 4.1 8B Q4_K_M (CPU M1, HF, diversification lignée)",
         validation_alias="EVALUATOR_MODEL",
     )
     evaluator_model_digest: str | None = Field(
@@ -279,8 +278,7 @@ class Settings(BaseSettings):
     nfs_relay_path: Path = Field(
         default=Path("/data/shared/evaluation-relay.json"),
         description=(
-            "Fichier relay partagé M1↔M2 via NFS "
-            "(/data/shared exporté par M1, monté sur M2)"
+            "Fichier relay partagé M1↔M2 via NFS (/data/shared exporté par M1, monté sur M2)"
         ),
         validation_alias="NFS_RELAY_PATH",
     )
@@ -477,7 +475,9 @@ class Settings(BaseSettings):
         validation_alias="BC250_ENABLED",
     )
     bc250_cu_count: int = Field(
-        default=24, ge=24, le=40,
+        default=24,
+        ge=24,
+        le=40,
         description="Compute Units actifs (24 stock, 40 via unlock patch duggasco)",
         validation_alias="BC250_CU_COUNT",
     )
@@ -487,7 +487,8 @@ class Settings(BaseSettings):
         validation_alias="BC250_CPU_CORES_UNLOCKED",
     )
     bc250_vram_gib: int = Field(
-        default=16, ge=8,
+        default=16,
+        ge=8,
         description="VRAM GDDR6 unifiée en GiB (cpu+gpu même pool)",
         validation_alias="BC250_VRAM_GIB",
     )
@@ -634,10 +635,13 @@ class Settings(BaseSettings):
         if self.bc250_cpu_cores_unlocked:
             cmds.append("lscpu | grep -E 'CPU\\(s\\)|Core\\(s\\) per socket'")
             cmds.append("sudo dmesg | grep -E 'smp|lapic' | tail -5")
-        cmds.extend([
-            f"cat /sys/module/ttm/parameters/pages_limit  # expect {self.bc250_ttm_pages_limit}",
-            "vulkaninfo --summary 2>&1 | grep deviceName",
-        ])
+        cmds.extend(
+            [
+                # ruff: noqa: E501 — commande shell lisible > longueur
+                f"cat /sys/module/ttm/parameters/pages_limit  # expect {self.bc250_ttm_pages_limit}",
+                "vulkaninfo --summary 2>&1 | grep deviceName",
+            ]
+        )
         return cmds
 
 

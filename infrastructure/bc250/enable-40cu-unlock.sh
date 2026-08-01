@@ -8,6 +8,10 @@
 # module amdgpu. Gain mesuré (A/B contrôlé) : +32% à +61% tok/s en génération
 # selon le modèle, +50% en moyenne en prefill. Coût : +30W, +4°C.
 #
+# OS : Fedora 43 (décision 02/08/2026) — OS 8 cores déjà débloqués par le BIOS
+# Forbidden-Darkness (docs/deployment-guide.md §3.0), CE script ne concerne que
+# les CU GPU.
+#
 # STATUT : script de référence, non testé sur le matériel réel de Michel.
 set -euo pipefail
 
@@ -27,10 +31,10 @@ echo "  git clone https://github.com/duggasco/bc250-40cu-unlock.git"
 echo "  cd bc250-40cu-unlock"
 echo "  ./scripts/cu_map.sh   # à lancer et lire AVANT de patcher quoi que ce soit"
 
-echo "=== 3. Dépendances de build (Debian/Ubuntu — chemin standard, aucun piège connu) ==="
-echo "  sudo apt install linux-headers-\$(uname -r) build-essential zstd"
+echo "=== 3. Dépendances de build (Fedora 43) ==="
+echo "  sudo dnf install -y kernel-headers kernel-devel gcc make zstd"
 
-echo "=== 4. Build + activation (script officiel Debian/Ubuntu) ==="
+echo "=== 4. Build + activation (Fedora 43) ==="
 echo "  sudo ./scripts/bc250-enable-40cu.sh build"
 echo "  sudo ./scripts/bc250-enable-40cu.sh enable    # écrit la config modprobe et reboote"
 

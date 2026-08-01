@@ -214,7 +214,10 @@ judge_critique:
 
 ## 3. Evaluator Agent — Synthèse & Décision
 
-- **Modèle** : Qwen3-4B Q4_K_M (M1, CPU)
+- **Modèle** : Granite 4.1 8B Q4_K_M (M1, CPU) — diversification de lignée vs
+  Générateur Qwen3-14B : un évaluateur Granite juge sans le biais de famille
+  Qwen (corrélations de calibration). Retenu sur Qwen3-4B (raisonnement
+  comparable, diversification meilleure).
 - **Skill** : synthétiser Judge + Avocat en décision finale de publication.
 - **Entrée** : query, response, judge (complet), advocate (complet)
 - **Sortie** (`evaluator_output_v1`) :

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Débloque les 2 cores CPU désactivés du BC-250 (6c/12t → 8c/16t).
 #
+# VOIE PRINCIPALE (décision 02/08/2026) : flash BIOS Forbidden-Darkness —
+# https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script
+# (core unlock PERSISTANT + carve-out VRAM dynamique 512 MB). Voir
+# docs/deployment-guide.md §3.0. CE SCRIPT n'est gardé qu'en FALLBACK.
+#
 # Patch communautaire par rw-r-r-0644 : https://github.com/rw-r-r-0644/bc250-core-unlock
 # Résumé technique : le die (PS5 Oberon) a 8 cores physiques, l'AGESA/PSP en
 # masque 2 en usine. Le SMU (queue 3, msg 0x98) accepte une écriture SMN non
