@@ -123,7 +123,7 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Machine 1** | **Master** (Orchestration, API, VectorDB, Evaluator, Embedding CPU, Relay NFS) | 2× Xeon E5-2699 v4 / **32 GB ECC** | AMD Radeon RX 580 (8 GB) | 1 TB NVMe | Proxmox VE 9.3 (LXC 100, 101, VM 104) — monitoring natif via UI Proxmox, plus de LXC 103 dédié |
 | **Machine 2** | **GPU Worker + Services** (Reranker, Judge, Avocat, Backup Embedding CPU, **OMV Backup**) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | **1 TB NVMe** + **HDD 2TB physique** | Proxmox VE 9.3 (LXC 105, 200 privilégié GPU, 201) — monitoring natif via UI Proxmox |
-| **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Fast-check) | Zen 2 6c/12t (**→ 8c/16t core unlock** [rw-r-r-0644/bc250-core-unlock](https://github.com/rw-r-r-0644/bc250-core-unlock), volatil après cold boot) / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU débloquées) | Debian Testing/Sid baremetal (Ollama Vulkan natif) |
+| **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Fast-check) | Zen 2 6c/12t (**→ 8c/16t core unlock**, persistant — flashé au niveau BIOS via [Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script), configure aussi le carve-out VRAM dynamique 512 MB) / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU débloquées via [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock), séparé) | Debian Testing/Sid baremetal (Ollama Vulkan natif) |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
 * VM 104 = pfSense (reverse proxy + firewall + NAT).
@@ -1294,3 +1294,54 @@ mécanisme pull uniquement. Pas tranché ici, à discuter au moment de la
 Phase 7.
 
 ---
+
+## 01/08/2026 — Sidecar OCR PDF -> Vault (Unlimited-OCR)
+
+### Constat de départ
+
+- Besoin d'ingérer des PDFs dans le vault sous forme de notes markdown
+  propres (tableaux, mise en page) plutôt qu'un simple texte brut extrait.
+- Évalué [baidu/Unlimited-OCR](https://github.com/baidu/Unlimited-OCR) (VLM
+  3B, lignée DeepSeek-OCR, parsing multi-page en un seul passage) : ne
+  tourne que sur GPU CUDA — le BC-250 (M3, Vulkan-only) est exclu d'office.
+  Seul le RTX 4000 8 GB (M2) est éligible, mais déjà chargé (Inference,
+  Reranking, Juge, Avocat) : risque de contention VRAM si le pipeline OCR
+  est branché en direct dans le chemin de requête.
+
+### Décision actée
+
+- Sidecar **hors chemin critique**, cohérent avec le docstring déjà présent
+  dans `ingestion.py` ("pipeline offline asynchrone"). Flux :
+  `PDF (inbox) → OCR (M2) → note vault (sources/) → IngestionService → Qdrant`.
+- Deux déclenchements, pas de service long-vivant qui garde la VRAM :
+  cron en heure creuse (`--once`, ex: fenêtre 02:30 du rsync existant) et
+  déclenchement manuel via un mini-serveur FastAPI dédié (`--serve`,
+  Swagger auto-généré sur `:8090`) — pas de couplage avec `src/api/main.py`
+  (M1, pas de GPU).
+
+### Fait
+
+- `src/services/ocr_sidecar.py` (nouveau) : classe `PdfOcrSidecar` (scan
+  inbox, OCR multi-page, nettoyage balises `<|det|>`, écriture note +
+  frontmatter minimal, indexation, archivage `_processed/`/`_failed/`,
+  déchargement VRAM explicite en fin de run) + CLI `--once`/`--serve`.
+- `pyproject.toml` : nouveau groupe optionnel `ocr-sidecar` (torch,
+  transformers, pymupdf, einops, addict, easydict) — isolé du reste,
+  installé uniquement sur M2 (`pip install -e ".[ocr-sidecar]"`), pas
+  d'impact sur M1/M3.
+
+### Reste hors périmètre de cette session
+
+- Frontmatter du sidecar volontairement minimal — le schéma OKF v0.2
+  complet n'est pas encore formalisé (item 4.3 toujours ouvert) ; à
+  réaligner une fois ce point clos.
+- Pas encore testé sur le RTX 4000 réel (VRAM effective en usage
+  concurrent avec Reranker/Juge/Avocat non mesurée).
+- `docs/deployment-guide.md` : entrée cron à ajouter (emplacement identifié,
+  pas rédigé).
+- Aucun test unitaire sur `ocr_sidecar.py`.
+- `README.md` : capacité non encore mentionnée dans la description du
+  pipeline d'ingestion.
+
+---
+

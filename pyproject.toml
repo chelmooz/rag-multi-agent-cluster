@@ -84,6 +84,17 @@ bc250 = [
     # Note: ollama avec backend Vulkan se configure via variable d'env OLLAMA_VULKAN=1
 ]
 
+ocr-sidecar = [
+    # Sidecar OCR PDF -> Vault (src/services/ocr_sidecar.py) — M2 uniquement
+    # (seul GPU CUDA du cluster ; le BC-250 M3 est Vulkan-only, incompatible)
+    "torch>=2.10.0",
+    "transformers>=4.57.1",
+    "pymupdf>=1.27.2",
+    "einops>=0.8.2",
+    "addict>=2.4.0",
+    "easydict>=1.13",
+]
+
 [build-system]
 requires = ["setuptools>=69.0", "wheel"]
 build-backend = "setuptools.build_meta"
