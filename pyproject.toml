@@ -53,7 +53,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
 
     # Observabilité
-    "prometheus-client>=0.19.0",
     "structlog>=24.1.0",
 
     # Utils
@@ -106,6 +105,11 @@ unfixable = ["T20", "TRY"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "ERA001"]
 "scripts/*" = ["S101", "T201"]
+"src/services/ollama.py" = ["TRY003"]  # messages longs ok pour OllamaClient - TRY003 trop restrictif ici
+"src/services/vector.py" = ["TRY003"]  # messages longs ok pour VectorService - TRY003 trop restrictif ici
+"src/services/ingestion.py" = ["TRY003"]  # messages longs ok pour IngestionService - TRY003 trop restrictif ici
+"src/services/reranker.py" = ["TRY003"]  # messages longs ok pour RerankerService - TRY003 trop restrictif ici
+"src/api/main.py" = ["TRY003", "B008"]  # TRY003/B008 ok pour endpoints FastAPI
 
 [tool.ruff.format]
 quote-style = "double"

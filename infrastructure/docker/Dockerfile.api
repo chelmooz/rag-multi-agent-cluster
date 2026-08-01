@@ -2,10 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Layer 1 (change rare -> cache stable) : dépendances seules, extraites de pyproject.toml
+# On ne duplique pas la liste dans un requirements.txt versionné : le fichier est
+# généré à la volée dans l'image, pyproject.toml reste la seule source de vérité (règle 0.2).
 COPY pyproject.toml .
-COPY src/ src/
+RUN python -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print('\n'.join(d['project']['dependencies']))" > /tmp/requirements.txt \
+    && pip install --no-cache-dir -r /tmp/requirements.txt
 
-RUN pip install --no-cache-dir .
+# Layer 2 (change à chaque commit) : code source + install du package local, sans réseau
+# (--no-deps : les dépendances sont déjà installées et cachées par la layer au-dessus)
+COPY src/ src/
+RUN pip install --no-cache-dir --no-deps .
 
 EXPOSE 8000
 
