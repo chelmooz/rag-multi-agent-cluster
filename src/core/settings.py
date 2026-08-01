@@ -558,6 +558,49 @@ class Settings(BaseSettings):
     )
 
     # ──────────────────────────────────────────────
+    # Dashboard CTOS (frontend single-page chat + monitoring)
+    # ──────────────────────────────────────────────
+    dashboard_enabled: bool = Field(
+        default=True,
+        description="Active le dashboard web (GET /, partials, /api/v1/monitoring)",
+        validation_alias="DASHBOARD_ENABLED",
+    )
+    dashboard_refresh_sec: int = Field(
+        default=10,
+        ge=2,
+        description="Intervalle de rafraîchissement du panneau monitoring (s)",
+        validation_alias="DASHBOARD_REFRESH_SEC",
+    )
+    glances_m3_url: HttpUrl = Field(  # type: ignore[assignment]
+        default="http://10.10.0.3:61208",
+        description="Glances web API BC-250 (M3, Fedora 43, port 61208)",
+        validation_alias="GLANCES_M3_URL",
+    )
+    chat_history_max: int = Field(
+        default=10,
+        ge=2,
+        le=50,
+        description="Nombre max de messages (paires user/assistant) gardés en contexte chat",
+        validation_alias="CHAT_HISTORY_MAX",
+    )
+    chat_max_context_chars: int = Field(
+        default=12000,
+        ge=2000,
+        description="Plafond de caractères du contexte envoyé au LLM (anti lost-in-the-middle)",
+        validation_alias="CHAT_MAX_CONTEXT_CHARS",
+    )
+    dashboard_semi_light: bool = Field(
+        default=False,
+        description="Thème semi-éclairé par défaut (toggle UI sinon)",
+        validation_alias="DASHBOARD_SEMI_LIGHT",
+    )
+    monitoring_offline: bool = Field(
+        default=False,
+        description="Prédéploiement : monitoring sans sonde réseau (cartes n/a immédiates)",
+        validation_alias="MONITORING_OFFLINE",
+    )
+
+    # ──────────────────────────────────────────────
     # Helpers
     # ──────────────────────────────────────────────
     @property

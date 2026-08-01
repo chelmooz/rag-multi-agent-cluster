@@ -1,0 +1,169 @@
+/* ═══════════════════════════════════════════════════════════
+   JARVIS CTOS — Design system (Watch Dogs CTOS aesthetic)
+   Dark mode par défaut + toggle semi-éclairé (docs sombres)
+   ═══════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/static/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/static/fonts/JetBrainsMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('/static/fonts/SpaceGrotesk-Regular.woff2') format('woff2-variations');
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+:root {
+  --bg-deep: #0a0a0f;
+  --bg-panel: #0d0d14;
+  --bg-card: #11111a;
+  --bg-elevated: #16161f;
+  --fg-primary: #00ffcc;
+  --fg-text: #c9d4d4;
+  --fg-muted: #5c6b74;
+  --accent-ok: #00ff88;
+  --accent-warn: #ffaa00;
+  --accent-crit: #ff3344;
+  --accent-info: #33aaff;
+  --border: #1c2430;
+  --border-strong: #2a3a4a;
+  --scanline-opacity: 0.03;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  --font-ui: 'Space Grotesk', 'Segoe UI', sans-serif;
+}
+
+[data-theme="semi-lit"] {
+  --bg-deep: #1c1c2e;
+  --bg-panel: #222236;
+  --bg-card: #262640;
+  --bg-elevated: #2d2d4a;
+  --fg-text: #e8edf0;
+  --fg-muted: #8a97a3;
+  --border: #3a3a55;
+  --border-strong: #4a4a6a;
+  --scanline-opacity: 0.015;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--fg-text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  position: relative;
+}
+
+/* ── Scanlines overlay ─────────────────────────────── */
+.scanlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 2px,
+      rgba(0, 0, 0, var(--scanline-opacity)) 3px,
+      transparent 4px
+    );
+  mix-blend-mode: overlay;
+}
+
+/* ── Topbar ────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 100;
+}
+
+.topbar::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--fg-primary), transparent);
+  opacity: 0.4;
+}
+
+.topbar-brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { color: var(--fg-primary); font-size: 18px; text-shadow: 0 0 8px var(--fg-primary); }
+.brand-title { font-weight: 700; letter-spacing: 2px; color: var(--fg-text); }
+.brand-sub { color: var(--fg-primary); }
+.brand-meta { color: var(--fg-muted); font-size: 10px; letter-spacing: 1px; }
+
+.topbar-controls { display: flex; align-items: center; gap: 12px; }
+.clock { color: var(--fg-primary); font-size: 12px; letter-spacing: 1px; }
+.btn-icon {
+  background: none; border: 1px solid var(--border); color: var(--fg-text);
+  width: 28px; height: 28px; cursor: pointer; font-size: 14px;
+  transition: all 0.15s;
+}
+.btn-icon:hover { border-color: var(--fg-primary); color: var(--fg-primary); }
+
+.status-pill {
+  background: none; border: 1px solid var(--border); color: var(--fg-muted);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px;
+  padding: 4px 10px; cursor: default;
+}
+.status-pill.ok { color: var(--accent-ok); border-color: var(--accent-ok); }
+.status-pill.warn { color: var(--accent-warn); border-color: var(--accent-warn); }
+.status-pill.crit { color: var(--accent-crit); border-color: var(--accent-crit); }
+
+/* ── Layout 70/30 ──────────────────────────────────── */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  height: calc(100vh - 44px);
+  gap: 0;
+}
+
+.chat-panel {
+  background: var(--bg-deep);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.monitoring-panel {
+  background: var(--bg-panel);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Scrollbar CTOS ────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-panel); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); }
+::-webkit-scrollbar-thumb:hover { background: var(--fg-primary); }
+
+/* ── Responsive (fallback tablette) ────────────────── */
+@media (max-width: 1024px) {
+  .layout { grid-template-columns: 1fr; grid-template-rows: 1fr 320px; }
+  .chat-panel { border-right: none; border-bottom: 1px solid var(--border); }
+}

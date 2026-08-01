@@ -191,7 +191,13 @@ class OllamaClient:
         attempt = 0
 
         async for attempt_state in retrier:
-            attempt = attempt_state.attempt_number  # type: ignore[attr-defined]
+            attempt = getattr(attempt_state, "attempt_number", None)
+            if attempt is None:
+                attempt = getattr(
+                    getattr(attempt_state, "retry_state", None),
+                    "attempt_number",
+                    1,
+                )
             try:
                 resp = await self._client.request(method, path, **kwargs)
                 resp.raise_for_status()

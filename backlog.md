@@ -1594,6 +1594,76 @@ encore "6c/12t" ? — Le "6c/12t" n'est plus l'état de la carte après flash.
   qui part réellement de 6c) et la trace de session ci-dessus (historique).
 - `pytest test_settings` : 4/4 PASSED, ruff OK.
 
+---
+
+## 02/08/2026 — Dashboard CTOS (chat + monitoring single-page)
+
+### Contexte
+
+Nouveau frontend unifié pour remplacer la page wiki : une seule page web
+"JARVIS CTOS" (inspiration Watch Dogs, dark cyberpunk) avec :
+- chat RAG à gauche (70 %), panneau monitoring M1/M2/M3 + cluster à droite (30 %)
+- vanilla JS/CSS sans build, pas d'auth (LAN de confiance)
+- polices locales WOFF2 (JetBrains Mono + Space Grotesk), dark + toggle semi-lit
+- sliding window contexte chat (anti lost-in-the-middle) : 10 paires max, 12 000 chars max
+- monitoring via MemoryManager + Ollama /api/ps + Qdrant + Glances M3 — PAS de Proxmox API
+- temps de réponse affiché (pas de streaming token obligatoire, SSE implémenté quand même)
+- M3 : pas d'émulation, Glances natif Fedora 43 (port 61208), pas de py3nvml (AMD/Vulkan)
+
+### Fait
+
+- `src/core/settings.py` : section Dashboard CTOS — `dashboard_enabled`,
+  `dashboard_refresh_sec` (10), `glances_m3_url`, `chat_history_max` (10),
+  `chat_max_context_chars` (12000), `dashboard_semi_light`, `monitoring_offline`
+  (prédéploiement : cartes n/a immédiates, zéro sonde réseau).
+- `src/services/monitoring.py` (nouveau) : `MonitoringService` — `summary()` →
+  4 cartes (m1/m2/m3/cluster) + alerts ; `_card_m1/_card_m2/_card_m3` ;
+  `_card_cluster` via `_cluster_checks()` (Qdrant /health, Ollama tags ×3,
+  Glances /api/3/cpu, relay age) ; `_check_relay()` (relay.json < TTL×3) ;
+  `_summary_offline()` mode prédéploiement sans réseau.
+- `src/api/main.py` : static mount `/static` ; GET `/` (index.html),
+  `/partials/chat`, `/partials/monitoring` (fragment HTML + alerts) ;
+  `/api/v1/monitoring` (JSON poll) ; `/api/v1/chat` (SSE : token/done avec
+  elapsed_ms, sources, chunks_used — pipeline hybrid search + rerank +
+  génération LLM via `pool.generate` M3, repli sur contexte brut si échec).
+- `static/` (nouveau) : `index.html` (shell CTOS), `partials/chat.html`,
+  `css/ctos.css` (design system + fonts-face + scanlines + thème semi-lit),
+  `css/chat.css`, `css/monitoring.css`, `js/utils.js`, `js/chat.js` (SSE via
+  fetch ReadableStream), `js/monitoring.js` (poll 10s), `js/app.js` (bootstrap,
+  horloge, toggle thème) ; `fonts/` (JetBrainsMono Regular/Bold, Space Grotesk
+  variable — WOFF2 valides).
+- `.env.example` : section Dashboard CTOS (DASHBOARD_*, GLANCES_M3_URL,
+  CHAT_HISTORY_MAX, CHAT_MAX_CONTEXT_CHARS, MONITORING_OFFLINE commentée).
+- `infrastructure/docker/Dockerfile.api` : `COPY static/ static/` (le dashboard
+  était absent de l'image → 404 en conteneur).
+
+### Bugs corrigés pendant le test
+
+- tenacity 9.1.4 : `AttemptManager` n'a plus `attempt_number` → compat 8/9 dans
+  `ollama.py` (`getattr(attempt_state, "attempt_number", None)` → retry_state).
+- `MachineCard`/`MachineMetric` non sérialisables → `to_dict()` + `summary()`
+  sérialise, `_render_card` accepte dict.
+- `logger` manquant dans `main.py` (import logging ajouté).
+- Test en prédéploiement : les sondes SSH/Ollama/Qdrant sur IP inexistantes
+  bloquaient (~3 s × 10+) → `MONITORING_OFFLINE=true` + garde chat
+  prédéploiement (SSE erreur clair, aucune tentative réseau).
+
+### Validation
+
+- TestClient (mode prédéploiement) : `/` 200, `/partials/chat` 200,
+  `/static/css/ctos.css` 200, `/api/v1/monitoring` 200 (4 cartes),
+  `/partials/monitoring` 200, `/api/v1/chat` 200 SSE (erreur prédéploiement claire).
+- `pytest test_api + test_settings` : 10/10 PASSED (20 s).
+- ruff : mes fichiers propres ; restent 3 violations TRY003/TRY301
+  pré-existantes (`src/main.py`, `ocr_sidecar.py`) hors périmètre.
+
+### Prochaines étapes (post-déploiement)
+
+- Validation réelle M1/M2/M3 avec le dashboard (monitoring + chat de bout en bout)
+- Ouvert : `partials/monitoring` rend du HTML + le JS refait le rendu — choisir
+  UNE source de vérité (le JSON `/api/v1/monitoring` suffit, partial à supprimer)
+
+
 
 
 

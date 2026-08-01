@@ -12,6 +12,7 @@ RUN python -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); prin
 # Layer 2 (change à chaque commit) : code source + install du package local, sans réseau
 # (--no-deps : les dépendances sont déjà installées et cachées par la layer au-dessus)
 COPY src/ src/
+COPY static/ static/
 RUN pip install --no-cache-dir --no-deps .
 
 EXPOSE 8000

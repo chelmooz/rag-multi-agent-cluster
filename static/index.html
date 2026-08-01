@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS CTOS · Cluster RAG</title>
+<link rel="stylesheet" href="/static/css/ctos.css">
+<link rel="stylesheet" href="/static/css/chat.css">
+<link rel="stylesheet" href="/static/css/monitoring.css">
+</head>
+<body>
+<div class="scanlines" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="topbar-brand">
+    <span class="brand-mark">◈</span>
+    <span class="brand-title">JARVIS <span class="brand-sub">CTOS</span></span>
+    <span class="brand-meta">RAG MULTI-AGENT CLUSTER · M1 M2 M3</span>
+  </div>
+  <div class="topbar-controls">
+    <span id="top-clock" class="clock">--:--:--</span>
+    <button id="theme-toggle" class="btn-icon" title="Semi-éclairé pour documents sombres">◐</button>
+    <button id="status-pill" class="status-pill" title="Santé cluster">SCANNING…</button>
+  </div>
+</header>
+
+<main class="layout">
+  <section id="chat-panel" class="chat-panel">
+    <div id="chat-area"></div>
+  </section>
+
+  <aside id="monitoring-panel" class="monitoring-panel">
+    <div class="panel-header">
+      <span class="panel-title">SYSTEM MONITOR</span>
+      <span id="mon-last-update" class="panel-sub">—</span>
+    </div>
+    <div id="monitoring-cards" class="monitoring-cards">
+      <div class="metric-card n-a"><div class="card-header"><span class="machine-label">M1 MASTER</span></div><div class="metrics-grid"><div class="m-row"><span class="m-label">SCANNING</span><span class="m-value ok">…</span></div></div></div>
+      <div class="metric-card n-a"><div class="card-header"><span class="machine-label">M2 GPU WORKER</span></div><div class="metrics-grid"><div class="m-row"><span class="m-label">SCANNING</span><span class="m-value ok">…</span></div></div></div>
+      <div class="metric-card n-a"><div class="card-header"><span class="machine-label">M3 BC-250</span></div><div class="metrics-grid"><div class="m-row"><span class="m-label">SCANNING</span><span class="m-value ok">…</span></div></div></div>
+      <div class="metric-card n-a"><div class="card-header"><span class="machine-label">CLUSTER</span></div><div class="metrics-grid"><div class="m-row"><span class="m-label">SCANNING</span><span class="m-value ok">…</span></div></div></div>
+    </div>
+    <div id="alert-ticker" class="alert-ticker"></div>
+  </aside>
+</main>
+
+<script src="/static/js/utils.js"></script>
+<script src="/static/js/monitoring.js"></script>
+<script src="/static/js/chat.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

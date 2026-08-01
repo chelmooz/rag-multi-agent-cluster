@@ -4,28 +4,37 @@ Architecture :
 - FastAPI + LangGraph pour l'orchestration
 - Configuration centralisée via src.core.settings
 - Health/Readiness probes (consultation via curl/Glances — pas de Prometheus, cf. D9)
+- Dashboard CTOS : GET / (SPA), /partials/* (fragments HTML), /api/v1/chat (SSE),
+  /api/v1/monitoring (JSON poll)
 """
 import asyncio
+import json as jsonlib
+import logging
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 from typing import Any, cast
 
 import asyncpg
 import httpx
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
 from src.core.settings import get_settings
 from src.services.ingestion import IngestionService
 from src.services.lexical import LexicalSearch
+from src.services.monitoring import MonitoringService
 from src.services.ollama import OllamaClientPool
 from src.services.reranker import RerankerService
 from src.services.vector import VectorService
 
 settings = get_settings()
+
+logger = logging.getLogger(__name__)
 
 _TIMEOUT = 3.0
 
@@ -76,6 +85,19 @@ class HealthResponse(BaseModel):
     status: str
     version: str = "0.1.0-dev"
     environment: str = settings.log_level.lower()
+
+
+class ChatMessage(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant|system)$")
+    content: str = Field(..., min_length=1)
+    timestamp: str
+    sources: list[str] = []
+    elapsed_ms: int | None = None
+
+
+class ChatRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=4000)
+    conversation_id: str | None = None
 
 
 async def _check_ollama(url: str) -> dict[str, Any]:
@@ -148,6 +170,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         vector_service=app.state.vector_service,
     )
     app.state.reranker_service = RerankerService(ollama_pool=app.state.ollama_pool)
+    app.state.monitoring_service = MonitoringService(ollama_pool=app.state.ollama_pool)
 
     # Créer la collection Qdrant si nécessaire
     with suppress(Exception):
@@ -160,6 +183,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await app.state.vector_service.close()
     await app.state.ingestion_service.close()
     await app.state.reranker_service.close()
+    await app.state.monitoring_service.close()
 
 
 app = FastAPI(
@@ -188,6 +212,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_STATIC_DIR = str(Path(__file__).resolve().parents[2] / "static")
+if settings.dashboard_enabled:
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
 @app.get(f"{settings.api_prefix}/health", response_model=HealthResponse, tags=["Health"])
@@ -276,7 +304,7 @@ async def ready() -> JSONResponse:
 async def embed(request: EmbedRequest) -> EmbedResponse:
     """Embedding texte → vecteur dense (nomic-embed-text-v2-moe) + sparse (BM25)."""
     # Vérifier que les services sont initialisés
-    if not hasattr(app.state, 'ollama_pool') or not hasattr(app.state, 'lexical_search'):
+    if not hasattr(app.state, "ollama_pool") or not hasattr(app.state, "lexical_search"):
         return JSONResponse(
             status_code=503,
             content={"detail": "Services not initialized - server starting up"}
@@ -305,7 +333,7 @@ async def embed(request: EmbedRequest) -> EmbedResponse:
 async def ingest(request: IngestRequest) -> IngestResponse:
     """Ingestion d'une source (texte) → chunks → embeddings → Qdrant."""
     # Vérifier que les services sont initialisés
-    if not hasattr(app.state, 'ingestion_service'):
+    if not hasattr(app.state, "ingestion_service"):
         return JSONResponse(
             status_code=503,
             content={"detail": "Services not initialized - server starting up"}
@@ -337,7 +365,7 @@ async def ingest_file(
 ) -> IngestResponse:
     """Ingestion d'un fichier uploadé."""
     # Vérifier que les services sont initialisés
-    if not hasattr(app.state, 'ingestion_service'):
+    if not hasattr(app.state, "ingestion_service"):
         return JSONResponse(
             status_code=503,
             content={"detail": "Services not initialized - server starting up"}
@@ -387,7 +415,7 @@ async def query(request: QueryRequest) -> QueryResponse:
     4. Construction réponse (Phase B ajoutera Generator + Évaluation)
     """
     # Vérifier que les services sont initialisés
-    if not hasattr(app.state, 'ollama_pool') or not hasattr(app.state, 'vector_service'):
+    if not hasattr(app.state, "ollama_pool") or not hasattr(app.state, "vector_service"):
         return JSONResponse(
             status_code=503,
             content={"detail": "Services not initialized - server starting up"}
@@ -486,6 +514,207 @@ async def okf_show() -> dict[str, str]:
 @app.get(f"{settings.api_prefix}/lint", tags=["Wiki"])
 async def lint() -> dict[str, str]:
     raise NotImplementedError("Lint wiki pas encore implémenté")
+
+
+# ──────────────────────────────────────────────
+# Dashboard CTOS — SPA (chat + monitoring)
+# ──────────────────────────────────────────────
+def _render_card(card: Any) -> str:
+    """Rend une carte monitoring en HTML (fragment htmx/partial)."""
+    if not isinstance(card, dict):
+        card = card.to_dict()
+    status_cls = card["status"] if card["status"] in {"ok", "warn", "crit", "n/a"} else "ok"
+    rows = "".join(
+        f'<div class="m-row"><span class="m-label">{m["label"]}</span>'
+        f'<span class="m-value {m["status"]}">{m["value"]}</span></div>'
+        for m in card["metrics"]
+    )
+    return (
+        f'<div class="metric-card {status_cls}" data-machine="{card["machine"]}">'
+        f'<div class="card-header"><span class="machine-label">{card["title"]}</span>'
+        f'<span class="status-dot {status_cls}" title="status: {status_cls}"></span></div>'
+        f'<div class="metrics-grid">{rows}</div></div>'
+    )
+
+
+@app.get("/", include_in_schema=False)
+async def dashboard_index() -> FileResponse:
+    """Page unique du dashboard CTOS (chat + monitoring)."""
+    return FileResponse(f"{_STATIC_DIR}/index.html")
+
+
+@app.get("/partials/chat", include_in_schema=False)
+async def partial_chat() -> FileResponse:
+    """Fragment HTML : zone messages (vide au premier chargement) + input."""
+    return FileResponse(f"{_STATIC_DIR}/partials/chat.html")
+
+
+@app.get("/partials/monitoring", include_in_schema=False)
+async def partial_monitoring() -> JSONResponse:
+    """Fragment HTML : 4 cartes monitoring (poll JS 10s)."""
+    if not hasattr(app.state, "monitoring_service"):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Services not initialized - server starting up"},
+        )
+    service: MonitoringService = app.state.monitoring_service
+    data = await service.summary()
+    html = (
+        _render_card(data["cards"]["m1"])
+        + _render_card(data["cards"]["m2"])
+        + _render_card(data["cards"]["m3"])
+        + _render_card(data["cluster"])
+    )
+    return JSONResponse(content={"html": html, "alerts": data["alerts"]})
+
+
+@app.get(f"{settings.api_prefix}/monitoring", tags=["Dashboard"])
+async def monitoring_json() -> JSONResponse:
+    """JSON agrégé pour le dashboard (poll JS 10s)."""
+    if not hasattr(app.state, "monitoring_service"):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Services not initialized - server starting up"},
+        )
+    service: MonitoringService = app.state.monitoring_service
+    data = await service.summary()
+    return JSONResponse(content=data)
+
+
+@app.post(f"{settings.api_prefix}/chat", tags=["Dashboard"])
+async def chat_sse(request: ChatRequest) -> StreamingResponse:
+    """Chat RAG — réponse streaming (SSE) avec temps d'exécution.
+
+    Pipeline : /query (hybrid search + rerank) puis réponse structurée.
+    Événements SSE : token (texte) puis done (elapsed_ms, sources).
+    """
+    async def event_stream() -> AsyncIterator[str]:
+        started = asyncio.get_running_loop().time()
+        try:
+            if settings.monitoring_offline:
+                yield _sse(
+                    {
+                        "type": "error",
+                        "detail": "Prédéploiement — aucune machine du cluster installée",
+                    }
+                )
+                return
+            if not hasattr(app.state, "vector_service"):
+                yield _sse({"type": "error", "detail": "Services not initialized"})
+                return
+
+            pool: OllamaClientPool = app.state.ollama_pool
+            vector: VectorService = app.state.vector_service
+            lexical: LexicalSearch = app.state.lexical_search
+            reranker: RerankerService = app.state.reranker_service
+
+            query_embeddings = await pool.embed([request.question])
+            if not query_embeddings:
+                yield _sse({"type": "error", "detail": "Échec embedding requête"})
+                return
+            query_dense = query_embeddings[0]
+            query_sparse = lexical.encode_to_dict(request.question)
+
+            search_results = await vector.hybrid_search(
+                query_vector=query_dense,
+                query_sparse=query_sparse,
+                top_k=settings.top_k_retrieval * 3,
+                score_threshold=settings.similarity_threshold,
+            )
+
+            if not search_results:
+                msg = "Aucun document pertinent trouvé dans la base de connaissances."
+                yield _sse({"type": "token", "token": msg})
+                yield _sse({"type": "done", "elapsed_ms": _elapsed_ms(started), "sources": []})
+                return
+
+            if len(search_results) > 1:
+                docs_texts = [r["payload"].get("text", "") for r in search_results]
+                reranked = await reranker.rerank(
+                    request.question, docs_texts, top_k=settings.top_k_rerank
+                )
+                final_results = []
+                for rr in reranked:
+                    orig = search_results[rr.index]
+                    final_results.append({**orig, "rerank_score": rr.score})
+                search_results = final_results
+            else:
+                search_results = search_results[: settings.top_k_rerank]
+
+            chunks_used = len(search_results)
+            sources: list[str] = []
+            context_parts: list[str] = []
+            budget = settings.chat_max_context_chars
+
+            for i, result in enumerate(search_results):
+                payload = result.get("payload", {})
+                text = payload.get("text", "")
+                source_id = payload.get("source_id", f"doc_{i}")
+                score = result.get("rerank_score", result.get("score", 0.0))
+                sources.append(f"{source_id} (score: {score:.3f})")
+                snippet = f"[Source {i+1}] {text}"
+                if len("".join(context_parts)) + len(snippet) > budget:
+                    break
+                context_parts.append(snippet)
+
+            context = (
+                "\n\n".join(context_parts) if context_parts
+                else "Aucun contexte pertinent trouvé."
+            )
+            prompt = (
+                "Tu es JARVIS, assistant du cluster RAG maison (M1 master / M2 GPU / M3 BC-250). "
+                "Réponds en français, uniquement à partir du contexte fourni ci-dessous. "
+                "Si le contexte ne contient pas la réponse, dis-le clairement.\n\n"
+                f"CONTEXTE:\n{context}\n\n"
+                f"QUESTION: {request.question}\n\n"
+                "RÉPONSE:"
+            )
+
+            answer = ""
+            if context_parts:
+                try:
+                    result = await pool.generate(prompt)
+                    answer = str(result.get("response", "")).strip()
+                except Exception as e:
+                    logger.warning("Génération LLM échouée (%s), repli sur contexte", e)
+                    answer = ""
+            if not answer:
+                answer = "\n\n".join(context_parts) if context_parts else "Pas de contexte trouvé."
+
+            # Streaming par chunks (simulation naturelle de lecture)
+            for chunk in _chunk_text(answer, size=24):
+                yield _sse({"type": "token", "token": chunk})
+
+            yield _sse({
+                "type": "done",
+                "elapsed_ms": _elapsed_ms(started),
+                "sources": sources,
+                "chunks_used": chunks_used,
+            })
+        except Exception as e:
+            yield _sse({"type": "error", "detail": type(e).__name__})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+def _sse(payload: dict[str, Any]) -> str:
+    return f"data: {jsonlib.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _elapsed_ms(started: float) -> int:
+    import time
+
+    return int((time.monotonic() - started) * 1000)
+
+
+def _chunk_text(text: str, size: int = 24) -> list[str]:
+    """Découpe le texte en morceaux de ~size tokens (mots)."""
+    words = text.split()
+    return [" ".join(words[i : i + size]) for i in range(0, len(words), size)]
 
 
 if __name__ == "__main__":

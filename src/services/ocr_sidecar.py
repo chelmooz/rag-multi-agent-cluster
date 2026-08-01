@@ -26,7 +26,7 @@ import re
 import shutil
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from src.core.settings import get_settings
@@ -179,7 +179,7 @@ class PdfOcrSidecar:
         self._vault_sources.mkdir(parents=True, exist_ok=True)
         slug = pdf_path.stem.replace(" ", "-").lower()
         note_path = self._vault_sources / f"{slug}.md"
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         frontmatter = (
             "---\n"
@@ -242,7 +242,7 @@ class PdfOcrSidecar:
                     shutil.move(str(pdf_path), str(processed_dir / pdf_path.name))
                     result.processed.append(pdf_path.name)
 
-                except Exception as e:  # noqa: BLE001 — isoler l'échec par fichier
+                except Exception as e:
                     logger.exception("Échec OCR sur %s", pdf_path.name)
                     shutil.move(str(pdf_path), str(failed_dir / pdf_path.name))
                     result.failed.append(f"{pdf_path.name}: {e}")
