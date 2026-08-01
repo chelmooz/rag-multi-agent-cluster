@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "Projet JARVIS", email = "jarvis@example.com"}
+    {name = "Projet CTOS", email = "ctos@example.com"}
 ]
 keywords = ["rag", "llm", "multi-agent", "offline", "obsidian", "proxmox", "vulkan"]
 classifiers = [

@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════════════════════
-   JARVIS CTOS — Bootstrap SPA
+   CTOS — Bootstrap SPA
    ═══════════════════════════════════════════════════════════ */
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Thème : dark par défaut, toggle semi-lit (docs sombres)
   const root = document.documentElement;
-  const saved = localStorage.getItem('jarvis-theme');
+  const saved = localStorage.getItem('ctos-theme');
   if (saved === 'semi-lit' || (window.DASHBOARD_SEMI_LIGHT && saved !== 'dark')) {
     root.setAttribute('data-theme', 'semi-lit');
   }
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   themeBtn.addEventListener('click', () => {
     const next = root.getAttribute('data-theme') === 'semi-lit' ? 'dark' : 'semi-lit';
     root.setAttribute('data-theme', next);
-    localStorage.setItem('jarvis-theme', next);
+    localStorage.setItem('ctos-theme', next);
   });
 
   // Horloge topbar

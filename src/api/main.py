@@ -662,7 +662,7 @@ async def chat_sse(request: ChatRequest) -> StreamingResponse:
                 else "Aucun contexte pertinent trouvé."
             )
             prompt = (
-                "Tu es JARVIS, assistant du cluster RAG maison (M1 master / M2 GPU / M3 BC-250). "
+                "Tu es CTOS, assistant du cluster RAG maison (M1 master / M2 GPU / M3 BC-250). "
                 "Réponds en français, uniquement à partir du contexte fourni ci-dessous. "
                 "Si le contexte ne contient pas la réponse, dis-le clairement.\n\n"
                 f"CONTEXTE:\n{context}\n\n"

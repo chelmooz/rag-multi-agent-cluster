@@ -628,7 +628,7 @@ Prêt pour Phase 0 (squelette + config + Docker Compose).
 | Paramètre | Valeur |
 |-----------|--------|
 | **CTID** | 100 |
-| **Hostname** | `jarvis-master` |
+| **Hostname** | `rag-master` |
 | **Template** | Debian 12 (bookworm) standard |
 | **CPU** | 8 vCPU (sur 44 threads M1) |
 | **RAM** | 8 GB (sur 32 GB ECC M1) |
@@ -1601,7 +1601,7 @@ encore "6c/12t" ? — Le "6c/12t" n'est plus l'état de la carte après flash.
 ### Contexte
 
 Nouveau frontend unifié pour remplacer la page wiki : une seule page web
-"JARVIS CTOS" (inspiration Watch Dogs, dark cyberpunk) avec :
+"CTOS" (inspiration Watch Dogs, dark cyberpunk) avec :
 - chat RAG à gauche (70 %), panneau monitoring M1/M2/M3 + cluster à droite (30 %)
 - vanilla JS/CSS sans build, pas d'auth (LAN de confiance)
 - polices locales WOFF2 (JetBrains Mono + Space Grotesk), dark + toggle semi-lit
@@ -1609,6 +1609,19 @@ Nouveau frontend unifié pour remplacer la page wiki : une seule page web
 - monitoring via MemoryManager + Ollama /api/ps + Qdrant + Glances M3 — PAS de Proxmox API
 - temps de réponse affiché (pas de streaming token obligatoire, SSE implémenté quand même)
 - M3 : pas d'émulation, Glances natif Fedora 43 (port 61208), pas de py3nvml (AMD/Vulkan)
+
+### Renommage JARVIS → CTOS (validation utilisateur)
+
+Le projet n'est plus "JARVIS" — le dashboard s'appelle **CTOS**. Toutes les
+occurrences renommées : branding frontend (index.html, chat.html, CSS, JS,
+namespace `JARVIS` → `CTOS`, localStorage `jarvis-theme` → `ctos-theme`),
+prompt LLM (`Tu es CTOS, assistant…`), hostnames LXC (`jarvis-master` →
+`rag-master`, `jarvis-vectordb` → `rag-vectordb`, `jarvis-gpu-inference` →
+`rag-gpu-inference`, `jarvis-workers` → `rag-workers`, VM pfSense
+`jarvis-pfsense` → `rag-pfsense`), mot de passe défaut LXC `jarvis` →
+`ctos`, pyproject (auteur "Projet CTOS", email `ctos@example.com`),
+backlog (tableau hostname + trace session). Vérifié : `git grep -i jarvis` =
+0 occurrence (hors `static/fonts` binaire).
 
 ### Fait
 

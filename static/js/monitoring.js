@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   JARVIS CTOS — Monitoring (poll JSON 10s, rendu cartes)
+   CTOS — Monitoring (poll JSON 10s, rendu cartes)
    ═══════════════════════════════════════════════════════════ */
 
 const Monitoring = (() => {
@@ -19,16 +19,16 @@ const Monitoring = (() => {
 
   async function poll() {
     try {
-      const res = await fetch(`${JARVIS.API_PREFIX}/monitoring`);
+      const res = await fetch(`${CTOS.API_PREFIX}/monitoring`);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       render(data);
       updateStatusPill(data);
       renderAlerts(data.alerts || []);
-      lastUpdateEl.textContent = 'MAJ ' + JARVIS.fmtTime(data.timestamp || new Date().toISOString());
+      lastUpdateEl.textContent = 'MAJ ' + CTOS.fmtTime(data.timestamp || new Date().toISOString());
     } catch (e) {
       updateStatusPill(null);
-      lastUpdateEl.textContent = 'POLL ÉCHOUÉ ' + JARVIS.fmtTime(new Date().toISOString());
+      lastUpdateEl.textContent = 'POLL ÉCHOUÉ ' + CTOS.fmtTime(new Date().toISOString());
     }
   }
 
@@ -44,14 +44,14 @@ const Monitoring = (() => {
     if (!card) return '';
     const rows = (card.metrics || [])
       .map((m) =>
-        `<div class="m-row"><span class="m-label">${JARVIS.esc(m.label)}</span>` +
-        `<span class="m-value ${JARVIS.esc(m.status)}">${JARVIS.esc(m.value)}</span></div>`
+        `<div class="m-row"><span class="m-label">${CTOS.esc(m.label)}</span>` +
+        `<span class="m-value ${CTOS.esc(m.status)}">${CTOS.esc(m.value)}</span></div>`
       )
       .join('');
     return (
-      `<div class="metric-card ${JARVIS.esc(card.status)}" data-machine="${JARVIS.esc(card.machine)}">` +
-      `<div class="card-header"><span class="machine-label">${JARVIS.esc(card.title)}</span>` +
-      `<span class="status-dot ${JARVIS.esc(card.status)}"></span></div>` +
+      `<div class="metric-card ${CTOS.esc(card.status)}" data-machine="${CTOS.esc(card.machine)}">` +
+      `<div class="card-header"><span class="machine-label">${CTOS.esc(card.title)}</span>` +
+      `<span class="status-dot ${CTOS.esc(card.status)}"></span></div>` +
       `<div class="metrics-grid">${rows}</div></div>`
     );
   }
@@ -78,8 +78,8 @@ const Monitoring = (() => {
     }
     const html = alerts
       .map((a) =>
-        `<div class="alert-item ${JARVIS.esc(a.level)}">` +
-        `${JARVIS.esc(a.machine.toUpperCase())} · ${JARVIS.esc(a.metric)} : ${JARVIS.esc(a.message)}</div>`
+        `<div class="alert-item ${CTOS.esc(a.level)}">` +
+        `${CTOS.esc(a.machine.toUpperCase())} · ${CTOS.esc(a.metric)} : ${CTOS.esc(a.message)}</div>`
       )
       .join('');
     if (tickerEl.innerHTML !== html) tickerEl.innerHTML = html;

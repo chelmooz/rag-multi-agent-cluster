@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════
-   JARVIS CTOS — Utilitaires
+   CTOS — Utilitaires
    ═══════════════════════════════════════════════════════════ */
 
-const JARVIS = (() => {
+const CTOS = (() => {
   const API_PREFIX = '/api/v1';
 
   function fmtTime(iso) {

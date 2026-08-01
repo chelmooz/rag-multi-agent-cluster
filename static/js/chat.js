@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   JARVIS CTOS — Chat (POST SSE via fetch + ReadableStream)
+   CTOS — Chat (POST SSE via fetch + ReadableStream)
    ═══════════════════════════════════════════════════════════ */
 
 const Chat = (() => {
@@ -49,7 +49,7 @@ const Chat = (() => {
       '<div class="msg-bubble"></div>' +
       '<div class="msg-meta"><span class="msg-time"></span></div>';
     wrap.querySelector('.msg-bubble').textContent = text;
-    wrap.querySelector('.msg-time').textContent = JARVIS.fmtTime(JARVIS.nowIso());
+    wrap.querySelector('.msg-time').textContent = CTOS.fmtTime(CTOS.nowIso());
     messagesEl.appendChild(wrap);
     scrollBottom();
   }
@@ -110,11 +110,11 @@ const Chat = (() => {
     autoGrow();
 
     const assistant = appendAssistant();
-    assistant.timeEl.textContent = JARVIS.fmtTime(JARVIS.nowIso());
+    assistant.timeEl.textContent = CTOS.fmtTime(CTOS.nowIso());
     let text = '';
 
     try {
-      const res = await fetch(`${JARVIS.API_PREFIX}/chat`, {
+      const res = await fetch(`${CTOS.API_PREFIX}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question }),
