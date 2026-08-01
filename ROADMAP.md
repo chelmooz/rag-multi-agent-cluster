@@ -108,7 +108,7 @@ Phase A (RAG core) ──bloquant──► Phase B (multi-agents) ──► Phas
 | 1.12 | Déployer OMV via Docker (docker-compose.omv.yml) | ⏳ déplacé en C3 |
 | 1.13 | Passthrough HDD 2TB → LXC 105 | ⏳ déplacé en C3 |
 | 1.14 | Configurer borg repo HDD + clés SSH OMV→M1/M3 | ⏳ déplacé en C3 |
-| 1.15 | Ajouter `python-multipart` aux dépendances (`pyproject.toml`) — requis par `/ingest/file` (`UploadFile`) | ⏳ **à faire** — `pip install -e .` en env propre casse actuellement à l'import de `main.py` |
+| 1.15 | Ajouter `python-multipart` aux dépendances (`pyproject.toml`) — requis par `/ingest/file` (`UploadFile`) | ✅ fait |
 | 1.16 | Committer les fichiers en attente (`src/services/{ingestion,lexical,reranker}.py` untracked ; `main.py`, `vector.py`, `ollama.py`, `pyproject.toml`, `tests/test_api.py` modifiés non commités) | ⏳ **à faire** — `git status` (01/08/2026) |
 
 **Bonus nettoyage (session 31/07/2026)** : suppression nginx.conf/certs/ + LXC 102-103 des scripts Proxmox ; `.env.example` réécrit aligné sur `settings.py` (bug `parents[3]` → `parents[2]` corrigé : le `.env` n'était jamais lu) ; doc README/diagrams purgée (D9) ; backlog Phase 1 décocher (rien n'était livré) ; README `/api/embed` statut corrigé (stub, pas "OK").
