@@ -1406,4 +1406,76 @@ Phase 7.
 
 ---
 
+## 01/08/2026 — Prompts Agents v1 : templates + few-shots + contrats Pydantic
+
+### Contexte
+
+- Question ouverte : comment l'information qualité passe-t-elle du Juge à
+  l'Avocat du diable en mode séquentiel ? Réponse : via `relay.json` (NFS
+  M1↔M2) — l'Avocat lit la sortie complète du Juge (`judge.critique` +
+  `judge.score`) en entrée de son prompt. **Pas de partage KV cache** :
+  modèles différents (DeepSeek-R1-8B vs Ministral-8B), architectures et
+  tokenizers incompatibles. Le relay.json EST le mécanisme de passage.
+- Question OKF pour les sorties agents : **non pertinent** — OKF v0.2 est
+  verbeux (type, verified, sources[], stale_after...) et conçu pour des
+  pages wiki persistantes, pas pour du parsing LLM inter-agents.
+  Recommandation actée : schémas JSON minimaux versionnés
+  (`*_output_v1`, 4-6 champs) + OKF réservé au frontmatter du vault
+  (écrit par l'Évaluateur sur les pages validées, `verified:
+  human-reviewed` jamais en automatique → `machine-confirmed`).
+
+### Décisions
+
+- Sorties agents = schémas Pydantic stricts, versionnés, validés avant
+  écriture relay.json.
+- Score Advocate INVERSÉ (0.0 = faille bloquante, 1.0 = aucune faille) —
+  clarification vs Juge.
+- Few-shots (2 par agent) dans le prompt système pour fiabiliser le JSON.
+- Parsing : retry avec prompt correctif (1 tentative) si JSON invalide ;
+  `json_repair` à évaluer en dernier recours.
+- `human-reviewed` interdit en sortie automatique (contrainte Literal).
+
+### Fait
+
+- `docs/prompts-agents.md` (nouveau) : principes communs + prompts système
+  + 2 few-shots concrets par agent (Judge, Advocate, Evaluator, Generator,
+  Planner, Rewriter) + trace de décision OKF.
+- `src/agents/judge.py` : `JudgeOutput` (score, critique, checks_passed,
+  flags[hallucination_suspect|omission_source|contradiction_interne],
+  confidence).
+- `src/agents/advocate.py` : `AdvocateOutput` (score inversé, faille,
+  claims_contested, hallucination_risk, missing_context, confidence) +
+  docstring explicite passage info via relay.json.
+- `src/agents/evaluator.py` : `EvaluatorOutput` (decision
+  publish|revise|reject, final_score, reasoning, revision_instructions,
+  verified_tier[machine-confirmed|unverified]).
+- `src/agents/generator.py` : `GeneratorOutput` (answer, citations,
+  confidence, reasoning_trace).
+- `src/agents/planner.py` (nouveau) : `PlannerOutput` + `SearchStrategy`
+  (validateur vector+bm25 = 1.0).
+- `src/agents/rewriter.py` (nouveau) : `RewriterOutput` (rewritten_query,
+  expanded_terms, resolved_references).
+- `src/agents/__init__.py` : exports des 6 agents + schémas.
+- `tests/test_agent_schemas.py` : 13 tests (valides + rejets : score hors
+  bornes, flag inconnu, risk inconnu, human-reviewed auto interdit,
+  poids ≠ 1.0).
+- `pyproject.toml` : per-file-ignore TRY003 pour `src/agents/*`.
+
+### Validation
+
+- `pytest`: 42/42 PASSED (13 nouveaux)
+- `ruff`: 0 erreur
+- `mypy`: 0 erreur sur `src/agents/` (9 fichiers)
+
+### Prochaine étape (Phase B.1)
+
+- Implémentation des méthodes LLM (prompt système + few-shots + parsing
+  robuste + retry correctif) dans les 6 agents.
+- Construction du graphe LangGraph minimal end-to-end
+  (Plan → Rewrite → Retrieval → Rerank → Assemble → Gen → [Relay →
+  Judge → Advocate → Eval si EVALUATION_ENABLED]).
+
+---
+
+
 
