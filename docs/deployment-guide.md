@@ -252,7 +252,7 @@ préalable). Il rend **persistant** le core unlock 6→8 et configure le
 |---|---|
 | **Repo BIOS** | [Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script) |
 | **BIOS final** | BIOS moddé Forbidden-Darkness complet (base P3.00 + core unlock + VRAM 512 MB) — flash UEFI direct, AUCUN flash P3.00 stock préalable |
-| **Effet 1 — Core unlock** | 6c/12t → **8c/16t persistant** (flash BIOS, plus de script volatil SMU) |
+| **Effet 1 — Core unlock** | **8c/16t** persistant (flash BIOS, plus de script volatil SMU) |
 | **Effet 2 — VRAM dynamique** | **512 MB carve-out** dynamique (~12 GB dispo IA sur 16 GB unifiée) |
 | **Risque** | Flash BIOS = irréversible, pas de snapshot. Garder une sauvegarde du BIOS d'origine sur USB (rollback recovery) + backup config `/etc`. |
 

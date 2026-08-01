@@ -18,7 +18,7 @@ Sources faisant autorité (à consulter avant toute modification des scripts `in
 - Swap NVMe recommandé (~16 Go) : les modèles 11+ Go sur une machine à 16 Go RAM unifiée ont besoin de cette marge.
 - Gouverneur GPU obligatoire (`cyan-skillfish-governor-smu`) pour le scaling de fréquence — sans lui, pas de contrôle de clock fiable sur cette puce.
 - OS : **Fedora 43** (décision 02/08/2026) — Mesa 25.1+ en mainline, pas de experimental/compilation manuelle. Debian Testing/Sid abandonné. antiX-26 réservé au poste de travail de Michel, pas au BC-250.
-- BIOS : **moddé Forbidden-Darkness** (image complète, base P3.00 incluse — flash UEFI direct, aucun flash P3.00 stock préalable). Core unlock 6c/12t → **8c/16t persistant** + carve-out VRAM dynamique 512 MB. Plus besoin du script volatil SMU (rw-r-r-0644), gardé en fallback.
+- BIOS : **moddé Forbidden-Darkness** (image complète, base P3.00 incluse — flash UEFI direct, aucun flash P3.00 stock préalable). Core unlock → **8c/16t persistant** (2 cores débloqués dès le boot) + carve-out VRAM dynamique 512 MB. Plus besoin du script volatil SMU (rw-r-r-0644), gardé en fallback.
 
 ## Ce que ce projet ne couvre pas encore
 

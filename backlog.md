@@ -123,7 +123,7 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Machine 1** | **Master** (Orchestration, API, VectorDB, Evaluator, Embedding CPU, Relay NFS) | 2× Xeon E5-2699 v4 / **32 GB ECC** | AMD Radeon RX 580 (8 GB) | 1 TB NVMe | Proxmox VE 9.3 (LXC 100, 101, VM 104) — monitoring natif via UI Proxmox, plus de LXC 103 dédié |
 | **Machine 2** | **GPU Worker + Services** (Reranker, Judge, Avocat, Backup Embedding CPU, **OMV Backup**) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | **1 TB NVMe** + **HDD 2TB physique** | Proxmox VE 9.3 (LXC 105, 200 privilégié GPU, 201) — monitoring natif via UI Proxmox |
-| **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Fast-check) | Zen 2 6c/12t (**→ 8c/16t core unlock**, persistant — BIOS complet Forbidden-Darkness, base P3.00 incluse, flash UEFI direct, aucun flash P3.00 stock préalable) / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU débloquées via [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock), séparé) | Fedora 43 baremetal (Ollama Vulkan natif) |
+| **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Fast-check) | Zen 2 **8c/16t** (core unlock persistant par BIOS complet Forbidden-Darkness, base P3.00 incluse, flash UEFI direct, aucun flash P3.00 stock préalable) / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU débloquées via [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock), séparé) | Fedora 43 baremetal (Ollama Vulkan natif) |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
 * VM 104 = pfSense (reverse proxy + firewall + NAT).
@@ -1567,6 +1567,33 @@ mermaid et signaler les corrections.
 
 - Rien de code modifié (doc + scripts shell) — pas de test à relancer.
 - Aucun `apt`/experimental/antiX-26 résiduel hors contexte M1/M2 (LXC Debian légitime).
+
+---
+
+## 02/08/2026 — M3 : specs 8c/16t directes (plus de 6c/12t)
+
+### Contexte
+
+Retour de Michel : si le BIOS Forbidden-Darkness (flash direct) rend les
+8c/16t **définitifs**, pourquoi les tableaux de specs Machine 3 affichent
+encore "6c/12t" ? — Le "6c/12t" n'est plus l'état de la carte après flash.
+
+### Fait
+
+- `README.md` tableau Machine 3 : "6c/12t → 8c/16t core unlock" → "**8c/16t**
+  — core unlock persistant par flash BIOS".
+- `backlog.md` tableau Machine 3 : "Zen 2 6c/12t (→ 8c/16t)" → "Zen 2 **8c/16t**".
+- `docs/deployment-guide.md` §3.0 Effet 1 : "6c/12t → 8c/16t persistant" →
+  "**8c/16t** persistant (flash BIOS, plus de script volatil SMU)".
+- `docs/bc250-hardware-notes.md` : "Core unlock 6c/12t → 8c/16t" → "Core
+  unlock → **8c/16t persistant** (2 cores débloqués dès le boot)".
+- `src/core/settings.py` : description `bc250_cpu_cores_unlocked` →
+  "8c/16t via BIOS Forbidden-Darkness persistant ; fallback SMU volatil".
+- `.env.example` : commentaire `BC250_CPU_CORES_UNLOCKED` idem.
+- **Conservés à dessein** : `enable-cpu-core-unlock.sh` (script fallback SMU
+  qui part réellement de 6c) et la trace de session ci-dessus (historique).
+- `pytest test_settings` : 4/4 PASSED, ruff OK.
+
 
 
 

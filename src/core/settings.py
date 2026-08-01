@@ -483,7 +483,7 @@ class Settings(BaseSettings):
     )
     bc250_cpu_cores_unlocked: bool = Field(
         default=False,
-        description="CPU core unlock appliqué (6c/12t → 8c/16t via SMU msg 0x98 rw-r-r-0644)",
+        description="CPU core unlock appliqué (8c/16t via BIOS Forbidden-Darkness persistant ; fallback SMU msg 0x98 rw-r-r-0644 volatil)",
         validation_alias="BC250_CPU_CORES_UNLOCKED",
     )
     bc250_vram_gib: int = Field(
