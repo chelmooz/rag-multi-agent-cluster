@@ -25,6 +25,17 @@ class TestHealth:
 
 
 class TestQueryEndpoint:
-    def test_query_not_implemented(self, client):
+    def test_query_service_unavailable_when_not_initialized(self, client):
+        """Endpoint /query returns 503 when services not initialized (test environment)."""
         resp = client.post("/api/v1/query", json={"question": "test"})
-        assert resp.status_code == 500
+        assert resp.status_code == 503
+        assert "Services not initialized" in resp.json()["detail"]
+
+    def test_query_rejects_empty_body(self, client):
+        resp = client.post("/api/v1/query", json={})
+        assert resp.status_code == 422
+
+    def test_query_service_unavailable_when_not_initialized_with_context(self, client):
+        resp = client.post("/api/v1/query", json={"question": "hello", "context": "test"})
+        assert resp.status_code == 503
+        assert "Services not initialized" in resp.json()["detail"]

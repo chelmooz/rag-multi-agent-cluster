@@ -10,7 +10,7 @@
 
 > ⚠️ **Correction hardware (29/07/2026)** : le BC-250 tourne sous **Vulkan (Mesa/RADV), pas ROCm** — AMD ne fournit pas de bibliothèques rocBLAS pour ce GPU (GFX1013). Sa mémoire est **16 GB GDDR6 unifiée** partagée CPU/GPU (pas 12 GB dédiés). Voir [docs communautaires BC-250](https://elektricm.github.io/amd-bc250-docs/) et le [guide AI akandr/bc250](https://github.com/akandr/bc250).
 
-> ℹ️ **Beta test frontend** : voir `scripts/smoke_test_frontend_api.py` — validation automatisée API + frontend (32 scénarios, 32/32 PASSED sur le squelette actuel). **`/api/embed` → stub `NotImplementedError`** — à implémenter (ROADMAP Phase A7 : bge-m3 dense+sparse en un seul passage ou nomic-embed-text-v2-moe 768d, BM25 conservé en complément lexical ; fallback histogramme si indisponible).
+> ℹ️ **Beta test frontend** : voir `scripts/smoke_test_frontend_api.py` — validation automatisée API + frontend (33 scénarios, 33/33 PASSED). **`/api/embed`, `/api/query`, `/api/ingest` sont implémentés** (Phase A) mais renvoient `503` tant que les services (Ollama/Qdrant) ne sont pas démarrés en dehors du lifespan applicatif — couverture unitaire encore faible sur `ingestion.py`/`vector.py`/`lexical.py`/`reranker.py`/`ollama.py` (~30%). Seuls `/lint` et `/okf/*` restent de vrais stubs `NotImplementedError` (ROADMAP Phase B).
 
 > ✅ **Alignement OKF v0.2 (30/07/2026)** : Frontmatter wiki migré vers format OKF v0.2 (Google Cloud, juin 2026). Champs clés : `type` (obligatoire), `verified` (trust tier : unverified/machine-confirmed/human-reviewed), `status` (draft/stable/deprecated), `stale_after` (date), `sources` enrichis (crédibilité par source). Structure vault OKF : `index.md` (§8) + `log.md` (§9). CLI `okf` + plugin Obsidian `okf-enforcer` identifiés — **pas de dépendance dure tant que pré-1.0** (lecture/écriture frontmatter gérée nativement dans Wiki Agent).
 
@@ -21,8 +21,8 @@
 | Bloc | État |
 |---|---|
 | Conception documentaire (README, docs, diagrammes) | ✅ Terminée |
-| Squelette (settings, `/health` `/ready`, relay.json, injection_filter) | ✅ Implémenté — tests 14/14 |
-| Sprint 1 Hygiène/CI (ruff 0, mypy 0, .gitattributes, nginx/LXC 102-103 retirés) | ✅ Terminé |
+| Squelette (settings, `/health` `/ready`, relay.json, injection_filter) | ✅ Implémenté — tests 16/16 |
+| Sprint 1 Hygiène/CI (ruff 0, mypy 4 résiduelles sur `main.py`, .gitattributes, nginx/LXC 102-103 retirés) | ⚠️ **Quasi terminé** — ruff 0 erreur ✅, mypy 4 erreurs résiduelles (`response_model` vs `JSONResponse` d'erreur sur `/embed` `/ingest` `/query`) |
 | **Phase A — Pipeline RAG core** (OllamaClient, VectorService, Ingestion, endpoints) | ⏳ **EN COURS** (mock-first, D10) |
 | **Phase B — Multi-agents** (Planner, Judge/Advocate/Evaluator, build_graph) | ⏳ à faire |
 | Phase C — Déploiement hardware (LXC, Ollama, OMV, Glances) | ⏳ bloquée (machines à livrer) |

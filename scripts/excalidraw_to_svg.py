@@ -2,7 +2,6 @@
 """Convert Excalidraw JSON diagrams to clean, self-contained SVG."""
 
 import json
-import sys
 from pathlib import Path
 
 
@@ -77,7 +76,10 @@ def render_rect(el):
         rx = min(w, h) * 0.2
     elif isinstance(rn, (int, float)):
         rx = rn
-    a = f'x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    a = (
+        f'x="{x}" y="{y}" width="{w}" height="{h}" '
+        f'fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    )
     if rx:
         a += f' rx="{rx:.1f}" ry="{rx:.1f}"'
     if op < 1:
@@ -118,11 +120,20 @@ def render_text(el):
         style += f";opacity:{op}"
     tspans = []
     for i, line in enumerate(lines):
-        esc = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;") or " "
+        esc = (
+            line.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            or " "
+        )
         dy = 0 if i == 0 else lh
         tspans.append(f'        <tspan x="{tx}" dy="{dy}">{esc}</tspan>')
     t = "\n".join(tspans)
-    return f'    <text x="{tx}" y="{ty:.1f}" text-anchor="{anchor}" style="{style}">\n{t}\n    </text>'
+    return (
+        f'    <text x="{tx}" y="{ty:.1f}" text-anchor="{anchor}" style="{style}">'
+        f"\n{t}\n    </text>"
+    )
 
 
 def render_arrow(el):
@@ -138,7 +149,10 @@ def render_arrow(el):
     op = el.get("opacity", 100) / 100
     safe = stroke.replace("#", "")
     marker = f' marker-end="url(#a-{safe})"' if el.get("endArrowhead") else ""
-    a = f'd="{d}" fill="none" stroke="{stroke}" stroke-width="{sw}" stroke-linejoin="round" stroke-linecap="round"'
+    a = (
+        f'd="{d}" fill="none" stroke="{stroke}" stroke-width="{sw}" '
+        f'stroke-linejoin="round" stroke-linecap="round"'
+    )
     if op < 1:
         a += f' opacity="{op}"'
     a += dash_attr(el)
@@ -156,13 +170,15 @@ def convert(input_path, output_path):
     colors = arrow_colors(elements)
     lines = ['<?xml version="1.0" encoding="utf-8"?>']
     lines.append(
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{ox:.0f} {oy:.0f} {w:.0f} {h:.0f}" width="{w:.0f}" height="{h:.0f}">'
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'viewBox="{ox:.0f} {oy:.0f} {w:.0f} {h:.0f}" width="{w:.0f}" height="{h:.0f}">'
     )
     lines.append("  <defs>")
     for c in colors:
         s = c.replace("#", "")
         lines.append(
-            f'    <marker id="a-{s}" markerWidth="14" markerHeight="10" refX="12" refY="5" orient="auto" markerUnits="userSpaceOnUse">'
+            f'    <marker id="a-{s}" markerWidth="14" markerHeight="10" refX="12" refY="5" '
+            f'orient="auto" markerUnits="userSpaceOnUse">'
         )
         lines.append(f'      <polygon points="0 0, 14 5, 0 10" fill="{c}" />')
         lines.append("    </marker>")

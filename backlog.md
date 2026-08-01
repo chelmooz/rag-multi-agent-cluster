@@ -1036,3 +1036,261 @@ Le cluster est **100% offline** : les IA (Ollama) tournent en local sur les 3 ma
 
 ---
 
+
+## 01/08/2026 — Audit Claude (web) — corrections ruff + smoke test + docs
+
+### Constat de départ
+
+- `ruff check .` : **19 erreurs** alors que ROADMAP 1.7 et backlog (31/07) affirmaient "0 erreurs".
+- `mypy src` : **4 erreurs résiduelles** sur `src/api/main.py` (`response_model` vs `JSONResponse` d'erreur sur `/embed` `/ingest` `/ingest/file` `/query`) — non détectées par l'audit du 31/07.
+- `pytest` (suite officielle `tests/`) : échoue à la collecte, `python-multipart` absent de `pyproject.toml` (requis par `/ingest/file`).
+- Couverture réelle du cœur RAG (Phase A) : 47 % global, `ingestion.py` 27 %, `vector.py` 26 %, `lexical.py` 31 %, `reranker.py` 33 %, `ollama.py` 30 % — aucun test unitaire dédié (`tests/test_hybrid_search.py` de la tâche A8 n'existe pas).
+- `git status` : `ingestion.py`, `lexical.py`, `reranker.py` non trackés ; `main.py`, `vector.py`, `ollama.py`, `pyproject.toml`, `test_api.py` modifiés non commités.
+- `scripts/smoke_test_frontend_api.py` : "32/32 PASSED" affirmé dans README/backlog était faux à l'exécution — 30/32 (2 échecs). Le test n'avait pas suivi l'évolution du code : `/embed`, `/ingest`, `/query` sont passés de stub `NotImplementedError` (500) à endpoints implémentés (Phase A) qui renvoient `503` tant que les services ne sont pas initialisés hors lifespan. Bug annexe : `/embed` testé en `GET` alors que l'endpoint est en `POST`.
+
+### Corrections appliquées
+
+- `scripts/excalidraw_to_svg.py`, `scripts/smoke_test_frontend_api.py`, `src/core/settings.py`, `src/services/reranker.py`, `src/services/vector.py` : 19 → 0 erreur ruff (E501, F401, Q000, TRY300).
+- `src/services/vector.py` : refactor initial avait cassé le *type narrowing* mypy sur `upsert()` — corrigé en `if/else` explicite (aucune régression mypy introduite).
+- `scripts/smoke_test_frontend_api.py` : `test_22` scindé en `test_22` (stubs réels `/lint` `/okf/*` → 500) et `test_22b` (`/query` `/embed` implémentés mais non initialisés → 503) ; `test_26` passé en `POST` avec body valide. 32 → 33 scénarios, **33/33 PASSED** (vérifié par exécution).
+- `README.md` : ligne Sprint 1 (mypy 4 résiduelles, pas 0), tests squelette 14/14 → 16/16, note `/api/embed` mise à jour (implémenté Phase A, plus un stub), 32/32 → 33/33.
+- `ROADMAP.md` : lignes 1.7 (ruff, corrigé) / 1.8 (mypy, 4 résiduelles) + titre section Sprint 1 passé de "TERMINÉ" à "QUASI TERMINÉ".
+
+### Reste hors périmètre de cette session
+
+- `python-multipart` toujours absent de `pyproject.toml` — casse `pip install -e .` en env propre dès qu'on touche `/ingest/file`.
+- Les 4 erreurs mypy sur `src/api/main.py` (pattern `JSONResponse` vs `response_model`) non corrigées.
+- Couverture tests quasi nulle sur `ingestion.py`/`vector.py`/`lexical.py`/`reranker.py`/`ollama.py` — tâche A8 (`tests/test_hybrid_search.py`) toujours à faire.
+- Fichiers non commités (`ingestion.py`, `lexical.py`, `reranker.py`, etc.) — à committer.
+
+---
+
+## 01/08/2026 — Extraction Agent Skills (MCP vs Agent Skills) — B5.1
+
+### Contexte
+
+Discussion partie d'une image comparative MCP vs Agent Skills. Constat
+dans le code : `OllamaClientPool.judge()/advocate()/evaluate()/generate()`
+prennent un paramètre `prompt: str` dont le contenu n'était écrit nulle
+part — trou réel identifié avant même l'implémentation de B5.
+
+### Fait
+
+- 5 `SKILL.md` créés : `src/agents/skills/{generator,judge,advocate,evaluator,wiki_agent}/SKILL.md`
+  — critères d'évaluation, barème, format de sortie JSON, discipline
+  anti lost-in-the-middle/anti-hallucination par rôle.
+- `src/agents/skills/loader.py` : chargeur avec cache (`functools.cache`),
+  fail-fast (`ValueError`/`FileNotFoundError`) sur rôle/fichier manquant.
+- `build_prompt()` ajouté sur `GeneratorAgent`, `JudgeAgent`,
+  `AdvocateAgent`, `EvaluatorAgent` (assemble skill + données du relay,
+  testable sans mock LLM) ; `skill_reference()` sur `WikiAgent` (règles
+  de lint/frontmatter, pas un prompt LLM).
+- `evaluate/challenge/synthesize/generate()` restent `NotImplementedError`
+  — câblage `OllamaClientPool` volontairement hors scope (mock-first,
+  D10-D14).
+- Ruff (`0 erreur`, ignore `TRY003` ajouté pour `loader.py`, cohérent
+  avec les exceptions déjà en place sur `services/*.py`) + mypy (`0 erreur`)
+  vérifiés sur `src/agents/`.
+
+### Stratégie Agent Skills (question ouverte — PAS tranchée)
+
+Remarque de Michel : les skills OpenCode (`clean-code-discipline`,
+`loop-engineering`) et les nouveaux skills du projet ne sont pas écrits
+dans le dépôt versionné de la même façon que le code — et ce RAG n'est
+pas forcément soumis à la même discipline. Points à trancher avant que
+le nombre de `SKILL.md` grossisse (B7, LangGraph) :
+
+- **Localisation** : `src/agents/skills/<role>/SKILL.md` (actuel,
+  colocalisé avec le code Python) vs répertoire séparé hors du package
+  Python (ex. `skills/` à la racine, ou dans le vault Obsidian lui-même
+  comme pages `type: agent`) vs dépôt dédié partagé avec les skills
+  OpenCode.
+- **Versioning** : un `SKILL.md` modifié change le comportement d'un
+  agent au même titre qu'un changement de code — doit-il suivre la même
+  revue/CI que `src/` (ruff n'a rien à y valider, mais un lint markdown
+  + une revue humaine minimum semblent nécessaires) ?
+- **Testabilité** : `build_prompt()` est testable (comparaison texte),
+  mais rien ne garantit aujourd'hui qu'un `SKILL.md` modifié produit
+  encore un JSON conforme au format de sortie attendu par le code aval
+  (`evaluate()`/`synthesize()` qui parseront la réponse LLM) — un test
+  de contrat (schema JSON attendu documenté dans le skill lui-même,
+  vérifié par un test qui appelle un LLM mocké renvoyant un exemple
+  conforme) est à prévoir.
+- **Fact-checking = priorité n°1** : la chaîne Generator→Judge→Advocate→
+  Evaluator existe spécifiquement pour limiter le *lost in the middle*
+  et les hallucinations sur contexte long. La discipline anti
+  lost-in-the-middle est maintenant écrite explicitement dans les 4
+  skills concernés (Generator/Judge/Advocate/Evaluator) plutôt que
+  laissée implicite — à vérifier empiriquement une fois B5.2 câblé
+  (comparer taux de détection de hallucinations injectées
+  volontairement avant/après ce skill).
+
+### Prochaine étape
+
+B5.2 (câblage `OllamaClientPool`) reste bloqué par la stratégie
+mock-first (pas de pull de modèle avant déploiement, D10-D14) — les
+`build_prompt()` sont prêts à être branchés dès que le hardware C1-C6
+est livré.
+
+---
+
+## 01/08/2026 — Gap identifié (image RAG/Agents/MCP/A2A) — Human Control absent
+
+### Constat
+
+Comparaison du pipeline avec le lane "AI Agents" (Plan→Observe→Reflect
++ curseur Human Control ↔ Autonomous Action). Deux trous :
+
+- **PlannerAgent (B1)** : `src/agents/planner.py` n'existe pas encore
+  (déjà tracé backlog 0.29 / ROADMAP B1 — pas un oubli de planning,
+  juste pas construit).
+- **Human Control** : **rien n'existe** — le pipeline est 100 %
+  automatique, `Evaluator` écrit `verified.status = human-reviewed`
+  sans qu'aucun humain n'intervienne jamais (nom déjà signalé comme
+  trompeur dans `src/agents/skills/evaluator/SKILL.md`). Pas tracé
+  avant aujourd'hui.
+
+### Question ouverte (PAS tranchée)
+
+Faut-il un vrai point de contrôle humain avant publication — au moins
+pour `decision = draft` (confiance 0.5-0.75) ou pour des `tags`/
+`type` jugés sensibles — plutôt que publication 100 % automatique dès
+que le seuil de confiance de l'Évaluateur est atteint ? À trancher
+avant B5.2 (câblage réel du LLM Evaluator), sinon le comportement par
+défaut sera "aucun humain dans la boucle" par construction.
+
+---
+
+## 01/08/2026 — Coordination inter-agents (relay.json) — motifs d'interrogation avant B7
+
+### Constat
+
+A2A (discovery/delegation/routing/handoffs/audit) confirmé hors scope
+(cluster unique, pas d'agents distants) — mais la coordination interne
+simple (Generator→Judge→Avocat→Évaluateur→WikiAgent) a des trous
+identifiés en comparant le design documenté (29/07, `session_id` prévu
+dans le schéma relay.json) au code réel (`src/services/relay.py`) et à
+l'orchestrateur (`langgraph_orchestrator.py`, `build_graph()` toujours
+`NotImplementedError`).
+
+### Questions ouvertes (à trancher avant B7, PAS de décision prise ici)
+
+Formulées comme motifs d'interrogation pour guider une implémentation
+SOLID / Clean Code / KISS de `build_graph()` et de `RelayService` —
+pas comme un cahier des charges figé :
+
+- **SRP (Single Responsibility)** — `RelayService` fait aujourd'hui
+  à la fois "stockage d'un relay" et implicitement "un seul relay
+  global à la fois" (chemin fixe `nfs_relay_path`). Le `session_id`
+  existe dans le schéma JSON mais n'est responsabilité de personne
+  dans le code (aucune classe ne l'utilise pour isoler une session).
+  Question : la responsabilité "isoler une session" doit-elle être
+  portée par `RelayService` lui-même (chemin paramétré par
+  `session_id`), ou par un composant séparé (ex. un
+  `SessionRelayFactory`) qui construit un `RelayService` par requête ?
+- **KISS** — avant d'ajouter un verrou distribué ou une queue, est-ce
+  qu'un chemin de fichier `relay-{session_id}.json` suffit à éliminer
+  la collision entre requêtes concurrentes ? À valider : est-ce que
+  plusieurs requêtes concurrentes sont même un cas réel au vu du
+  volume attendu (usage perso/petite équipe) — sinon la solution la
+  plus simple est peut-être de documenter "1 requête à la fois" plutôt
+  que de complexifier `RelayService`.
+- **Audit trail vs KISS** — le design actuel écrase le relay à chaque
+  étape (`tmp` → `rename` atomique, un seul instantané). Ajouter un
+  historique (append plutôt qu'overwrite, ou copie dans `log.md`)
+  répond au besoin d'audit mais viole KISS si rien n'exploite cet
+  historique aujourd'hui — à ne construire que si un besoin réel de
+  traçabilité post-incident est identifié (cf. YAGNI, cohérent D14).
+- **Gestion d'échec / Open-Closed** — `RelayService.read()` renvoie
+  `None` si `stale()`, sans comportement défini en aval (retry ?
+  abandon ? escalade humaine — cf. gap "Human Control" du 01/08).
+  Question : ce comportement doit-il être injecté (stratégie de
+  gestion d'échec passée à l'orchestrateur, ouvert à l'extension sans
+  modifier `RelayService`) plutôt que codé en dur dans
+  `build_graph()` ?
+- **Dependency Inversion** — `build_graph()` doit-il dépendre d'une
+  abstraction du relais (interface `RelayService`-like) plutôt que du
+  chemin NFS concret, pour rester testable avec le mock-first actuel
+  (D10) sans dépendre de `/data/shared` ?
+
+### Prochaine étape
+
+À trancher au moment de B7 (`build_graph()` complet) — ne pas
+sur-designer `RelayService` avant que B6/B7 ne rendent ces questions
+concrètes (cohérent avec la discipline YAGNI déjà appliquée sur la
+mémoire, D14).
+
+---
+
+## 01/08/2026 — Grille "System Design Concepts" — un point neuf : PostgreSQL inutilisé
+
+### Constat
+
+Passage en revue face à une grille générique (Load Balancer, Cache,
+Database, Microservices, Message Queue, Rate Limiter, Search Service).
+6 des 7 points sont soit déjà couverts (Search Service = VectorService+
+LexicalSearch+Reranker), soit déjà tranchés (Rate Limiter = D5, Load
+Balancer/Microservices = hors échelle du projet), soit déjà tracés
+(Cache = B16). Un point neuf :
+
+- **PostgreSQL déployé (2 docker-compose) mais sans aucun schéma ni
+  table** — `postgres_dsn` (`src/core/settings.py`) n'est utilisé que
+  par le healthcheck (`_check_postgres` dans `src/api/main.py`/
+  `src/main.py`). Le commentaire settings.py dit "conversations,
+  feedback, mémoire long-terme" mais rien n'écrit dedans. Candidat
+  YAGNI (même logique que D14 sur la mémoire) : soit on construit un
+  usage réel, soit on questionne le déploiement d'un service qui ne
+  sert à rien pour l'instant.
+
+### Lien avec la question déjà loggée (coordination/relay)
+
+Le commentaire `settings.py` ligne 269 ("Redis : cache, queue
+orchestrateur, sessions") anticipe déjà Redis comme *message queue*
+pour l'orchestrateur — angle supplémentaire sur la question déjà
+ouverte "relay.json vs verrou/queue" du point précédent : une queue
+Redis (liste/stream) résoudrait la collision session concurrente sans
+ajouter de nouveau composant. Pas tranché ici non plus — juste noté
+que les deux questions ouvertes se recoupent.
+
+### Question ouverte (PAS tranchée)
+
+PostgreSQL : construire un usage réel (schéma conversations/feedback)
+maintenant, ou le retirer du docker-compose tant qu'aucun agent n'en a
+besoin (YAGNI, cohérent avec D14) ?
+
+---
+
+## 01/08/2026 — Grille "System Design Concepts" (suite, planche 4/4) — Notification System absent
+
+### Constat
+
+Search Service (déjà couvert), File Storage (déjà couvert par OMV/Borg),
+Real-time Analytics (déjà écarté, D9) : rien de neuf. Un point neuf :
+
+- **Aucun mécanisme de notification/alerte push.** Le monitoring actuel
+  (D9, Phase 7 allégée) est intégralement pull : graphs Proxmox natifs,
+  Glances web (`-w`), `/health`/`/ready`. Michel doit consulter
+  manuellement pour détecter une panne. Seul élément planifié et non
+  fait : "SMART NVMe : alertes usure (mail/webhook simple)" — un seul
+  cas précis, pas un mécanisme général.
+- Runbooks déjà écrits (0.22 : BC250 ne boot plus, RTX 4000 OOM, NFS
+  stale handle, Qdrant corruption, OMV HDD failure) mais rien ne
+  déclenche leur consultation — seul un check manuel régulier les
+  rendrait utiles en pratique.
+
+### Distinction avec le gap "Human Control" (01/08, déjà loggé)
+
+Celui-ci porte sur la validation de contenu avant publication (pipeline
+Evaluator). Celui-ci porte sur la santé opérationnelle du cluster
+(pannes hardware/service). Deux besoins différents, tous deux absents.
+
+### Question ouverte (PAS tranchée)
+
+Un webhook simple (mail ou Slack/ntfy self-hosted) déclenché par les
+health checks déjà en place (`/health`, `/ready`, D0.17) suffirait
+probablement — cohérent avec l'esprit "allégé" de D9 (pas de
+Prometheus/Grafana), juste un signal push minimal plutôt qu'un
+mécanisme pull uniquement. Pas tranché ici, à discuter au moment de la
+Phase 7.
+
+---

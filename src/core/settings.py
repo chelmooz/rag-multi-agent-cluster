@@ -103,7 +103,10 @@ class Settings(BaseSettings):
     # Embedding
     embedding_model: str = Field(
         default="hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0",
-        description="Modèle embedding principal (768d, dense+sparse via bge-m3 fallback) — nomic-embed-text-v2-moe Q8_0 via HF",
+        description=(
+            "Modèle embedding principal (768d, dense+sparse via bge-m3 fallback) "
+            "— nomic-embed-text-v2-moe Q8_0 via HF"
+        ),
         validation_alias="EMBEDDING_MODEL",
     )
     embedding_model_digest: str | None = Field(

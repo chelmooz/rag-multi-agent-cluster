@@ -1,4 +1,4 @@
-"""Smoke test automatisé API — 32 scénarios de validation.
+"""Smoke test automatisé API — 33 scénarios de validation.
 
 Valide que l'API FastAPI tourne et répond correctement.
 Tous les endpoints doivent exister et retourner 200/422/500 JSON (pas de 404 nus).
@@ -51,10 +51,11 @@ class TestSmoke:
 
 
 class TestChat:
-    def test_06_query_returns_500_not_implemented(self, client):
+    def test_06_query_returns_503_when_not_initialized(self, client):
+        """Endpoint /query returns 503 when services not initialized (test environment)."""
         resp = client.post(f"{BASE}/query", json={"question": "test"})
-        assert resp.status_code == 500
-        assert "detail" in resp.json()
+        assert resp.status_code == 503
+        assert "Services not initialized" in resp.json()["detail"]
 
     def test_07_query_rejects_empty_body(self, client):
         resp = client.post(f"{BASE}/query", json={})
@@ -62,17 +63,20 @@ class TestChat:
 
     def test_08_query_accepts_optional_context(self, client):
         resp = client.post(f"{BASE}/query", json={"question": "hello", "context": "test"})
-        assert resp.status_code == 500
+        assert resp.status_code == 503
+        assert "Services not initialized" in resp.json()["detail"]
 
-    def test_09_ingest_returns_500_not_implemented(self, client):
+    def test_09_ingest_validates_required_fields(self, client):
+        """Endpoint /ingest validates required fields (returns 422 for missing text)."""
         resp = client.post(f"{BASE}/ingest")
-        assert resp.status_code == 500
+        assert resp.status_code == 422
         assert "detail" in resp.json()
 
-    def test_10_embed_returns_500_not_implemented(self, client):
-        resp = client.get(f"{BASE}/embed")
-        assert resp.status_code == 500
-        assert "detail" in resp.json()
+    def test_10_embed_returns_503_when_not_initialized(self, client):
+        """Endpoint /embed returns 503 when services not initialized (test environment)."""
+        resp = client.post(f"{BASE}/embed", json={"texts": ["test"]})
+        assert resp.status_code == 503
+        assert "Services not initialized" in resp.json()["detail"]
 
     def test_11_lint_returns_500_not_implemented(self, client):
         resp = client.get(f"{BASE}/lint")
@@ -113,7 +117,14 @@ class TestAgents:
         resp = client.get("/openapi.json")
         assert resp.status_code == 200
         paths = resp.json()["paths"]
-        for path in (f"{BASE}/health", f"{BASE}/query", f"{BASE}/ready", f"{BASE}/ingest", f"{BASE}/embed"):
+        expected_paths = (
+            f"{BASE}/health",
+            f"{BASE}/query",
+            f"{BASE}/ready",
+            f"{BASE}/ingest",
+            f"{BASE}/embed",
+        )
+        for path in expected_paths:
             assert path in paths, f"Missing {path}"
 
 
@@ -139,11 +150,9 @@ class TestSettings:
 
 
 class TestCyber:
-    def test_22_all_not_implemented_return_500_json(self, client):
+    def test_22_stub_endpoints_return_500_json(self, client):
+        """Endpoints encore non implémentés (ROADMAP Phase B) → 500 NotImplementedError."""
         endpoints = [
-            ("POST", f"{BASE}/query", {"json": {"question": "test"}}),
-            ("POST", f"{BASE}/ingest", {}),
-            ("GET", f"{BASE}/embed", {}),
             ("GET", f"{BASE}/lint", {}),
             ("POST", f"{BASE}/okf/validate", {}),
             ("GET", f"{BASE}/okf/list", {}),
@@ -152,6 +161,17 @@ class TestCyber:
         for method, url, kwargs in endpoints:
             resp = client.request(method, url, **kwargs)
             assert resp.status_code == 500, f"{method} {url} expected 500"
+            assert "detail" in resp.json()
+
+    def test_22b_implemented_endpoints_return_503_when_uninitialized(self, client):
+        """Endpoints implémentés (Phase A) mais services non démarrés hors lifespan → 503."""
+        endpoints = [
+            ("POST", f"{BASE}/query", {"json": {"question": "test"}}),
+            ("POST", f"{BASE}/embed", {"json": {"texts": ["test"]}}),
+        ]
+        for method, url, kwargs in endpoints:
+            resp = client.request(method, url, **kwargs)
+            assert resp.status_code == 503, f"{method} {url} expected 503"
             assert "detail" in resp.json()
 
     def test_23_not_found_returns_json(self, client):
@@ -170,8 +190,8 @@ class TestCyber:
 
 class TestVision:
     def test_26_embed_has_structured_error(self, client):
-        resp = client.get(f"{BASE}/embed")
-        assert resp.status_code == 500
+        resp = client.post(f"{BASE}/embed", json={"texts": ["test"]})
+        assert resp.status_code == 503
         assert "detail" in resp.json()
 
     def test_27_ready_checks_have_status_field(self, client):
@@ -210,7 +230,9 @@ class TestMonitors:
         assert resp.status_code == 200
         tags = [t["name"] for t in resp.json().get("tags", [])]
         expected = {"Health", "RAG", "Ingestion", "Embedding", "OKF", "Wiki"}
-        assert expected.issubset(tags) or resp.json()["paths"], f"Missing tags: {expected - set(tags)}"
+        assert expected.issubset(tags) or resp.json()["paths"], (
+            f"Missing tags: {expected - set(tags)}"
+        )
 
 
 if __name__ == "__main__":
