@@ -1610,18 +1610,17 @@ Nouveau frontend unifié pour remplacer la page wiki : une seule page web
 - temps de réponse affiché (pas de streaming token obligatoire, SSE implémenté quand même)
 - M3 : pas d'émulation, Glances natif Fedora 43 (port 61208), pas de py3nvml (AMD/Vulkan)
 
-### Renommage JARVIS → CTOS (validation utilisateur)
+### Renommage de la marque → CTOS (validation utilisateur)
 
-Le projet n'est plus "JARVIS" — le dashboard s'appelle **CTOS**. Toutes les
-occurrences renommées : branding frontend (index.html, chat.html, CSS, JS,
-namespace `JARVIS` → `CTOS`, localStorage `jarvis-theme` → `ctos-theme`),
-prompt LLM (`Tu es CTOS, assistant…`), hostnames LXC (`jarvis-master` →
-`rag-master`, `jarvis-vectordb` → `rag-vectordb`, `jarvis-gpu-inference` →
-`rag-gpu-inference`, `jarvis-workers` → `rag-workers`, VM pfSense
-`jarvis-pfsense` → `rag-pfsense`), mot de passe défaut LXC `jarvis` →
-`ctos`, pyproject (auteur "Projet CTOS", email `ctos@example.com`),
-backlog (tableau hostname + trace session). Vérifié : `git grep -i jarvis` =
-0 occurrence (hors `static/fonts` binaire).
+L'ancien nom de marque du projet a été remplacé par **CTOS** (dashboard) et
+`rag-*` (hostnames LXC). Toutes les occurrences renommées : branding
+frontend (index.html, chat.html, CSS, JS, namespace JS → `CTOS`,
+localStorage `ctos-theme`), prompt LLM (`Tu es CTOS, assistant…`), hostnames
+LXC (`rag-master`, `rag-vectordb`, `rag-gpu-inference`, `rag-workers`, VM
+pfSense `rag-pfsense`), mot de passe défaut LXC → `ctos`, pyproject (auteur
+"Projet CTOS", email `ctos@example.com`), backlog (tableau hostname + trace
+session). Vérifié : `git grep -i` de l'ancien nom = 0 occurrence (hors
+`static/fonts` binaire).
 
 ### Fait
 
