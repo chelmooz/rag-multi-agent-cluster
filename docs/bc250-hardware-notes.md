@@ -12,12 +12,13 @@ Sources faisant autorité (à consulter avant toute modification des scripts `in
 - Mémoire : **16 GB GDDR6 unifiée**, partagée CPU+GPU (pas de VRAM dédiée séparée). 512 MB carve-out BIOS pour le framebuffer.
 - CU : 40 physiques, **24 actifs en stock** (masqués en usine), 40 après le patch communautaire (gain mesuré : +32% à +61% tok/s en génération selon le modèle).
 - Deux réglages kernel obligatoires avant de faire tourner des modèles 14B+ :
-  - `ttm.pages_limit=4194304` (16 GiB) — sinon plafond silencieux ~7.4 GiB et échecs HTTP 500 en cours d'inférence
+  - `ttm.pages_limit=3959290` (~15 GiB) — sinon plafond silencieux ~7.4 GiB et échecs HTTP 500 en cours d'inférence
   - Vérifier la valeur **après reboot**, pas seulement après l'avoir posée (piège `systemd-tmpfiles` documenté)
 - Ollama : `OLLAMA_VULKAN=1`, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q4_0` (KV cache 4-bit, quasi aucune perte de vitesse, 2x plus de contexte utilisable), `OLLAMA_CONTEXT_LENGTH=65536` comme plafond raisonnable pour de l'interactif.
 - Swap NVMe recommandé (~16 Go) : les modèles 11+ Go sur une machine à 16 Go RAM unifiée ont besoin de cette marge.
 - Gouverneur GPU obligatoire (`cyan-skillfish-governor-smu`) pour le scaling de fréquence — sans lui, pas de contrôle de clock fiable sur cette puce.
-- OS : Debian **Testing/Sid** requis pour avoir Mesa 25.1+ (Debian Stable est trop ancien). À réconcilier avec l'antiX-26 déjà en place sur le poste de Michel.
+- OS : **Fedora 43** (décision 02/08/2026) — Mesa 25.1+ en mainline, pas de experimental/compilation manuelle. Debian Testing/Sid abandonné. antiX-26 réservé au poste de travail de Michel, pas au BC-250.
+- BIOS : **moddé Forbidden-Darkness** (image complète, base P3.00 incluse — flash UEFI direct, aucun flash P3.00 stock préalable). Core unlock 6c/12t → **8c/16t persistant** + carve-out VRAM dynamique 512 MB. Plus besoin du script volatil SMU (rw-r-r-0644), gardé en fallback.
 
 ## Ce que ce projet ne couvre pas encore
 

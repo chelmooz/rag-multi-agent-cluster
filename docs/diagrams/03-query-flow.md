@@ -29,7 +29,7 @@ flowchart TB
         Relay["📄 relay.json<br/>NFS M1↔M2"]:::relay
         Judge["① ⚖️ Juge 8b — M2<br/>Qualité + Cohérence"]:::m2
         Advocate["② 😈 Avocat 8b — M2<br/>Failles + Hallucinations"]:::m2
-        Evaluator["③ ✅ Évaluateur 4b — M1<br/>Synthèse des deux avis"]:::m1
+        Evaluator["③ ✅ Évaluateur Granite 4.1 8b — M1<br/>Synthèse des deux avis"]:::m1
     end
 
     Answer["🎉 Réponse validée + citations<br/>Archivée vault (pattern Karpathy)"]:::front

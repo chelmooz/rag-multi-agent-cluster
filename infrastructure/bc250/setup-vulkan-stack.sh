@@ -21,8 +21,9 @@ cat <<'EOF'
 - OS : Fedora 43 Workstation (Mesa 25.1+ en mainline — OK tel quel).
 - Kernel : viser 6.18.18 LTS. ÉVITER 6.15.0-6.15.6 et 6.17.8-6.17.10
   (bugs GPU driver connus). Pinner via versionlock (§3.2 du deployment-guide).
-- BIOS : P3.00 moddé Forbidden-Darkness (core unlock 8c/16t + VRAM dynamique
-  512MB) — voir docs/deployment-guide.md §3.0.
+- BIOS : moddé Forbidden-Darkness (image complète, base P3.00 incluse —
+  core unlock 8c/16t + VRAM dynamique 512MB, flash UEFI direct). Voir
+  docs/deployment-guide.md §3.0.
 - Paramètre de boot nomodeset nécessaire à l'installation, à retirer une fois
   Mesa installé.
 EOF

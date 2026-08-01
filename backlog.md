@@ -123,7 +123,7 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Machine 1** | **Master** (Orchestration, API, VectorDB, Evaluator, Embedding CPU, Relay NFS) | 2× Xeon E5-2699 v4 / **32 GB ECC** | AMD Radeon RX 580 (8 GB) | 1 TB NVMe | Proxmox VE 9.3 (LXC 100, 101, VM 104) — monitoring natif via UI Proxmox, plus de LXC 103 dédié |
 | **Machine 2** | **GPU Worker + Services** (Reranker, Judge, Avocat, Backup Embedding CPU, **OMV Backup**) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | **1 TB NVMe** + **HDD 2TB physique** | Proxmox VE 9.3 (LXC 105, 200 privilégié GPU, 201) — monitoring natif via UI Proxmox |
-| **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Fast-check) | Zen 2 6c/12t (**→ 8c/16t core unlock**, persistant — flashé au niveau BIOS via [Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script), configure aussi le carve-out VRAM dynamique 512 MB) / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU débloquées via [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock), séparé) | Debian Testing/Sid baremetal (Ollama Vulkan natif) |
+| **Machine 3** | **BC250 Baremetal** (Generator, Text-to-SQL, Vision, Fast-check) | Zen 2 6c/12t (**→ 8c/16t core unlock**, persistant — BIOS complet Forbidden-Darkness, base P3.00 incluse, flash UEFI direct, aucun flash P3.00 stock préalable) / **16 GB GDDR6 unifiée** | **Intégré - Vulkan ONLY** (40 CU débloquées via [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock), séparé) | Fedora 43 baremetal (Ollama Vulkan natif) |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
 * VM 104 = pfSense (reverse proxy + firewall + NAT).
@@ -173,25 +173,24 @@
 - [ ] Carte BC-250 reçue, inspectée (PCB, condensateurs, slot PCIe)
 - [ ] Alim 300W+ 12V 8-pin PCIe connectée
 - [ ] Refroidissement AIO / high-CFM fans monté (test thermal paste)
-- [ ] BIOS flashé P3.00+ community-patched (elektricM guide)
-- [ ] BIOS VRAM: Dynamic 512 MB configuré
-- [ ] Backup BIOS P3.00 sur USB (procédure recovery validée)
+- [ ] BIOS moddé Forbidden-Darkness flashé (image complète, base P3.00 incluse — aucun flash P3.00 stock préalable)
+- [ ] BIOS VRAM: Dynamic 512 MB configuré (dans le BIOS Forbidden-Darkness)
+- [ ] Backup BIOS d'origine sur USB (procédure recovery validée)
 
 ### OS & Kernel
-- [ ] Debian Testing/Sid installé (netinst, `nomodeset` au boot install)
-- [ ] Kernel 6.18.18 LTS ou 6.19.x installé (pin apt pour éviter 6.15/6.17 buggés)
-- [ ] GRUB: `ttm.pages_limit=4194304 ttm.page_pool_size=4194304 amdgpu.sg_display=0`
-- [ ] `update-grub` + reboot + vérif `cat /proc/cmdline`
+- [ ] Fedora 43 installé (Basic Graphics Mode au boot install, `nomodeset` si écran noir)
+- [ ] Kernel 6.18.18 LTS ou 6.19.x installé (pin versionlock pour éviter 6.15/6.17 buggés)
+- [ ] GRUB: `ttm.pages_limit=3959290 ttm.page_pool_size=3959290 amdgpu.sg_display=0`
+- [ ] `grub2-mkconfig -o /boot/grub2/grub.cfg` + reboot + vérif `cat /proc/cmdline`
 - [ ] CPU governor: `performance` persistant (tmpfiles.d)
 
 ### Mesa / Vulkan
-- [ ] Repo `experimental` ajouté + pin-priority 500 pour mesa-vulkan-drivers
-- [ ] `apt install -t experimental mesa-vulkan-drivers libgl1-mesa-dri mesa-utils vulkan-tools`
+- [ ] `dnf install mesa-vulkan-drivers vulkan-tools mesa-utils` (mainline Fedora 43)
 - [ ] `vulkaninfo --summary` → "AMD BC-250 (RADV GFX1013)" + INTEGRATED_GPU
 - [ ] `glxinfo` → OpenGL 4.6+ Mesa 25.1.x
 
 ### GPU Governor (Oberon)
-- [ ] `cyan-skillfish-governor-smu` .deb installé (Magnap/filippor release)
+- [ ] `cyan-skillfish-governor-smu` installé (COPR filippor/bazzite)
 - [ ] Config `/etc/cyan-skillfish-governor-smu/config.toml` → core_cap_mhz=1500, voltage_mv=900
 - [ ] `systemctl enable --now cyan-skillfish-governor-smu`
 - [ ] `journalctl -u cyan-skillfish-governor-smu` → OK
@@ -268,9 +267,9 @@
 
 | Piège | Symptôme | Solution |
 |-------|----------|----------|
-| **`systemd-tmpfiles` écrase `ttm.pages_limit`** | `cat /sys/module/ttm/parameters/pages_limit` → `3145728` (12 GiB) au lieu de `4194304` | Vérifier **après reboot**, pas après écriture. `tmpfiles.d` priorité finale gagne. Corriger `/etc/tmpfiles.d/gpu-ttm-memory.conf` |
+| **`systemd-tmpfiles` écrase `ttm.pages_limit`** | `cat /sys/module/ttm/parameters/pages_limit` → `3145728` (12 GiB) au lieu de `3959290` (~15 GiB) | Vérifier **après reboot**, pas après écriture. `tmpfiles.d` priorité finale gagne. Corriger `/etc/tmpfiles.d/gpu-ttm-memory.conf` |
 | **Kernel update casse 40 CU unlock** | `active_cu_number` retombe à 24 | Rebuild module patché + `dracut -f` + reboot **après chaque kernel upgrade** |
-| **Mesa dans Debian Stable trop vieux** | `vulkaninfo` → Mesa 24.x, pas de RADV GFX1013 | **OBLIGATOIRE** Debian Testing/Sid + repo experimental pin 500 |
+| **Mesa trop vieux** | `vulkaninfo` → Mesa 24.x, pas de RADV GFX1013 | **Fedora 43** — Mesa 25.1+ en mainline, `dnf upgrade mesa-vulkan-drivers` |
 | **ROCm installé par erreur** | `rocblas_abort()`, compute queue hang | **Ne jamais installer ROCm**. Vulkan only. |
 | **CPU governor `schedutil`** | Spikes latence TTFT, instabilité | `performance` lock via tmpfiles.d |
 | **zram trop gros** | Concurrence RAM physique avec modèles | Max 2 GB (`zram-size = 2048`) |
@@ -337,7 +336,7 @@ Le BC250 n'a **pas** de VRAM séparée. CPU et GPU partagent le même pool 16GB 
 
 **3. L'embedding tient sur Master sans aucun coût**
 
-Le Master LXC 100 a **2 × Xeon 2699** (16c/32t chacun, 32GB ECC) contre 6c/12t Zen 2 sur BC250 :
+Le Master LXC 100 a **2 × Xeon 2699** (16c/32t chacun, 32GB ECC) contre 8c/16t Zen 2 sur BC250 :
 - Les Xeon sont **inutilisés** pour le ML (Master n'a pas de GPU)
 - L'ingestion est **offline** → pas d'impact latence
 - **Aucune contention mémoire** possible (RAM ECC séparée)
@@ -357,7 +356,7 @@ Le Master LXC 100 a **2 × Xeon 2699** (16c/32t chacun, 32GB ECC) contre 6c/12t 
 
 **5. Règle d'or pour le BC250 (confirmée docs communautaires)**
 
-> **Le CPU du BC250 est le serviteur du GPU.** Toute charge CPU significative sur BC250 est un vol de bande passante mémoire au Generator 14B. Le CPU BC250 (Zen 2 6c/12t) doit rester au repos (ou charge minimale) quand le GPU fait de l'inférence Vulkan.
+> **Le CPU du BC250 est le serviteur du GPU.** Toute charge CPU significative sur BC250 est un vol de bande passante mémoire au Generator 14B. Le CPU BC250 (Zen 2 8c/16t) doit rester au repos (ou charge minimale) quand le GPU fait de l'inférence Vulkan.
 
 **Références** :
 - [AMD BC250 Documentation](https://elektricm.github.io/amd-bc250-docs/) — Unified Memory Architecture, Vulkan-only, 40 CU unlock
@@ -445,7 +444,7 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 2. Crée de la contention thermique (235W TDP max dans format compact)
 3. Réduit la VRAM effective disponible pour le Generator 14B
 
-→ **CPU BC250 (Zen 2 6c/12t) DOIT RESTER AU REPOS** pendant l'inférence GPU. Embedding = Machine 1 CPU (principal) / Machine 2 CPU (backup).
+→ **CPU BC250 (Zen 2 8c/16t) DOIT RESTER AU REPOS** pendant l'inférence GPU. Embedding = Machine 1 CPU (principal) / Machine 2 CPU (backup).
 
 ---
 
@@ -514,7 +513,7 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 |--------|--------|------------|
 | **Single Point of Failure : Machine 1 (Master)** | Qdrant + API + Wiki + Evaluator + NFS = tout s'arrête si M1 tombe | → Backup Qdrant snapshot quotidien sur M2. NFS export read-only possible depuis M2. |
 | **NFS latency sur évaluation** | Relay file = point de synchronisation bloquant | → MTU 9000 + 10GbE = <1ms RTT. Timeout 120s Juge → Avocat. Acceptable. |
-| **BC250 baremetal = pas de snapshot/rollback** | Mise à jour noyau/BIOS risquée | → Tests sur VM simulée d'abord. Backup config `/etc` + BIOS P3.00 sur USB. |
+| **BC250 baremetal = pas de snapshot/rollback** | Mise à jour noyau/BIOS risquée | → Tests sur VM simulée d'abord. Backup config `/etc` + BIOS d'origine sur USB. |
 | **RTX 4000 8GB limite dure** | Pas de place pour modèle > 7B quantifié | → Choix validé : Judge/Avocat 7B max. Si besoin 14B → seul BC250 peut. |
 | **Modèles non verrouillés (tags Ollama)** | `hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M` pull = version mobile → reproductibilité | → Fixer digests SHA256 dans `.env` / `docker-compose`. `ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M@sha256:...` |
 | **Obsidian vault lock concurrency** | Client + Cluster écrivent simultanément | → NFS `no_root_squash` + file locking (fcntl). Ou versioning git sidecar. |
@@ -808,13 +807,13 @@ amdgpu.gttsize=14750 ttm.pages_limit=3959290 ttm.page_pool_size=3959290
 ```
 Les 3 paramètres DOIVENT être posés ensemble — gttsize seul ne suffit pas (plafond ttm par défaut atteint avant, crash driver). **NE JAMAIS** utiliser `amd_iommu=on` (IOMMU cassé sur BC-250).
 
-**Kernel cible** : 6.18.18 LTS recommandé (doc officielle), pin avec `apt-mark hold`. Éviter 6.15.0-6.15.6 et 6.17.8-6.17.10 (bugs GPU).
+**Kernel cible** : 6.18.18 LTS recommandé (doc officielle), pin avec `dnf versionlock` (ou excludepkgs). Éviter 6.15.0-6.15.6 et 6.17.8-6.17.10 (bugs GPU).
 
-**Mesa** : 25.1.3 minimum, 25.3+ recommandé. Debian Testing/Sid uniquement, via experimental repo, pin-priority 500.
+**Mesa** : 25.1.3 minimum, 25.3+ recommandé. Fedora 43 mainline (décision 02/08/2026) — plus de repo experimental ni pin-priority.
 
 **Gouverneur** : `cyan-skillfish-governor-smu` recommandé (filippor, tarball release, pas de kernel patch nécessaire). Config ideal : safe-points 1000/700, 1500/900, 2000/1000, 2200/1000.
 
-**40 CU Unlock** : Optionnel interactif (step 9/9). Clone duggasco/bc250-40cu-unlock, `cu_map.sh` obligatoire avant, `active_cu_number=40` à vérifier. Rebuild après chaque kernel upgrade (hook apt). Rollback via `disable`/`restore`.
+**40 CU Unlock** : Optionnel interactif (step 9/9). Clone duggasco/bc250-40cu-unlock, `cu_map.sh` obligatoire avant, `active_cu_number=40` à vérifier. Rebuild après chaque kernel upgrade (hook dnf). Rollback via `disable`/`restore`.
 
 ---
 
@@ -1520,6 +1519,55 @@ vs Générateur Qwen3-14B).
 
 - Phase C4 : pulls réels des modèles (digests SHA256 à remplir dans `.env`)
 - Déploiement Fedora 43 sur le BC-250 réel (guide §3 prêt).
+
+---
+
+## 02/08/2026 — Clarification BIOS Forbidden-Darkness (flash P3.00 inutile) + harmonisation mermaid
+
+### Contexte
+
+Retour de Michel : le flash P3.00 n'est **plus nécessaire** comme étape
+préalable — le repo Forbidden-Darkness fournit un **BIOS complet** (base
+P3.00 incluse, core unlock 8c/16t + VRAM dynamique 512 MB), on flashe donc
+directement cette image en UEFI. Demande aussi : vérifier les diagrammes
+mermaid et signaler les corrections.
+
+### Fait
+
+- `docs/deployment-guide.md` §3.0 : "BIOS cible P3.00 moddé" → "BIOS moddé
+  Forbidden-Darkness complet, flash UEFI direct, AUCUN flash P3.00 stock
+  préalable" (tableau + blocs code).
+- `README.md` : tableau Machine 3 (BIOS final = Forbidden-Darkness, OS →
+  Fedora 43 — restait "Debian Testing/Sid") ; 3 mermaid alignés
+  "Zen 2 6c/12t" → "8c/16t (core unlock BIOS)" ; règle d'or CPU → 8c/16t ;
+  décision Roadmap "AntiX-26 vs Debian" → Fedora 43.
+- `docs/diagrams/03-query-flow.md` : Évaluateur "4b" → "Granite 4.1 8b".
+- `docs/diagrams/05-network-topology.md` + `06-physical-topology.md` :
+  "6c/12t" → "8c/16t (core unlock BIOS)".
+- `backlog.md` : tableau Machine 3 (BIOS + Fedora 43) ; checklist OS/Mesa/
+  Governor (dnf + grub2-mkconfig + COPR, plus d'experimental) ; table pièges
+  (Mesa → Fedora mainline, tmpfiles 3959290) ; kernel pin dnf versionlock ;
+  rebuild 40 CU hook dnf ; garde "6c/12t → 8c/16t" légitime dans les
+  descriptions d'état d'origine.
+- `docs/bc250-hardware-notes.md` : OS → Fedora 43, BIOS Forbidden-Darkness
+  (P3.00 inclus, fallback SMU), ttm.pages_limit → 3959290.
+- `infrastructure/bc250/enable-cpu-core-unlock.sh` : `apt` → `dnf` (stress-ng).
+- `infrastructure/bc250/setup-vulkan-stack.sh` : formulation BIOS clarifiée.
+
+### Diagrammes vérifiés — état final
+
+- 01 ✅ corrigé (OMV M2, Granite, Fedora 43, 8c/16t)
+- 02 ✅ ok (ingestion, pas de mention M3 BIOS)
+- 03 ✅ corrigé (Évaluateur Granite 4.1 8b)
+- 04 ✅ ok (OMV sur M2, cohérent)
+- 05 ✅ corrigé (8c/16t)
+- 06 ✅ corrigé (8c/16t)
+
+### Validation
+
+- Rien de code modifié (doc + scripts shell) — pas de test à relancer.
+- Aucun `apt`/experimental/antiX-26 résiduel hors contexte M1/M2 (LXC Debian légitime).
+
 
 
 

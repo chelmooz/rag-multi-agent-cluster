@@ -108,7 +108,7 @@ subgraph M2["🎮 M2 — GPU WORKER · Xeon E5-2698 v4 · 64 GB ECC · RTX 4000 
         OMV["📦 OMV Backup<br/>HDD 2TB · borg/rsync · LXC 105"]:::m2
     end
 
-    subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
+    subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 8c/16t (core unlock BIOS) · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
         Gen["🤖 Générateur<br/>Qwen3-14B (Q4_K_M ~9GB)<br/>ou Qwen3-30B-A3B MoE (Q2_K ~11.3GB)<br/>Ollama Vulkan natif · CPU au repos"]:::m3
         Variants["🔀 Variantes<br/>Text-to-SQL (Qwen3-Coder-30B-A3B)<br/>Vision (llava-v1.6-vicuna-13b)<br/>Fast-check (granite-4.0-h-tiny)"]:::m3
         Glances["📊 Glances -w :61208<br/>Monitoring BC-250 (décision D9)"]:::m3
@@ -307,7 +307,7 @@ flowchart TB
 subgraph VLAN10["VLAN 10 · Cluster — 10.10.0.0/24 — backbone 10G · MTU 9000 (jumbo frames, +15% débit)"]
         M1["M1 — Master · 10.10.0.1<br/>2× Xeon E5-2699v4 / 32GB ECC<br/>LXC 100 Orchestrator+Wiki · LXC 101 Qdrant<br/>VM 104 pfSense (reverse proxy) · Export NFS /data/shared"]:::m1
         M2["M2 — GPU Worker · 10.10.0.2<br/>Xeon E5-2698v4 / 64GB ECC · RTX 4000 8GB<br/>LXC 105 OMV Backup · LXC 200 Inference GPU (Reranker+Juge)<br/>LXC 201 Workers Agents (Avocat+Backup Embedding)<br/>Mount NFS /data/shared · HDD 2TB passthrough"]:::m2
-        M3["M3 — BC-250 Baremetal<br/>Zen 2 6c/12t · 16GB GDDR6 unifiée<br/>40 CU débloquées · Vulkan/Mesa (RADV)<br/>Générateur · Text-to-SQL · Vision · Fast-check<br/>Ollama Vulkan natif (pas de LXC) · Glances :61208"]:::m3
+        M3["M3 — BC-250 Baremetal<br/>Zen 2 8c/16t (core unlock BIOS) · 16GB GDDR6 unifiée<br/>40 CU débloquées · Vulkan/Mesa (RADV)<br/>Générateur · Text-to-SQL · Vision · Fast-check<br/>Ollama Vulkan natif (pas de LXC) · Glances :61208"]:::m3
         Relay["relay.json<br/>TTL 300s"]:::relay
     end
 
@@ -448,7 +448,7 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 |---|---|---|---|---|
 | **Machine 1** | **Master** (Orchestration, API, VectorDB, Évaluateur, Embedding CPU, Relay NFS) | 2× Xeon E5-2699 v4 / **32 GB ECC** | **AMD Radeon RX 580** (8 GB) — fallback léger uniquement | Proxmox VE 9.3 (LXC 100, 101, VM 104*) |
 | **Machine 2** | **GPU Worker + Services** (Inference, Reranking, Juge, Avocat, Backup Embedding CPU, Backup) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | Proxmox VE 9.3 (LXC 105, 200 privilégié GPU, 201) |
-| **Machine 3** | **BC-250 Baremetal** (Générateur, Text-to-SQL, Vision, Fast-check) | Carte minage BIOS modifiée · Puce PS5 (BC-250, Zen 2, **6c/12t → 8c/16t core unlock**, persistant — flashé au niveau BIOS via [Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script), qui configure aussi le carve-out VRAM dynamique 512 MB) · **40 CU débloquées** via [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock) (séparé, GPU) | **16 GB GDDR6 unifiée** CPU+GPU · ~12 GB dispo pour IA (512 MB carve-out dynamique) | **BIOS P3.00 moddé (flash UEFI) · VRAM dynamique 512 MB** · Debian Testing/Sid (baremetal, Ollama Vulkan natif) |
+| **Machine 3** | **BC-250 Baremetal** (Générateur, Text-to-SQL, Vision, Fast-check) | Carte minage BIOS modifiée · Puce PS5 (BC-250, Zen 2, **6c/12t → 8c/16t core unlock**, persistant — flashé au niveau BIOS via [Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script), BIOS complet (base P3.00 incluse) qui configure aussi le carve-out VRAM dynamique 512 MB) · **40 CU débloquées** via [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock) (séparé, GPU) | **16 GB GDDR6 unifiée** CPU+GPU · ~12 GB dispo pour IA (512 MB carve-out dynamique) | **BIOS moddé Forbidden-Darkness (flash UEFI direct) · VRAM dynamique 512 MB** · Fedora 43 (baremetal, Ollama Vulkan natif) |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
 \* VM 104 = pfSense (reverse proxy + firewall + NAT), uniquement si pas d'appliance dédiée.
@@ -463,7 +463,7 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 
 ### ⚡ Règle d'or BC-250
 
-> **Le CPU du BC-250 est le serviteur du GPU.** Toute charge CPU significative sur M3 est un vol de bande passante mémoire au Générateur 14B. Le CPU (Zen 2 6c/12t) doit rester au repos (ou charge minimale) quand le GPU fait de l'inférence Vulkan. **Embedding = Machine 1 CPU (principal) / Machine 2 CPU (backup).**
+> **Le CPU du BC-250 est le serviteur du GPU.** Toute charge CPU significative sur M3 est un vol de bande passante mémoire au Générateur 14B. Le CPU (Zen 2 8c/16t) doit rester au repos (ou charge minimale) quand le GPU fait de l'inférence Vulkan. **Embedding = Machine 1 CPU (principal) / Machine 2 CPU (backup).**
 >
 > **Preuve** : le BC-250 a 16 GB GDDR6 *unifiée* (CPU+GPU, même pool, même bande passante). Si le CPU est chargé (embedding, batch, compilation) :
 > - **Contention bande passante mémoire** → le GPU 14B est affamé
@@ -522,7 +522,7 @@ subgraph M1["🖥️ M1 — MASTER · 2× Xeon E5-2699 v4 · 32 GB ECC · 2×10G
         LXC201["🤖 LXC 201<br/>Avocat Ministral-8B-Instruct-2410<br/>+ Backup Embedding CPU"]:::m2
     end
 
-    subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 6c/12t · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
+    subgraph M3["⚡ M3 — BC-250 BAREMETAL · Zen 2 8c/16t (core unlock BIOS) · 40 CU RDNA2 · 16 GB GDDR6 · Vulkan-only · 1GbE"]
         Ollama["🤖 Ollama Vulkan natif<br/>Générateur Qwen3-14B/30B-A3B MoE<br/>Text-to-SQL · Vision · Fast-check<br/>CPU au repos pendant inférence"]:::m3
         Glances["📊 Glances -w :61208<br/>Monitoring BC-250 (décision D9)"]:::m3
     end
@@ -628,7 +628,7 @@ curl -X POST ${CLUSTER_API_URL}/api/v1/query -d '{"question":"..."}'
 
 Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rien n'est encore fait — ce projet part de zéro sur le code, seule la conception documentaire existe).
 
-> ✅ **Déjà tranché** : Choix CrewAI vs LangGraph → **LangGraph** (écrit dans ce README et le backlog). AntiX-26 vs Debian pour M3 → **Debian Testing/Sid** (baremetal).
+> ✅ **Déjà tranché** : Choix CrewAI vs LangGraph → **LangGraph** (écrit dans ce README et le backlog). OS M3 → **Fedora 43** (décision 02/08/2026, docs communautaires BC-250 ; Debian Testing/Sid et antiX-26 abandonnés pour ce nœud).
 
 ---
 
@@ -637,7 +637,7 @@ Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rie
 | **SPOF : Machine 1 (Master)** | Qdrant + API + Wiki + Évaluateur + NFS = tout s'arrête si M1 tombe | Cold save périodique (Qdrant snapshot + wiki vault + configs) vers OMV M2 → HDD 2TB. pfSense VM sur M1. |
 | **Résilience M2** | OMV backup sur M2 → si M2 tombe, cold save stoppé | Aucun impact sur la prod (M1/M3 continuent de tourner). Reprise manuelle quand M2 remonte. |
 | **Latence NFS sur évaluation** | Relay file = point de synchronisation bloquant | MTU 9000 + 10 GbE = <1 ms RTT. Timeout 120 s Juge → Avocat. Acceptable. |
-| **BC-250 baremetal = pas de snapshot/rollback** | Mise à jour noyau/BIOS risquée | Tests sur VM simulée d'abord. Backup config `/etc` + BIOS P3.00 sur USB. |
+| **BC-250 baremetal = pas de snapshot/rollback** | Mise à jour noyau/BIOS risquée | Tests sur VM simulée d'abord. Backup config `/etc` + BIOS d'origine sur USB. |
 | **RTX 4000 8 GB limite dure** | Pas de place pour un modèle > 7B quantifié | Choix validé : Juge/Avocat 7B max. Si besoin 14B → seul le BC-250 peut. |
 | **Modèles non verrouillés (tags Ollama)** | `pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M` = version mobile → reproductibilité | Fixer digests SHA256 dans `.env` / `docker-compose`. `ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M@sha256:...` |
 | **Concurrency lock vault Obsidian** | Client + cluster écrivent simultanément | NFS `no_root_squash` + file locking (fcntl). Ou versioning git sidecar. |

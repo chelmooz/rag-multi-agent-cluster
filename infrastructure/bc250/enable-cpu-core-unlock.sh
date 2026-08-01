@@ -64,7 +64,7 @@ cat <<'EOF'
 L'auteur ignore pourquoi ces 2 cores sont désactivés en usine (die PS5
 Oberon) — l'hypothèse par défaut est un tri qualité/harvest, pas forcément
 un défaut. Avant tout usage soutenu :
-  sudo apt install stress-ng   # ou mprime
+  sudo dnf install stress-ng   # ou mprime
   stress-ng --cpu 16 --timeout 4h
   sudo dmesg | grep -i mce      # doit rester vide
 

@@ -243,25 +243,27 @@ borg init --encryption=repokey /srv/backup/borg-repo
 
 ### 3.0 BIOS — flash Forbidden-Darkness (OBLIGATOIRE, une seule fois)
 
-Avant toute installation OS, flasher le BIOS moddé. C'est lui qui rend
-**persistant** le core unlock 6→8 et configure le **carve-out VRAM dynamique
-512 MB** (rien à refaire après cold boot).
+Avant toute installation OS, flasher le BIOS moddé Forbidden-Darkness.
+C'est un BIOS **complet** (base P3.00 incluse, pas de flash P3.00 stock
+préalable). Il rend **persistant** le core unlock 6→8 et configure le
+**carve-out VRAM dynamique 512 MB** (rien à refaire après cold boot).
 
 | Élément | Détail |
 |---|---|
 | **Repo BIOS** | [Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script) |
-| **BIOS cible** | P3.00 moddé (flash UEFI) |
+| **BIOS final** | BIOS moddé Forbidden-Darkness complet (base P3.00 + core unlock + VRAM 512 MB) — flash UEFI direct, AUCUN flash P3.00 stock préalable |
 | **Effet 1 — Core unlock** | 6c/12t → **8c/16t persistant** (flash BIOS, plus de script volatil SMU) |
 | **Effet 2 — VRAM dynamique** | **512 MB carve-out** dynamique (~12 GB dispo IA sur 16 GB unifiée) |
-| **Risque** | Flash BIOS = irréversible, pas de snapshot. Garder le BIOS stock P3.00 sur USB + backup config `/etc`. |
+| **Risque** | Flash BIOS = irréversible, pas de snapshot. Garder une sauvegarde du BIOS d'origine sur USB (rollback recovery) + backup config `/etc`. |
 
 ```bash
 # ⚠️ À faire une fois, hors ligne, avant d'installer Fedora.
 # Suivre le menu script du repo Forbidden-Darkness :
 git clone https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script.git
 cd AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script
-# Lire le README — procédure USB flash (dd l'ISO moddée sur une clé)
-# Sélectionner : core unlock 8c/16t + carve-out VRAM dynamique 512 MB
+# Lire le README — le repo fournit l'image BIOS complète à flasher en UEFI
+# (dd de l'image sur une clé). Aucun flash P3.00 stock en amont.
+# Le BIOS inclu d'office : core unlock 8c/16t + carve-out VRAM dynamique 512 MB
 
 # Vérification après flash (dans le setup BIOS) :
 #   - 8 cores / 16 threads visibles
