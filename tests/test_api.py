@@ -23,6 +23,12 @@ class TestHealth:
         assert "status" in body
         assert "checks" in body
 
+    def test_health_memory_returns_503_when_not_initialized(self, client):
+        """/health/memory retourne 503 tant que les services ne sont pas initialisés."""
+        resp = client.get("/api/v1/health/memory")
+        assert resp.status_code == 503
+        assert "Services not initialized" in resp.json()["detail"]
+
 
 class TestQueryEndpoint:
     def test_query_service_unavailable_when_not_initialized(self, client):

@@ -1345,3 +1345,65 @@ Phase 7.
 
 ---
 
+## 01/08/2026 — MemoryManager (monitoring mémoire cluster, V1 lecture seule)
+
+### Contexte
+
+- Revue externe (copilot) : proposait un MemoryManager générique, sans
+  connaissance de l'architecture réelle (Vulkan-only BC-250, relay
+  séquentiel M2, règle d'or CPU). Corrections appliquées : réutilisation
+  d'`OllamaClientPool` existant (pas de nouveaux clients), match modèles
+  par tag complet (pas substring), estimation RAM Qdrant via
+  `get_collection_stats()` (approx ~200 B/point, choix Q2 — pas de
+  Prometheus, cf. D9), `free -b` direct sur M3 (Q3 — unified GDDR6).
+
+### Décisions (confirmées avant implémentation)
+
+- Q1 : réutiliser `OllamaClientPool` (singleton lifespan API).
+- Q2 : estimation RAM Qdrant par `points_count * 200 B` (pas `/metrics`).
+- Q3 : `free -b` direct pour BC-250 (unified 16 GB), fallback non requis.
+- SSH : user `root` partout, clé déployée via cloud-init/manuel
+  (`infrastructure/ssh-keys-deployment.md`).
+
+### Fait
+
+- `src/services/ssh_client.py` (nouveau) : wrapper asyncssh
+  (`SSHClient`, erreurs typées, decode bytes, timeout).
+- `src/services/memory_manager.py` (nouveau) : `MemoryManager` +
+  dataclasses (`MachineMemoryState`, `ClusterMemoryState`, `Alert`),
+  snapshots M1/M2/M3 en parallèle, `assert_bc250_cpu_idle()`,
+  `reserve_m2_gpu_for()`, `check_thresholds()`, log alertes structurées.
+- `src/services/ollama.py` : méthode `list_models()` ajoutée (`/api/ps`).
+- `src/services/vector.py` : méthode publique `get_collection_stats()`.
+- `src/core/settings.py` : section SSH (M2/M3) + seuils mémoire
+  (M1/M2/M3) — 15 nouvelles variables, toutes dans `.env.example`.
+- `src/api/main.py` : endpoint `GET /api/v1/health/memory` (snapshot +
+  alertes, 503 si services non initialisés, disabled si flag off).
+- `pyproject.toml` : dépendance `asyncssh>=2.14.0` + per-file-ignore
+  TRY003 pour ssh_client/memory_manager.
+- `tests/test_memory_manager.py` : 12 tests (snapshots, garde-fous,
+  alertes) — mocks SSH/Ollama/Qdrant, aucune machine réelle.
+- `tests/test_api.py` : +1 test endpoint `/health/memory`.
+- `infrastructure/ssh-keys-deployment.md` (nouveau) : guide déploiement
+  clés SSH LXC 100 → M2/M3.
+
+### Validation
+
+- `pytest`: 29/29 PASSED
+- `ruff`: 0 erreur sur fichiers modifiés
+- `mypy`: 0 erreur sur services modifiés (4 résiduelles pré-existantes
+  sur `ocr_sidecar.py` non touchées)
+
+### Reste hors périmètre (V2 potentiel)
+
+- Blocage automatique (actif) : refuser requête si seuil dépassé
+  (V1 = lecture seule + alertes).
+- Persistance historique Qdrant (`cluster_memory_history`) — flag
+  `MEMORY_MANAGER_PERSIST_TO_QDRANT` défini mais non implémenté.
+- Intégration relay : `reserve_m2_gpu_for()` appelé par le pipeline
+  d'évaluation (à brancher en Phase B multi-agents).
+- Monitoring continu (boucle interval) — seul le snapshot on-demand existe.
+
+---
+
+

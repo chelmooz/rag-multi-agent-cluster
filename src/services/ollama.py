@@ -133,6 +133,16 @@ class OllamaClient:
         else:
             return resp.status_code == 200
 
+    async def list_models(self) -> list[dict[str, Any]]:
+        """Modèles actuellement chargés en mémoire (VRAM/RAM) via /api/ps.
+
+        Retourne la liste des modèles avec size_bytes (poids fichier),
+        size_vram (occupation mémoire réelle) et details.
+        """
+        data = await self._request("GET", "/api/ps")
+        models: list[dict[str, Any]] = data.get("models", [])
+        return models
+
     async def unload_model(self, model: str) -> bool:
         """Décharge un modèle de la mémoire GPU (essentiel pour pipeline Judge→Avocat).
 

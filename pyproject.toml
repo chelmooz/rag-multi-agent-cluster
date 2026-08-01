@@ -30,6 +30,9 @@ dependencies = [
     "httpx>=0.27.0",
     "tenacity>=8.2.0",
 
+    # SSH async (MemoryManager — monitoring M2/M3 via nvidia-smi, free, loadavg)
+    "asyncssh>=2.14.0",
+
     # Vector DB
     "qdrant-client>=1.10.0",
 
@@ -121,6 +124,8 @@ unfixable = ["T20", "TRY"]
 "src/services/vector.py" = ["TRY003"]  # messages longs ok pour VectorService - TRY003 trop restrictif ici
 "src/services/ingestion.py" = ["TRY003"]  # messages longs ok pour IngestionService - TRY003 trop restrictif ici
 "src/services/reranker.py" = ["TRY003"]  # messages longs ok pour RerankerService - TRY003 trop restrictif ici
+"src/services/ssh_client.py" = ["TRY003"]  # messages longs ok pour SSHClient - TRY003 trop restrictif ici
+"src/services/memory_manager.py" = ["TRY003"]  # messages longs ok pour MemoryManager - TRY003 trop restrictif ici
 "src/api/main.py" = ["TRY003", "B008"]  # TRY003/B008 ok pour endpoints FastAPI
 
 [tool.ruff.format]

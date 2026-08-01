@@ -206,6 +206,14 @@ class VectorService:
 
     # ── Health & Backup ──────────────────────────────────────────
 
+    async def get_collection_stats(self) -> dict[str, int]:
+        """Statistiques collection : nombre de points (pour estimation RAM Qdrant)."""
+        try:
+            info = await self._client.get_collection(self.collection)
+        except Exception:
+            return {"points_count": 0}
+        return {"points_count": int(info.points_count or 0)}
+
     async def health(self) -> bool:
         """Vérification disponibilité Qdrant."""
         try:

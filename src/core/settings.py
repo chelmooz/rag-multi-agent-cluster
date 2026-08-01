@@ -296,6 +296,122 @@ class Settings(BaseSettings):
     )
 
     # ──────────────────────────────────────────────
+    # SSH Access (MemoryManager — monitoring M2/M3)
+    # ──────────────────────────────────────────────
+    m2_ssh_host: str = Field(
+        default="10.10.0.2",
+        description="Adresse M2 pour SSH (monitoring nvidia-smi)",
+        validation_alias="M2_SSH_HOST",
+    )
+    m2_ssh_user: str = Field(
+        default="root",
+        description="Utilisateur SSH M2 (clé déployée via cloud-init Proxmox)",
+        validation_alias="M2_SSH_USER",
+    )
+    m2_ssh_port: int = Field(
+        default=22,
+        validation_alias="M2_SSH_PORT",
+    )
+    m2_ssh_key_path: Path | None = Field(
+        default=Path("/root/.ssh/id_rsa"),
+        description="Chemin privé SSH M2 (dans LXC 100 orchestrateur)",
+        validation_alias="M2_SSH_KEY_PATH",
+    )
+
+    m3_ssh_host: str = Field(
+        default="10.10.0.3",
+        description="Adresse M3 BC-250 pour SSH (monitoring free, loadavg)",
+        validation_alias="M3_SSH_HOST",
+    )
+    m3_ssh_user: str = Field(
+        default="root",
+        description="Utilisateur SSH M3 (clé déployée via cloud-init Proxmox)",
+        validation_alias="M3_SSH_USER",
+    )
+    m3_ssh_port: int = Field(
+        default=22,
+        validation_alias="M3_SSH_PORT",
+    )
+    m3_ssh_key_path: Path | None = Field(
+        default=Path("/root/.ssh/id_rsa"),
+        description="Chemin privé SSH M3 (dans LXC 100 orchestrateur)",
+        validation_alias="M3_SSH_KEY_PATH",
+    )
+
+    # ──────────────────────────────────────────────
+    # Memory Manager — configuration & seuils
+    # ──────────────────────────────────────────────
+    memory_manager_enabled: bool = Field(
+        default=True,
+        description="Activer MemoryManager pour monitoring cluster",
+        validation_alias="MEMORY_MANAGER_ENABLED",
+    )
+    memory_manager_persist_to_qdrant: bool = Field(
+        default=False,
+        description=(
+            "Persister historique alertes mémoire dans collection Qdrant "
+            "(cluster_memory_history) — trend analysis"
+        ),
+        validation_alias="MEMORY_MANAGER_PERSIST_TO_QDRANT",
+    )
+    memory_snapshot_interval_seconds: int = Field(
+        default=60,
+        description="Intervalle entre snapshots mémoire (monitoring continu)",
+        validation_alias="MEMORY_SNAPSHOT_INTERVAL_SECONDS",
+    )
+    memory_manager_log_alerts: bool = Field(
+        default=True,
+        description="Log structuré des alertes mémoire",
+        validation_alias="MEMORY_MANAGER_LOG_ALERTS",
+    )
+
+    # Seuils M1 (Master)
+    m1_qdrant_ram_threshold_mb: int = Field(
+        default=28_000,
+        description="Seuil alerte Qdrant RAM (28 GB sur 32 GB)",
+        validation_alias="M1_QDRANT_RAM_THRESHOLD_MB",
+    )
+    m1_embedding_cpu_threshold_percent: float = Field(
+        default=80.0,
+        description="Seuil alerte CPU embedding % (avant throttle)",
+        validation_alias="M1_EMBEDDING_CPU_THRESHOLD_PERCENT",
+    )
+
+    # Seuils M2 (GPU Worker)
+    m2_rtx4000_vram_threshold_mb: int = Field(
+        default=7_680,
+        description="Seuil alerte RTX4000 VRAM (7.5 GB sur 8 GB)",
+        validation_alias="M2_RTX4000_VRAM_THRESHOLD_MB",
+    )
+    m2_rtx4000_vram_reserve_mb: int = Field(
+        default=5_500,
+        description="Réserve requise M2 pour charger un 8B Q4_K_M (~5.5 GB)",
+        validation_alias="M2_RTX4000_VRAM_RESERVE_MB",
+    )
+    m2_rtx4000_vram_total_mb: int = Field(
+        default=8_192,
+        description="VRAM totale RTX 4000 (8 GB = 8192 MB)",
+        validation_alias="M2_RTX4000_VRAM_TOTAL_MB",
+    )
+
+    # Seuils M3 (BC-250)
+    m3_bc250_unified_threshold_mb: int = Field(
+        default=14_500,
+        description="Seuil alerte BC-250 unified GDDR6 (14.5 GB sur 16 GB)",
+        validation_alias="M3_BC250_UNIFIED_THRESHOLD_MB",
+    )
+    m3_bc250_cpu_load_threshold: float = Field(
+        default=0.5,
+        description="Seuil alerte charge CPU BC-250 (doit rester ~0 pendant inférence)",
+        validation_alias="M3_BC250_CPU_LOAD_THRESHOLD",
+    )
+    m3_bc250_cpu_idle_timeout_seconds: int = Field(
+        default=30,
+        description="Timeout avant retry assert_bc250_cpu_idle()",
+        validation_alias="M3_BC250_CPU_IDLE_TIMEOUT_SECONDS",
+    )
+
+    # ──────────────────────────────────────────────
     # Logging & Observabilité
     # ──────────────────────────────────────────────
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(

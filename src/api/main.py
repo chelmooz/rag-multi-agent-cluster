@@ -195,6 +195,73 @@ async def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
+@app.get(f"{settings.api_prefix}/health/memory", tags=["Health"])
+async def health_memory() -> JSONResponse:
+    """Snapshot mémoire du cluster (M1 Qdrant, M2 RTX4000, M3 BC-250).
+
+    V1 lecture seule : renvoie l'état + alertes seuils, sans bloquer.
+    """
+    if not settings.memory_manager_enabled:
+        return JSONResponse(
+            status_code=200,
+            content={"status": "disabled", "detail": "MEMORY_MANAGER_ENABLED=false"},
+        )
+
+    if not hasattr(app.state, "ollama_pool") or not hasattr(app.state, "vector_service"):
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "detail": "Services not initialized - server starting up"},
+        )
+
+    from src.services.memory_manager import MemoryManager
+
+    memory_manager = MemoryManager(
+        ollama_pool=app.state.ollama_pool,
+        vector_service=app.state.vector_service,
+    )
+    try:
+        snapshot = await memory_manager.cluster_snapshot()
+    finally:
+        await memory_manager.close()
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "ok" if not snapshot.alerts else "degraded",
+            "timestamp": snapshot.timestamp.isoformat(),
+            "m1": {
+                "qdrant_ram_mb": snapshot.m1.qdrant_ram_mb,
+                "qdrant_points_count": snapshot.m1.qdrant_points_count,
+                "loaded_models": snapshot.m1.loaded_models,
+            },
+            "m2": {
+                "rtx4000_vram_mb": snapshot.m2.rtx4000_vram_mb,
+                "judge_vram_mb": snapshot.m2.judge_vram_mb,
+                "advocate_vram_mb": snapshot.m2.advocate_vram_mb,
+                "reranker_vram_mb": snapshot.m2.reranker_vram_mb,
+                "loaded_models": snapshot.m2.loaded_models,
+            },
+            "m3": {
+                "bc250_unified_mb": snapshot.m3.bc250_unified_mb,
+                "bc250_unified_percent": snapshot.m3.bc250_unified_percent,
+                "bc250_cpu_load": snapshot.m3.bc250_cpu_load,
+                "loaded_models": snapshot.m3.loaded_models,
+            },
+            "alerts": [
+                {
+                    "level": a.level,
+                    "machine": a.machine,
+                    "metric": a.metric,
+                    "current": a.current,
+                    "threshold": a.threshold,
+                    "message": a.message,
+                }
+                for a in snapshot.alerts
+            ],
+        },
+    )
+
+
 @app.get(f"{settings.api_prefix}/ready", tags=["Health"])
 async def ready() -> JSONResponse:
     checks = await _run_checks()
