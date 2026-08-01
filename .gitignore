@@ -26,3 +26,5 @@ archive_*.zip
 .DS_Store
 .vscode/
 .idea/
+
+graphify-out/
