@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.services.ollama import OllamaError
-from src.services.reranker import RerankerError, RerankResult, RerankerService
+from src.services.reranker import RerankerError, RerankerService, RerankResult
 
 
 @pytest.fixture

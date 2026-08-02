@@ -2,11 +2,10 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
-
 from qdrant_client.http.exceptions import UnexpectedResponse
 
-import httpx
 from src.services.vector import VectorService, VectorServiceError
 
 
@@ -20,7 +19,12 @@ def vector_service() -> VectorService:
 class TestCreateCollection:
     async def test_creates_when_absent(self, vector_service: VectorService) -> None:
         vector_service._client.get_collection = AsyncMock(
-            side_effect=UnexpectedResponse(status_code=404, reason_phrase="Not Found", content=b"", headers=httpx.Headers({"content-type": "application/json"}))
+            side_effect=UnexpectedResponse(
+                status_code=404,
+                reason_phrase="Not Found",
+                content=b"",
+                headers=httpx.Headers({"content-type": "application/json"}),
+            )
         )
         vector_service._client.create_collection = AsyncMock()
 
@@ -41,7 +45,12 @@ class TestCreateCollection:
 
     async def test_sets_vector_size(self, vector_service: VectorService) -> None:
         vector_service._client.get_collection = AsyncMock(
-            side_effect=UnexpectedResponse(status_code=404, reason_phrase="Not Found", content=b"", headers=httpx.Headers({"content-type": "application/json"}))
+            side_effect=UnexpectedResponse(
+                status_code=404,
+                reason_phrase="Not Found",
+                content=b"",
+                headers=httpx.Headers({"content-type": "application/json"}),
+            )
         )
         await vector_service.create_collection(vector_size=768)
         assert vector_service._vector_size == 768
@@ -149,7 +158,12 @@ class TestStatsHealth:
         assert stats == {"points_count": 10}
 
     async def test_stats_error_returns_zero(self, vector_service: VectorService) -> None:
-        vector_service._client.get_collection = AsyncMock(side_effect=UnexpectedResponse(status_code=503, reason_phrase="Service Unavailable", content=b"", headers=httpx.Headers({"content-type": "application/json"})))
+        vector_service._client.get_collection = AsyncMock(side_effect=UnexpectedResponse(
+                status_code=503,
+                reason_phrase="Service Unavailable",
+                content=b"",
+                headers=httpx.Headers({"content-type": "application/json"}),
+            ))
         stats = await vector_service.get_collection_stats()
         assert stats == {"points_count": 0}
 
@@ -158,7 +172,12 @@ class TestStatsHealth:
         assert await vector_service.health() is True
 
     async def test_health_false_on_error(self, vector_service: VectorService) -> None:
-        vector_service._client.collection_exists = AsyncMock(side_effect=UnexpectedResponse(status_code=503, reason_phrase="Service Unavailable", content=b"", headers=httpx.Headers({"content-type": "application/json"})))
+        vector_service._client.collection_exists = AsyncMock(side_effect=UnexpectedResponse(
+                status_code=503,
+                reason_phrase="Service Unavailable",
+                content=b"",
+                headers=httpx.Headers({"content-type": "application/json"}),
+            ))
         assert await vector_service.health() is False
 
 
