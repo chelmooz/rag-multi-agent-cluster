@@ -17,9 +17,14 @@ Score INVERSÉ : 0.0 = faille critique bloquante, 1.0 = aucune faille.
 """
 from __future__ import annotations
 
-from typing import Literal
+import json
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+from src.agents.skills.loader import load_skill
+
+_SKILL_ROLE = "advocate"
 
 
 class AdvocateOutput(BaseModel):
@@ -35,6 +40,23 @@ class AdvocateOutput(BaseModel):
 
 class AdvocateAgent:
     """Avocat du diable : cherche failles/hallucinations dans la réponse."""
+
+    def build_prompt(
+        self,
+        query: str,
+        response: str,
+        context: list[dict],
+        judge_critique: dict,
+    ) -> str:
+        """Assemble le SKILL.md Advocate + les données du relay en prompt système."""
+        skill = load_skill(_SKILL_ROLE)
+        payload: dict[str, Any] = {
+            "query": query,
+            "response": response,
+            "context_chunks": context,
+            "judge_critique": judge_critique,
+        }
+        return f"{skill}\n\n---\n\n{json.dumps(payload, ensure_ascii=False)}"
 
     async def challenge(
         self, query: str, response: str, context: list[dict], judge_critique: dict

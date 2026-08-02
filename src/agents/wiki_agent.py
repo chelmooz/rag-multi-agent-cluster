@@ -9,9 +9,23 @@ Le Wiki Agent est le boucle de maintenance continue du vault :
 - Git sidecar auto-commit (cron 1h)
 """
 
+from __future__ import annotations
+
+from src.agents.skills.loader import skill_reference
+
+_SKILL_ROLE = "wiki_agent"
+
 
 class WikiAgent:
     """Boucle de maintenance du vault Obsidian."""
+
+    def skill_reference(self) -> str:
+        """Retourne les règles de lint/frontmatter du vault (SKILL.md Wiki Agent).
+
+        Pas un prompt LLM : référence utilisée par write_page/update_index/
+        append_log/lint/validate_frontmatter.
+        """
+        return skill_reference(_SKILL_ROLE)
 
     async def write_page(self, path: str, content: str, frontmatter: dict) -> None:
         raise NotImplementedError

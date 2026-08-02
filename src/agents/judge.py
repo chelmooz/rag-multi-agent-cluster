@@ -12,9 +12,14 @@ Contrat de sortie : judge_output_v1 (voir docs/prompts-agents.md §1)
 """
 from __future__ import annotations
 
-from typing import Literal
+import json
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+from src.agents.skills.loader import load_skill
+
+_SKILL_ROLE = "judge"
 
 _CheckName = Literal["factualite", "coherence", "couverture", "style"]
 _FlagName = Literal[
@@ -36,6 +41,23 @@ class JudgeOutput(BaseModel):
 
 class JudgeAgent:
     """Évalue la qualité de la réponse (score 0.0-1.0 + critique textuelle)."""
+
+    def build_prompt(
+        self,
+        query: str,
+        response: str,
+        context: list[dict],
+        response_metadata: dict | None = None,
+    ) -> str:
+        """Assemble le SKILL.md Judge + les données du relay en prompt système."""
+        skill = load_skill(_SKILL_ROLE)
+        payload: dict[str, Any] = {
+            "query": query,
+            "response": response,
+            "context_chunks": context,
+            "response_metadata": response_metadata or {},
+        }
+        return f"{skill}\n\n---\n\n{json.dumps(payload, ensure_ascii=False)}"
 
     async def evaluate(self, query: str, response: str, context: list[dict]) -> JudgeOutput:
         raise NotImplementedError

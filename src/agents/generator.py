@@ -7,7 +7,14 @@ Contrat de sortie : generator_output_v1 (voir docs/prompts-agents.md §4).
 """
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from pydantic import BaseModel, Field
+
+from src.agents.skills.loader import load_skill
+
+_SKILL_ROLE = "generator"
 
 
 class GeneratorOutput(BaseModel):
@@ -21,6 +28,21 @@ class GeneratorOutput(BaseModel):
 
 class GeneratorAgent:
     """Génère la réponse brute sur BC-250, écrit dans relay.json pour Judge/Avocat."""
+
+    def build_prompt(
+        self,
+        query: str,
+        context: list[dict],
+        conversation_history: list[dict] | None = None,
+    ) -> str:
+        """Assemble le SKILL.md Generator + les données du relay en prompt système."""
+        skill = load_skill(_SKILL_ROLE)
+        payload: dict[str, Any] = {
+            "query": query,
+            "assembled_context": context,
+            "conversation_history": conversation_history or [],
+        }
+        return f"{skill}\n\n---\n\n{json.dumps(payload, ensure_ascii=False)}"
 
     async def generate(self, query: str, context: list[dict]) -> GeneratorOutput:
         raise NotImplementedError

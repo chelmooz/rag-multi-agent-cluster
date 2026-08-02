@@ -15,9 +15,14 @@ agents elles-mêmes n'utilisent pas OKF (minimalisme pour parsing fiable).
 
 from __future__ import annotations
 
-from typing import Literal
+import json
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+from src.agents.skills.loader import load_skill
+
+_SKILL_ROLE = "evaluator"
 
 
 class EvaluatorOutput(BaseModel):
@@ -33,6 +38,23 @@ class EvaluatorOutput(BaseModel):
 
 class EvaluatorAgent:
     """Synthèse finale : combine Judge + Avocat en réponse finale et décision de publication."""
+
+    def build_prompt(
+        self,
+        query: str,
+        response: str,
+        judge: dict,
+        advocate: dict,
+    ) -> str:
+        """Assemble le SKILL.md Evaluator + les avis Judge/Advocate en prompt système."""
+        skill = load_skill(_SKILL_ROLE)
+        payload: dict[str, Any] = {
+            "query": query,
+            "response": response,
+            "judge": judge,
+            "advocate": advocate,
+        }
+        return f"{skill}\n\n---\n\n{json.dumps(payload, ensure_ascii=False)}"
 
     async def synthesize(self, relay_data: dict) -> EvaluatorOutput:
         raise NotImplementedError
