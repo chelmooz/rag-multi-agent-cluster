@@ -1752,6 +1752,34 @@ Accord : Option B, ordre 1→2→3→4(a→e), un commit vérifiable par étape.
 
 ---
 
+## 02/08/2026 — Vérification indépendante (Claude Sonnet 5) + clôture
+
+Audit externe du résultat par Sonnet (env sandbox sans accès aux caches) :
+- **Confirmé** : suppression `src/main.py`, 8 commits cohérents, ruff 0 erreur,
+  mypy 12 vraies erreurs corrigées (response_model, tokenizer, None-guard),
+  `injection_filter` 37 tests / 100%, `ollama` 99%, `vector` 100%,
+  `reranker` 100% — vérifiés en exécutant les tests, pas via les messages.
+- **Résidu signalé** : `import-not-found` sur
+  `transformers.tokenization_utils_sentencepiece` /
+  `transformers.tokenization_utils_tokenizers` (l'override `transformers`
+  ne couvre pas les sous-modules) → **✅ FAIT** : `module = ["fitz", "torch",
+  "transformers", "transformers.*"]` — invisible chez nous (`py.typed`
+  installé), réel sur env sans types.
+- **Impossible à confirmer côté Sonnet** : lexical/ingestion (tests bloqués
+  par 403 sur `openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken`).
+  **✅ Vérifié chez nous** : `lexical.py` 100% (55 stmts, 0 miss),
+  `ingestion.py` 99% (137 stmts, 1 miss) — 45/45 tests.
+- **Risque offline CI** : tiktoken télécharge au premier appel, cache dans
+  `%TEMP%\data-gym-cache` (purgeable). **✅ TRAITÉ** :
+  `tests/fixtures/tiktoken/9b5ad71b2ce5302211f9c61530b329a4922fc6a4`
+  (cl100k_base vendored, 1,6 Mo) + `tests/conftest.py` qui fixe
+  `TIKTOKEN_CACHE_DIR` dessus. **Preuve** : cache système renommé →
+  45 tests passent, aucun re-téléchargement (répertoire non recréé).
+- État final : ruff 0, mypy 0 (27 fichiers), pytest 205/205, couverture 67%.
+  Commit `d325488`, pushé sur main.
+
+---
+
 ## 02/08/2026 — Clôture follow-up : mypy 0 + ruff 0 (project-wide)
 
 Suite directe de la session nettoyage : élimination des 5 dernières violations.
