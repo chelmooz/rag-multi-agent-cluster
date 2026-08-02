@@ -1794,6 +1794,57 @@ Suite directe de la session nettoyage : élimination des 5 dernières violations
 - État final : **ruff 0 erreur, mypy 0 erreur (27 fichiers), pytest 205/205,
   couverture totale 67%** — commit `e2cb3dc`, pushé sur main.
 
+---
+
+## 02/08/2026 — Lot 5 : B6+B7 (LangGraph orchestrator) — build_graph complet
+
+### Livré (commit `1c12e2b`)
+
+- **`src/agents/langgraph_orchestrator.py`** : remplace le stub
+  NotImplementedError par le graphe complet :
+  - `PipelineState` (dataclass) : query, conversation_history,
+    evaluation_enabled + sorties de chaque nœud (plan, rewritten_query,
+    search_results, assembled, generated, judge, advocate, evaluator,
+    wiki_note).
+  - `PipelineServices` : conteneur des services injectables (pool, vector,
+    lexical, reranker, wiki, 7 agents) — mock-first (D10), zéro réseau en
+    test.
+  - 9 nœuds async : plan → rewrite → retrieve → assemble → generate →
+    (conditional eval) judge → advocate → evaluate → wiki → END.
+  - Branche conditionnelle B6 : `evaluation_enabled` (défaut OFF, D12) —
+    `generate` route vers `judge` ou directement `wiki` ; 1 itération max
+    (aucune boucle feedback).
+  - Nœud wiki : écrit `synthesis/{slug}.md` + `update_index()` si
+    évaluateur `decision == "publish"` (les deux peuvent cohabiter).
+  - `run_pipeline()` : compile + ainvoke + reconversion dict → PipelineState.
+
+### Pièges LangGraph 1.0 rencontrés (corrigés)
+
+1. **Lambdas sync retournant des coroutines** → `InvalidUpdateError: Expected
+   dict, got <coroutine>` → wrappers async explicites par nœud.
+2. **Nœuds retournant l'état entier** → `InvalidUpdateError: Can receive only
+   one value per step` → les nœuds retournent des **dicts de mise à jour
+   partielle** `{"champ": valeur}`.
+3. **`ainvoke` retourne un dict**, pas le dataclass → reconversion
+   `PipelineState(**{k: v for k in fields})`.
+4. **Edge direct + conditional edge sur le même nœud** = conflit →
+   supprimé l'edge direct `generate → wiki`.
+
+### Tests
+
+- `tests/test_langgraph_orchestrator.py` (6 tests) : compilation du graphe,
+  chemin complet, éval OFF (judge/advocate/evaluator jamais appelés), éval
+  ON (3 appels + update_index), services minimaux (rebond propre, fallback
+  planner `default_plan`).
+
+### Vérification
+
+- ruff 0, mypy 0 (31 fichiers), **pytest 306/306 PASSED** (300 → 306).
+- Backlog lignes 1175-1219 : questions RelayService tranchées dans la
+  pratique (B6/B7 ne nécessitent PAS le relais — `PipelineServices`
+  injecté suffit, pas de dépendance NFS dans le graphe).
+
+
 
 
 
