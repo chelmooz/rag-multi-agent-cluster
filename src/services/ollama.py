@@ -187,43 +187,28 @@ class OllamaClient:
             reraise=True,
         )
 
-        last_exc: Exception | None = None
-        attempt = 0
+        try:
+            async for attempt in retrier:
+                with attempt:
+                    resp = await self._client.request(method, path, **kwargs)
+                    resp.raise_for_status()
+                    self._cb.record_success()
+                    return cast("dict[str, Any]", resp.json())
+        except httpx.TimeoutException as e:
+            raise OllamaTimeoutError(f"Timeout {method} {path}: {e}") from e
+        except httpx.HTTPStatusError as e:
+            self._cb.record_failure()
+            raise OllamaError(
+                f"HTTP {e.response.status_code} {method} {path}: "
+                f"{e.response.text[:500]}"
+            ) from e
+        except httpx.RequestError as e:
+            self._cb.record_failure()
+            raise OllamaUnavailableError(
+                f"Impossible de joindre {self.base_url}: {e}"
+            ) from e
 
-        async for attempt_state in retrier:
-            attempt = getattr(attempt_state, "attempt_number", None)
-            if attempt is None:
-                attempt = getattr(
-                    getattr(attempt_state, "retry_state", None),
-                    "attempt_number",
-                    1,
-                )
-            try:
-                resp = await self._client.request(method, path, **kwargs)
-                resp.raise_for_status()
-                self._cb.record_success()
-                return cast("dict[str, Any]", resp.json())
-            except httpx.TimeoutException as e:
-                last_exc = OllamaTimeoutError(f"Timeout {method} {path}: {e}")
-                raise
-            except httpx.HTTPStatusError as e:
-                last_exc = OllamaError(
-                    f"HTTP {e.response.status_code} {method} {path}: "
-                    f"{e.response.text[:500]}"
-                )
-                self._cb.record_failure()
-                raise
-            except httpx.RequestError as e:
-                last_exc = OllamaUnavailableError(
-                    f"Impossible de joindre {self.base_url}: {e}"
-                )
-                self._cb.record_failure()
-                raise
-
-        # Ne devrait jamais arriver grâce à reraise=True + stop_after_attempt
-        raise OllamaError(
-            f"Échec après {attempt} tentative(s): {last_exc}"
-        ) from last_exc
+        raise OllamaError(f"Échec après {self._max_retries + 1} tentative(s)")
 
     def reset_circuit_breaker(self) -> None:
         """Réinitialisation manuelle du circuit breaker."""
@@ -260,11 +245,10 @@ class OllamaClientPool:
         model = self._settings.embedding_model
         try:
             return await self.m1.embed(model, texts)
-        except (OllamaUnavailableError, OllamaTimeoutError, CircuitBreakerOpenError):
-            pass
-        if self._settings.embedding_host == "m1":
-            return await self.m2.embed(self._settings.embedding_model, texts)
-        raise
+        except (OllamaUnavailableError, OllamaTimeoutError, CircuitBreakerOpenError) as e:
+            if self._settings.embedding_host == "m1":
+                return await self.m2.embed(self._settings.embedding_model, texts)
+            raise e  # noqa: TRY201 - hors du bloc except, re-propagation explicite requise
 
     async def generate(self, prompt: str, **kwargs: Any) -> dict[str, Any]:
         """Génération : M3 (BC250) uniquement."""
