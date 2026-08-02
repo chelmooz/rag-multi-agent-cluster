@@ -67,6 +67,8 @@ class WikiAgent:
 
     def _resolve(self, path: str) -> Path:
         """Normalise un chemin relatif au vault et bloque le traversal."""
+        if "\\" in path:
+            raise WikiPathTraversalError(f"Chemin invalide (backslash interdit): {path!r}")
         raw = Path(path)
         if raw.is_absolute() or ".." in raw.parts:
             raise WikiPathTraversalError(f"Chemin invalide (hors vault): {path!r}")

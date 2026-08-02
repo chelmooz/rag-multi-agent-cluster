@@ -164,7 +164,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --basetemp=C:/Users/sangoku/AppData/Local/Temp/opencode/pytest-tmp"
+addopts = "-v --tb=short"
 
 [tool.coverage.run]
 source = ["src"]

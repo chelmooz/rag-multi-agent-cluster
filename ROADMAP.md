@@ -35,7 +35,7 @@ Phase A (RAG core, mock-first) ──► Phase B (multi-agents, mock-first) ─�
 | B4 | `WikiAgent` : write_page, update_index, append_log, validate_frontmatter, lint | `src/agents/wiki_agent.py` |
 | B5 | `Generator` (M3), `Judge` (M2), `Advocate` (M2), `Evaluator` (M1) — pipeline séquentiel via relay.json | `src/agents/*.py` |
 | B5.1 | Skills agents (Agent Skills, pas MCP — D13 inchangée) : `SKILL.md` par rôle avec critères/barème/format de sortie, chargé via `src/agents/skills/loader.py` au lieu d'un prompt hardcodé — **fait 02/08/2026** (le backlog/ROADMAP datait du 01/08 mais le code n'existait pas dans le repo — écart doc/code corrigé, cf. session Phase B Lot 1), `build_prompt()`/`skill_reference()` ajoutés (Generator/Judge/Advocate/Evaluator/WikiAgent), câblage `OllamaClientPool` toujours `NotImplementedError` (hors scope mock-first) | `src/agents/skills/{generator,judge,advocate,evaluator,wiki_agent}/SKILL.md`, `src/agents/skills/loader.py` |
-| B5.2 | Câblage réel `build_prompt()` → `OllamaClientPool.generate/judge/advocate/evaluate()` dans les méthodes `generate/evaluate/challenge/synthesize()` (actuellement `NotImplementedError`) | `src/agents/*.py` |
+| B5.2 | Câblage réel `build_prompt()` → `OllamaClientPool.generate/judge/advocate/evaluate()` dans les méthodes `generate/evaluate/challenge/synthesize()` | `src/agents/*.py` |
 | B5.3 | Tests unitaires `build_prompt()`/`skill_reference()` sans mock LLM (comparaison à des critères attendus, cf. discipline TDD) | `tests/test_agents_skills.py` (à créer) |
 | B5.4 | Voir backlog « Stratégie Agent Skills (question ouverte) » — localisation/versioning des `SKILL.md` hors du code Python testé, à trancher avant que le nombre de skills grossisse | `backlog.md` |
 | B6 | Boucle d'évaluation **optionnelle** : flag `evaluation_enabled` (défaut OFF, D12) — 1 itération max de feedback Évaluateur → Planner | `src/core/settings.py`, `src/agents/langgraph_orchestrator.py` |
@@ -101,7 +101,7 @@ Phase A (RAG core) ──bloquant──► Phase B (multi-agents) ──► Phas
 | 1.5 | Fix `injection_filter.py` : StrEnum + newline final | ✅ fait |
 | 1.6 | Déplacer doublon `test_injection_filter.py` racine → `tests/` (si présent) | ✅ fait (doublon supprimé, `src/tools/injection_filter.py` est la source) |
 | 1.7 | `ruff check .` → 0 erreurs | ✅ fait (0 erreur, corrigé 01/08/2026 — était 19) |
-| 1.8 | `mypy src` → 0 bloquantes | ⚠️ 4 erreurs résiduelles sur `src/api/main.py` (`response_model` vs `JSONResponse` d'erreur, endpoints `/embed` `/ingest` `/ingest/file` `/query`) |
+| 1.8 | `mypy src` → 0 bloquantes | ✅ fait (0 erreur, corrigé 02/08/2026) |
 | 1.9 | Corriger IPs `.env.example` : Qdrant/Postgres/Redis → `10.10.0.101` (LXC 101) | ✅ fait |
 | 1.10 | Ajouter volume NFS `/data/shared` dans compose orchestrator | ⏳ déplacé en C2 |
 | 1.11 | Créer LXC 105 OMV | ⏳ déplacé en C3 |
