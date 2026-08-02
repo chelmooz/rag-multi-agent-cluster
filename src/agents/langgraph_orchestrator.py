@@ -211,6 +211,16 @@ async def node_wiki(state: PipelineState, services: PipelineServices) -> dict[st
     if state.evaluator is not None and state.evaluator.get("decision") == "publish":
         await services.wiki.update_index()
         note = note or "index updated"
+    await services.wiki.append_log({
+        "query": state.query,
+        "agent": "generator",
+        "decision": (
+            "publish"
+            if state.evaluator and state.evaluator.get("decision") == "publish"
+            else "generated"
+        ),
+        "final_score": state.evaluator.get("score") if state.evaluator else None,
+    })
     return {"wiki_note": note} if note else {}
 
 
