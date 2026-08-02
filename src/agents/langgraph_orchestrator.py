@@ -105,7 +105,8 @@ async def node_plan(state: PipelineState, services: PipelineServices) -> dict[st
 async def node_rewrite(state: PipelineState, services: PipelineServices) -> dict[str, Any]:
     if services.rewriter is None:
         return {"rewritten_query": state.query}
-    out = await services.rewriter.rewrite(state.query, state.conversation_history)
+    history = state.conversation_history[-4:] if state.conversation_history else None
+    out = await services.rewriter.rewrite(state.query, history)
     return {"rewritten_query": out.rewritten_query or state.query}
 
 
@@ -155,7 +156,14 @@ async def node_generate(state: PipelineState, services: PipelineServices) -> dic
         }
         for c in (state.assembled.chunks if state.assembled else [])
     ]
-    generated = await services.generator.generate(state.query, chunks)
+    history = (
+        state.conversation_history[-4:]
+        if state.conversation_history
+        else None
+    )
+    generated = await services.generator.generate(
+        state.query, chunks, conversation_history=history,
+    )
     return {"generated": generated}
 
 

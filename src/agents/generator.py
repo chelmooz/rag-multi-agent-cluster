@@ -49,8 +49,10 @@ class GeneratorAgent:
         }
         return f"{skill}\n\n---\n\n{json.dumps(payload, ensure_ascii=False)}"
 
-    async def generate(self, query: str, context: list[dict]) -> GeneratorOutput:
-        prompt = self.build_prompt(query, context)
+    async def generate(
+        self, query: str, context: list[dict], conversation_history: list[dict] | None = None
+    ) -> GeneratorOutput:
+        prompt = self.build_prompt(query, context, conversation_history)
         try:
             data = await self._pool.generate(prompt, format="json")
         except Exception:

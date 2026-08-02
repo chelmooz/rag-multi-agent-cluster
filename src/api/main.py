@@ -47,12 +47,21 @@ logger = logging.getLogger(__name__)
 _TIMEOUT = 3.0
 
 
+class ChatMessage(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant|system)$")
+    content: str = Field(..., min_length=1)
+    timestamp: str | None = None
+    sources: list[str] = []
+    elapsed_ms: int | None = None
+
+
 class QueryRequest(BaseModel):
     question: str
     context: str | None = None
     top_k: int = Field(default=8, ge=1, le=50)
     use_reranker: bool = True
     evaluation_enabled: bool | None = None  # Override settings
+    messages: list[ChatMessage] | None = None
 
 
 class QueryResponse(BaseModel):
@@ -93,14 +102,6 @@ class HealthResponse(BaseModel):
     status: str
     version: str = "0.1.0-dev"
     environment: str = settings.log_level.lower()
-
-
-class ChatMessage(BaseModel):
-    role: str = Field(..., pattern="^(user|assistant|system)$")
-    content: str = Field(..., min_length=1)
-    timestamp: str
-    sources: list[str] = []
-    elapsed_ms: int | None = None
 
 
 class ChatRequest(BaseModel):
@@ -440,8 +441,14 @@ async def query(request: QueryRequest) -> QueryResponse:
         else settings.evaluation_enabled
     )
 
+    history = (
+        [{"role": m.role, "content": m.content} for m in request.messages]
+        if request.messages
+        else None
+    )
     state = await run_pipeline(
         query=request.question,
+        conversation_history=history,
         services=services,
         evaluation_enabled=evaluation,
         top_k=request.top_k,
