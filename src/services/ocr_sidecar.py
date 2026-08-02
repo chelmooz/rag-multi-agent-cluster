@@ -34,6 +34,7 @@ from src.core.settings import get_settings
 from src.services.ingestion import IngestionService
 
 if TYPE_CHECKING:
+    from fastapi import FastAPI
     from transformers import AutoModel
     from transformers.tokenization_utils_sentencepiece import SentencePieceBackend
     from transformers.tokenization_utils_tokenizers import TokenizersBackend
@@ -127,7 +128,7 @@ class PdfOcrSidecar:
         self._load_model()
         image_paths = self._pdf_to_images(pdf_path)
         if self._model is None or self._tokenizer is None:
-            raise RuntimeError("Modèle OCR non chargé — appeler _load_model() d'abord")
+            raise RuntimeError("Modèle OCR non chargé")
         try:
             raw = self._model.infer_multi(  # type: ignore[attr-defined]  # API custom Unlimited-OCR (trust_remote_code)
                 self._tokenizer,
@@ -262,7 +263,7 @@ class PdfOcrSidecar:
 
 # ── Mini-serveur (déclenchement manuel via UI Swagger) ───────────
 
-def _build_app():
+def _build_app() -> FastAPI:
     from fastapi import BackgroundTasks, FastAPI
 
     app = FastAPI(

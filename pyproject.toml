@@ -126,6 +126,7 @@ unfixable = ["T20", "TRY"]
 "src/services/reranker.py" = ["TRY003"]  # messages longs ok pour RerankerService - TRY003 trop restrictif ici
 "src/services/ssh_client.py" = ["TRY003"]  # messages longs ok pour SSHClient - TRY003 trop restrictif ici
 "src/services/memory_manager.py" = ["TRY003"]  # messages longs ok pour MemoryManager - TRY003 trop restrictif ici
+"src/services/ocr_sidecar.py" = ["TRY003"]  # messages longs ok pour OCRSidecar - TRY003 trop restrictif ici
 "src/agents/*" = ["TRY003"]  # messages longs ok pour les agents - TRY003 trop restrictif ici
 "src/api/main.py" = ["TRY003", "B008"]  # TRY003/B008 ok pour endpoints FastAPI
 
