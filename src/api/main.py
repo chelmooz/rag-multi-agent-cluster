@@ -24,6 +24,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
+from src.agents.advocate import AdvocateAgent
+from src.agents.evaluator import EvaluatorAgent
+from src.agents.generator import GeneratorAgent
+from src.agents.judge import JudgeAgent
+from src.agents.langgraph_orchestrator import PipelineServices, run_pipeline
+from src.agents.planner import PlannerAgent
+from src.agents.rewriter import RewriterAgent
+from src.agents.wiki_agent import WikiAgent
 from src.core.settings import get_settings
 from src.services.ingestion import IngestionService
 from src.services.lexical import LexicalSearch
@@ -98,6 +106,10 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=4000)
     conversation_id: str | None = None
+
+
+class OkfValidateRequest(BaseModel):
+    path: str = Field(..., min_length=1)
 
 
 async def _check_ollama(url: str) -> dict[str, Any]:
@@ -390,13 +402,14 @@ async def ingest_file(
 
 @app.post(f"{settings.api_prefix}/query", response_model=QueryResponse, tags=["RAG"])
 async def query(request: QueryRequest) -> QueryResponse:
-    """Endpoint principal de requête RAG — Hybrid Search + Reranker.
+    """Endpoint principal de requête RAG — pipeline multi-agents LangGraph.
 
-    Pipeline (Phase A) :
+    Pipeline (Phase B) :
     1. Embedding de la requête (dense + sparse)
     2. Hybrid Search Qdrant (RRF fusion dense + BM25)
     3. Reranker (bge-reranker-v2-m3 sur RTX 4000)
-    4. Construction réponse (Phase B ajoutera Generator + Évaluation)
+    4. Assemblage contexte + Génération (M3) via build_graph
+    5. Évaluation optionnelle (Judge → Advocate → Evaluator, B6)
     """
     # Vérifier que les services sont initialisés
     if not hasattr(app.state, "ollama_pool") or not hasattr(app.state, "vector_service"):
@@ -407,94 +420,110 @@ async def query(request: QueryRequest) -> QueryResponse:
     lexical: LexicalSearch = app.state.lexical_search
     reranker: RerankerService = app.state.reranker_service
 
-    # 1. Embedding requête (dense + sparse)
-    query_embeddings = await pool.embed([request.question])
-    if not query_embeddings:
-        raise ValueError("Échec embedding requête")
-    query_dense = query_embeddings[0]
-    query_sparse = lexical.encode_to_dict(request.question)
+    services = PipelineServices(
+        pool=pool,
+        vector=vector,
+        lexical=lexical,
+        reranker=reranker,
+        wiki=_wiki_agent(),
+        planner=PlannerAgent(pool),
+        rewriter=RewriterAgent(pool),
+        generator=GeneratorAgent(pool),
+        judge=JudgeAgent(pool),
+        advocate=AdvocateAgent(pool),
+        evaluator=EvaluatorAgent(pool),
+    )
 
-    # 2. Hybrid Search Qdrant
-    search_results = await vector.hybrid_search(
-        query_vector=query_dense,
-        query_sparse=query_sparse,
-        top_k=request.top_k * 3 if request.use_reranker else request.top_k,
+    evaluation = (
+        request.evaluation_enabled
+        if request.evaluation_enabled is not None
+        else settings.evaluation_enabled
+    )
+
+    state = await run_pipeline(
+        query=request.question,
+        services=services,
+        evaluation_enabled=evaluation,
+        top_k=request.top_k,
+        use_reranker=request.use_reranker,
         score_threshold=settings.similarity_threshold,
     )
 
-    if not search_results:
-        return QueryResponse(
-            answer="Aucun document pertinent trouvé dans la base de connaissances.",
-            sources=[],
-            confidence=0.0,
-            chunks_used=0,
-        )
-
-    # 3. Reranker (optionnel)
-    if request.use_reranker and len(search_results) > 1:
-        docs_texts = [r["payload"].get("text", "") for r in search_results]
-        reranked = await reranker.rerank(request.question, docs_texts, top_k=request.top_k)
-        # Remapper les résultats rerankés
-        final_results = []
-        for rr in reranked:
-            orig = search_results[rr.index]
-            final_results.append({
-                **orig,
-                "rerank_score": rr.score,
-            })
-        search_results = final_results
-    else:
-        search_results = search_results[:request.top_k]
-
-    # 4. Construire réponse (pour l'instant: concaténation des chunks top-k)
-    # Phase B ajoutera: Generator → Judge → Advocate → Evaluator
-    chunks_used = len(search_results)
-    context_parts = []
-    sources = []
-
-    for i, result in enumerate(search_results):
+    # Sources formatées pour la réponse
+    sources: list[str] = []
+    for result in state.search_results:
         payload = result.get("payload", {})
-        text = payload.get("text", "")
-        source_id = payload.get("source_id", f"doc_{i}")
+        source_id = payload.get("source_id", "doc")
         score = result.get("rerank_score", result.get("score", 0.0))
-
-        context_parts.append(f"[Source {i+1} (score: {score:.3f})] {text}")
         sources.append(f"{source_id} (score: {score:.3f})")
 
-    answer = "\n\n".join(context_parts) if context_parts else "Pas de contexte trouvé."
+    if state.generated is None:
+        return QueryResponse(
+            answer="Aucun document pertinent trouvé dans la base de connaissances.",
+            sources=sources,
+            confidence=0.0,
+            chunks_used=len(state.assembled.chunks) if state.assembled else 0,
+        )
+
+    confidence = state.generated.confidence
+    if state.evaluator is not None and state.evaluator.get("final_score") is not None:
+        confidence = state.evaluator["final_score"]
 
     return QueryResponse(
-        answer=answer,
+        answer=state.generated.answer,
         sources=sources,
-        confidence=0.5,  # Placeholder - Phase B calculera via Évaluateur
-        chunks_used=chunks_used,
+        confidence=confidence,
+        chunks_used=len(state.assembled.chunks) if state.assembled else 0,
     )
 
 
 # ──────────────────────────────────────────────
-# OKF Endpoints (Phase 0.8)
+# OKF Endpoints (Phase 0.8 / B8)
 # ──────────────────────────────────────────────
+def _wiki_agent() -> WikiAgent:
+    """Retourne le WikiAgent (lazy : injecté par les tests via app.state)."""
+    wiki = getattr(app.state, "wiki_agent", None)
+    if wiki is None:
+        wiki = WikiAgent()
+        app.state.wiki_agent = wiki
+    return wiki
+
+
 @app.post(f"{settings.api_prefix}/okf/validate", tags=["OKF"])
-async def okf_validate() -> dict[str, str]:
-    raise NotImplementedError("OKF validate pas encore implémenté")
+async def okf_validate(request: OkfValidateRequest) -> dict[str, Any]:
+    """Valide le frontmatter OKF v0.2 d'une page du vault."""
+    try:
+        result = await _wiki_agent().validate_frontmatter(request.path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"path": request.path, **result}
 
 
 @app.get(f"{settings.api_prefix}/okf/list", tags=["OKF"])
-async def okf_list() -> dict[str, str]:
-    raise NotImplementedError("OKF list pas encore implémenté")
+async def okf_list() -> dict[str, Any]:
+    """Liste les pages du vault (hors index.md/log.md)."""
+    pages = await _wiki_agent().list_pages()
+    return {"pages": pages, "count": len(pages)}
 
 
 @app.get(f"{settings.api_prefix}/okf/show", tags=["OKF"])
-async def okf_show() -> dict[str, str]:
-    raise NotImplementedError("OKF show pas encore implémenté")
+async def okf_show(path: str) -> dict[str, Any]:
+    """Affiche une page du vault (frontmatter + contenu markdown)."""
+    try:
+        return await _wiki_agent().read_page(path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ──────────────────────────────────────────────
-# Lint Endpoint (Phase 4.6)
+# Lint Endpoint (Phase 4.6 / B8)
 # ──────────────────────────────────────────────
 @app.get(f"{settings.api_prefix}/lint", tags=["Wiki"])
-async def lint() -> dict[str, str]:
-    raise NotImplementedError("Lint wiki pas encore implémenté")
+async def lint() -> dict[str, Any]:
+    """Lint du vault : pages orphelines, stale, contradictions, gaps."""
+    return await _wiki_agent().lint()
 
 
 # ──────────────────────────────────────────────

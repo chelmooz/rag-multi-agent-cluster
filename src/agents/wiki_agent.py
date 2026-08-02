@@ -159,6 +159,42 @@ class WikiAgent:
             return {}
         return fm if isinstance(fm, dict) else {}
 
+    async def list_pages(self) -> list[dict]:
+        """Liste toutes les pages du vault (hors index.md/log.md)."""
+        entries = []
+        for md in sorted(self.vault.rglob("*.md")):
+            if md.name in (_INDEX_FILENAME, _LOG_FILENAME):
+                continue
+            fm = self._read_frontmatter(md)
+            entries.append(
+                {
+                    "path": md.relative_to(self.vault).as_posix(),
+                    "title": fm.get("title", md.stem),
+                    "type": fm.get("type", "concept"),
+                    "status": fm.get("status", "draft"),
+                }
+            )
+        return entries
+
+    async def read_page(self, path: str) -> dict:
+        """Lit une page : frontmatter + corps markdown (anti traversal)."""
+        target = self._resolve(path)
+        if not target.is_file():
+            raise FileNotFoundError(f"page introuvable: {path}")
+        text = target.read_text(encoding="utf-8")
+        fm: dict = {}
+        body = text
+        if text.startswith("---"):
+            end = text.find("\n---", 3)
+            if end != -1:
+                try:
+                    parsed = yaml.safe_load(text[3:end])
+                    fm = parsed if isinstance(parsed, dict) else {}
+                except yaml.YAMLError:
+                    fm = {}
+                body = text[end + 4 :]
+        return {"path": path, "frontmatter": fm, "content": body}
+
     async def validate_frontmatter(self, page_path: str) -> dict:
         """Valide le frontmatter OKF v0.2 d'une page (relatif au vault)."""
         target = self._resolve(page_path)
@@ -186,10 +222,21 @@ class WikiAgent:
     # ── Lint ───────────────────────────────────────────────────────
 
     async def lint(self) -> dict:
-        """Détection : pages orphelines, stale, contradictions, gaps, frontmatter."""
+        """Détection : pages orphelines, stale, contradictions, gaps."""
         orphans: list[str] = []
         stale: list[str] = []
         frontmatter_issues: list[str] = []
+
+        def _stale_cutoff(value: object) -> date | None:
+            """Retourne la date d'expiration d'une valeur stale_after."""
+            if isinstance(value, str):
+                try:
+                    return datetime.strptime(value, "%Y-%m-%d").date()
+                except ValueError:
+                    return None
+            if isinstance(value, date):
+                return value
+            return None
 
         pages = [
             p
@@ -204,12 +251,13 @@ class WikiAgent:
                 continue
             stale_after = fm.get("stale_after")
             if stale_after:
-                try:
-                    cutoff = datetime.strptime(stale_after, "%Y-%m-%d").date()
-                    if date.today() > cutoff:
-                        stale.append(rel)
-                except ValueError:
-                    frontmatter_issues.append(f"{rel}: stale_after invalide: {stale_after!r}")
+                cutoff = _stale_cutoff(stale_after)
+                if cutoff is None:
+                    frontmatter_issues.append(
+                        f"{rel}: stale_after invalide: {stale_after!r}"
+                    )
+                elif date.today() > cutoff:
+                    stale.append(rel)
 
         for page in pages:
             rel = page.relative_to(self.vault).as_posix()

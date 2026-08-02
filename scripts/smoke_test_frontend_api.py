@@ -78,10 +78,13 @@ class TestChat:
         assert resp.status_code == 503
         assert "Services not initialized" in resp.json()["detail"]
 
-    def test_11_lint_returns_500_not_implemented(self, client):
+    def test_11_lint_returns_200(self, client):
+        """GET /lint est implémenté (B8) — retourne le rapport (vault vide → 200)."""
         resp = client.get(f"{BASE}/lint")
-        assert resp.status_code == 500
-        assert "detail" in resp.json()
+        assert resp.status_code == 200
+        body = resp.json()
+        for key in ("orphans", "stale", "contradictions", "gaps"):
+            assert key in body
 
     def test_12_ready_contains_expected_checks(self, client):
         resp = client.get(f"{BASE}/ready")
@@ -94,20 +97,36 @@ class TestChat:
 
 
 class TestAgents:
-    def test_13_okf_validate_not_implemented(self, client):
+    def test_13_okf_validate_requires_path(self, client):
+        """POST /okf/validate implémenté (B8) — body vide → 422 (validation)."""
         resp = client.post(f"{BASE}/okf/validate")
-        assert resp.status_code == 500
-        assert "detail" in resp.json()
+        assert resp.status_code == 422
 
-    def test_14_okf_list_not_implemented(self, client):
+    def test_13b_okf_validate_returns_report(self, client):
+        """POST /okf/validate — page introuvable → 200 avec issues (pas 500)."""
+        resp = client.post(f"{BASE}/okf/validate", json={"path": "introuvable.md"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["valid"] is False
+        assert "issues" in body
+
+    def test_14_okf_list_returns_pages(self, client):
+        """GET /okf/list implémenté (B8) — liste (vide si vault absent)."""
         resp = client.get(f"{BASE}/okf/list")
-        assert resp.status_code == 500
-        assert "detail" in resp.json()
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "pages" in body
+        assert "count" in body
 
-    def test_15_okf_show_not_implemented(self, client):
+    def test_15_okf_show_requires_path(self, client):
+        """GET /okf/show implémenté (B8) — sans path → 422 (validation)."""
         resp = client.get(f"{BASE}/okf/show")
-        assert resp.status_code == 500
-        assert "detail" in resp.json()
+        assert resp.status_code == 422
+
+    def test_15b_okf_show_missing_page_404(self, client):
+        """GET /okf/show — page introuvable → 404 (pas 500)."""
+        resp = client.get(f"{BASE}/okf/show", params={"path": "introuvable.md"})
+        assert resp.status_code == 404
 
     def test_16_redoc_available(self, client):
         resp = client.get("/redoc")
@@ -150,18 +169,21 @@ class TestSettings:
 
 
 class TestCyber:
-    def test_22_stub_endpoints_return_500_json(self, client):
-        """Endpoints encore non implémentés (ROADMAP Phase B) → 500 NotImplementedError."""
+    def test_22_okf_lint_endpoints_implemented(self, client):
+        """Endpoints OKF/Lint implémentés (B8) — plus aucun 500 NotImplementedError."""
         endpoints = [
             ("GET", f"{BASE}/lint", {}),
-            ("POST", f"{BASE}/okf/validate", {}),
             ("GET", f"{BASE}/okf/list", {}),
-            ("GET", f"{BASE}/okf/show", {}),
         ]
         for method, url, kwargs in endpoints:
             resp = client.request(method, url, **kwargs)
-            assert resp.status_code == 500, f"{method} {url} expected 500"
-            assert "detail" in resp.json()
+            assert resp.status_code == 200, f"{method} {url} expected 200"
+        for method, url, kwargs in [
+            ("POST", f"{BASE}/okf/validate", {}),
+            ("GET", f"{BASE}/okf/show", {}),
+        ]:
+            resp = client.request(method, url, **kwargs)
+            assert resp.status_code == 422, f"{method} {url} expected 422 (validation)"
 
     def test_22b_implemented_endpoints_return_503_when_uninitialized(self, client):
         """Endpoints implémentés (Phase A) mais services non démarrés hors lifespan → 503."""

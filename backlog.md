@@ -1844,6 +1844,46 @@ Suite directe de la session nettoyage : élimination des 5 dernières violations
   pratique (B6/B7 ne nécessitent PAS le relais — `PipelineServices`
   injecté suffit, pas de dépendance NFS dans le graphe).
 
+---
+
+## 02/08/2026 — Lot 6 : B8+B9 (Endpoints OKF/Lint + branchement graphe + smoke)
+
+### Livré (commit `a3f7b2d`)
+
+- **`src/agents/wiki_agent.py`** : ajout `list_pages()` et `read_page(path)` —
+  nécessaires pour `/okf/list` et `/okf/show`. Fix bug `stale_after` :
+  YAML parse les dates comme `datetime.date`, pas `datetime` →
+  `_stale_cutoff()` interne gère string + date.
+
+- **`src/api/main.py`** : 4 endpoints B8 implémentés (remplace NotImplementedError) :
+  - `POST /api/v1/okf/validate` : valide frontmatter d'une page (body `{"path":...}`).
+  - `GET /api/v1/okf/list` : liste toutes les pages du vault (hors index/log).
+  - `GET /api/v1/okf/show` : lit une page (frontmatter + contenu, anti-traversal).
+  - `GET /api/v1/lint` : rapport lint complet (orphans, stale, contradictions, gaps, frontmatter).
+  - `_wiki_agent()` helper lazy (injecté par les tests via `app.state.wiki_agent`).
+  - `/query` réécrit : utilise `run_pipeline` (LangGraph) au lieu de concaténation brute.
+    - `PipelineServices` injecté avec 7 agents réels (fallbacks prudence).
+    - `top_k`, `use_reranker`, `score_threshold` transmis via `PipelineState`.
+    - `evaluation_enabled` override par requête (défaut settings).
+
+- **`scripts/okf_lint.py`** : CLI fonctionnel (B8 Phase 0.7 terminée) :
+  - `--stale`, `--orphan`, `--contradiction`, `--validate`, `--fix`, `--wiki-path`.
+  - Sorties structurées + code de sortie 1 si problèmes détectés.
+
+- **`scripts/smoke_test_frontend_api.py`** : mis à jour (B9) — plus aucun 500 NIE :
+  - `test_11_lint_returns_200`, `test_13/14/15_okf_*_requires_body/returns_*`.
+  - `test_22_okf_lint_endpoints_implemented` : lint/list → 200, validate/show sans param → 422.
+
+- **`tests/test_okf_api.py`** (13 nouveaux tests) :
+  - OKF endpoints avec vault tmp_path réel (validate/list/show/lint).
+  - `/query` pipeline mocké : `run_pipeline` appelé, génération + éval flag override.
+
+### Vérification
+
+- ruff 0, mypy 0 (31 fichiers), **pytest 319/319 PASSED** (306 → 319).
+- Smoke test 35/35 scénarios — plus aucun endpoint 500 NotImplementedError.
+- Backlog Phase 0.7/0.8 (OKF/Lint) **CLOTURÉ**.
+
 
 
 

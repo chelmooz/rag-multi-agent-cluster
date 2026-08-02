@@ -42,6 +42,9 @@ class PipelineState:
     query: str
     conversation_history: list[dict] = field(default_factory=list)
     evaluation_enabled: bool = False
+    top_k: int = 8
+    use_reranker: bool = True
+    score_threshold: float | None = None
 
     # Sorties des nœuds
     plan: PlannerOutput | None = None
@@ -116,16 +119,19 @@ async def node_retrieve(state: PipelineState, services: PipelineServices) -> dic
         return {"search_results": []}
     query_dense = embeddings[0]
     query_sparse = services.lexical.encode_to_dict(query)
-    top_k = state.plan.rerank_top_k if state.plan else 8
+    top_k = state.top_k if state.top_k else (state.plan.rerank_top_k if state.plan else 8)
+    use_reranker = state.use_reranker and services.reranker is not None
 
     results = await services.vector.hybrid_search(
         query_vector=query_dense,
         query_sparse=query_sparse,
-        top_k=top_k * 3 if services.reranker is not None else top_k,
+        top_k=top_k * 3 if use_reranker else top_k,
+        score_threshold=state.score_threshold,
     )
-    if services.reranker is not None and len(results) > 1:
+    reranker = services.reranker
+    if use_reranker and reranker is not None and len(results) > 1:
         docs_texts = [r["payload"].get("text", "") for r in results]
-        reranked = await services.reranker.rerank(query, docs_texts, top_k=top_k)
+        reranked = await reranker.rerank(query, docs_texts, top_k=top_k)
         results = [
             {**results[rr.index], "rerank_score": rr.score} for rr in reranked
         ]
@@ -280,6 +286,9 @@ async def run_pipeline(
     services: PipelineServices,
     conversation_history: list[dict] | None = None,
     evaluation_enabled: bool = False,
+    top_k: int = 8,
+    use_reranker: bool = True,
+    score_threshold: float | None = None,
 ) -> PipelineState:
     """Exécute le pipeline complet (B7) et retourne l'état final.
 
@@ -292,6 +301,9 @@ async def run_pipeline(
         query=query,
         conversation_history=list(conversation_history or []),
         evaluation_enabled=evaluation_enabled,
+        top_k=top_k,
+        use_reranker=use_reranker,
+        score_threshold=score_threshold,
     )
     result = await app.ainvoke(state)
     if isinstance(result, PipelineState):
