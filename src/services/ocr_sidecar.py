@@ -28,9 +28,15 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.core.settings import get_settings
 from src.services.ingestion import IngestionService
+
+if TYPE_CHECKING:
+    from transformers import AutoModel
+    from transformers.tokenization_utils_sentencepiece import SentencePieceBackend
+    from transformers.tokenization_utils_tokenizers import TokenizersBackend
 
 logger = logging.getLogger("ocr_sidecar")
 
@@ -63,8 +69,8 @@ class PdfOcrSidecar:
         self._inbox: Path = settings.raw_data_path
         self._vault_sources: Path = settings.wiki_vault_path / "sources"
         self._ingestion = ingestion_service
-        self._model = None
-        self._tokenizer = None
+        self._model: AutoModel | None = None
+        self._tokenizer: TokenizersBackend | SentencePieceBackend | None = None
 
     # ── Modèle (chargement paresseux, une fois par run) ──────────
 
