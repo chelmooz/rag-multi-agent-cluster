@@ -1742,13 +1742,29 @@ Accord : Option B, ordre 1→2→3→4(a→e), un commit vérifiable par étape.
 
 ### Follow-up (hors périmètre, non fait)
 
-- 4 erreurs mypy `src/api/main.py` (JSONResponse vs response_model)
-- TRY301 `ocr_sidecar.py:235` (raise à abstraire en fonction interne)
+- ~~4 erreurs mypy `src/api/main.py` (JSONResponse vs response_model)~~ **✅ FAIT (02/08/2026)** — remplacées par `raise HTTPException(503)` (même corps JSON `{"detail": ...}`, tests compatibles), + suppression double `return IngestResponse` mort dans `/ingest/file` — **mypy src : 0 erreur**
+- ~~TRY301 `ocr_sidecar.py:235` (raise à abstraire en fonction interne)~~ **✅ FAIT (02/08/2026)** — corps du try extrait en `PdfOcrSidecar._process_pdf()` (retourne chunks_indexed, lève si OCR vide) — **ruff : 0 erreur sur tout le repo**
 - `test_vector.py` / `test_ingestion.py` : 9 warnings (UserWarning qdrant
   check_compatibility, inoffensifs — option `check_compatibility=False` à
   considérer)
 - `smoke_test_frontend_api.py` : toujours hors pytest (33 scénarios manuels,
   documenté dans README)
+
+---
+
+## 02/08/2026 — Clôture follow-up : mypy 0 + ruff 0 (project-wide)
+
+Suite directe de la session nettoyage : élimination des 5 dernières violations.
+- `src/api/main.py` : 4 erreurs mypy `JSONResponse` vs `response_model`
+  (`/embed` `/ingest` `/ingest/file` `/query`) → `raise HTTPException(
+  status_code=503, detail="Services not initialized...")` — même corps JSON,
+  les tests `test_api.py` passent sans modification. Code mort supprimé
+  (double `return IngestResponse` dans `/ingest/file`).
+- `src/services/ocr_sidecar.py` : TRY301 (raise dans try) → corps du run
+  extrait en `_process_pdf()` (SRP : OCR + note + ingestion en une méthode,
+  retourne chunks_indexed).
+- État final : **ruff 0 erreur, mypy 0 erreur (27 fichiers), pytest 205/205,
+  couverture totale 67%** — commit `e2cb3dc`, pushé sur main.
 
 
 
