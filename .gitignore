@@ -28,3 +28,4 @@ archive_*.zip
 .idea/
 
 graphify-out/
+.coverage
