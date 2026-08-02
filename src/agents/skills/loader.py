@@ -17,7 +17,9 @@ from pathlib import Path
 
 _SKILLS_DIR = Path(__file__).parent
 
-ROLES = frozenset({"generator", "judge", "advocate", "evaluator", "wiki_agent"})
+ROLES = frozenset(
+    {"generator", "judge", "advocate", "evaluator", "wiki_agent", "planner", "rewriter"}
+)
 
 
 @functools.cache

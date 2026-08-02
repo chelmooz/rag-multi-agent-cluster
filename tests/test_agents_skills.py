@@ -27,7 +27,15 @@ def _clear_skill_cache() -> None:
 # ── Loader ──────────────────────────────────────────────────────────
 
 def test_roles_expected_set() -> None:
-    expected = {"generator", "judge", "advocate", "evaluator", "wiki_agent"}
+    expected = {
+        "generator",
+        "judge",
+        "advocate",
+        "evaluator",
+        "wiki_agent",
+        "planner",
+        "rewriter",
+    }
     assert expected == ROLES
 
 
@@ -39,7 +47,14 @@ def test_load_skill_returns_nonempty_for_each_role() -> None:
 
 
 def test_load_skill_contains_json_schema_reference() -> None:
-    for role in ("generator", "judge", "advocate", "evaluator"):
+    for role in (
+        "generator",
+        "judge",
+        "advocate",
+        "evaluator",
+        "planner",
+        "rewriter",
+    ):
         skill = load_skill(role)
         assert "_output_v1" in skill or "Réponds UNIQUEMENT en JSON" in skill
 
