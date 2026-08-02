@@ -1675,6 +1675,82 @@ session). Vérifié : `git grep -i` de l'ancien nom = 0 occurrence (hors
 - Ouvert : `partials/monitoring` rend du HTML + le JS refait le rendu — choisir
   UNE source de vérité (le JSON `/api/v1/monitoring` suffit, partial à supprimer)
 
+---
+
+## 02/08/2026 — Session nettoyage + couverture Phase A (audit croisé Claude + Nemotron)
+
+### Contexte
+
+Audit croisé de deux IA (Claude + Nemotron) sur l'état du repo — mêmes outils réels
+(pytest/ruff/mypy), convergence sur : 42/42 tests, 3 erreurs ruff, 12-14 mypy,
+doublon `src/main.py` (433 lignes, exclu couverture, entrypoint réel =
+`src.api.main:app`), couverture 46% très inégale (Phase A 24-33%),
+`injection_filter.py` 54% sans test dédié, `smoke_test_frontend_api.py` hors pytest.
+Accord : Option B, ordre 1→2→3→4(a→e), un commit vérifiable par étape.
+
+### Fait (12 commits, 42→205 tests)
+
+1. **Suppression `src/main.py`** (fichier mort, doublon de `src/api/main.py`) —
+   ruff −1 erreur, couverture +10 lignes.
+2. **Mypy `ocr_sidecar.py` 5→0** : override `fitz/torch/transformers`
+   (deps optionnelles OCR, pattern per-file comme les autres services), annotation
+   types lazy-loaded (`TokenizersBackend | SentencePieceBackend | None` via
+   TYPE_CHECKING), garde `None` avant `infer_multi` (bug réel : modèle non chargé
+   → crash), annotation retour `_build_app() -> FastAPI`. Ruff TRY003 aligné
+   (per-file-ignore ajouté, cohérent avec les 7 autres services).
+3. **`tests/test_injection_filter.py`** (nouveau, 37 tests, 54%→100%) : 17 payloads
+   HIGH + 9 MEDIUM OWASP LLM01, cas vide/whitespace, batch, dataclass frozen,
+   précédence HIGH sur MEDIUM, `flagged`.
+4. **Couverture Phase A mock-first** (AsyncMock, zéro matériel) :
+   - `lexical.py` 31→100% (20 tests : encodage sparse, normalisation L2,
+     merge pondéré, batch, factory)
+   - `reranker.py` 33→100% (17 tests : tri décroissant, top_k, wrap OllamaError,
+     rerank_with_payload, lifecycle)
+   - `vector.py` 24→100% (20 tests : create_collection idempotent,
+     upsert dict/sparse/operation_id, hybrid search dense/sparse/RRF/filtre,
+     stats/health/snapshot)
+   - `ingestion.py` 27→99% (25 tests : chunking overlap, ids stables, détection
+     injection dans chunks, augment, embed, index, pipeline complet, erreurs)
+   - `ollama.py` 29→99% (44 tests : generate/embed/rerank payloads, retry,
+     circuit breaker, unload, routing pool M1/M2/M3, fallback embedding,
+     judge/advocate unload)
+
+### Bugs latents corrigés dans `ollama.py` (découverts par les tests)
+
+- **Retry tenacity no-op** : `async for attempt_state in retrier:` sans
+  `with attempt:` → les retries ne s'exécutaient JAMAIS (1 seule tentative).
+  Corrigé avec le pattern `async for attempt in retrier: with attempt:`.
+- **Error wrapping mort** : les `raise` nus relançaient l'httpx brute →
+  `OllamaUnavailableError`/`OllamaTimeoutError` jamais levés → **le fallback
+  embedding M1→M2 du pool était inopérant en prod**. Wrap externe ajouté.
+- **`raise` nu après `except: pass`** dans `pool.embed` →
+  `RuntimeError: No active exception to reraise` au lieu de re-propager.
+  → `raise e` (noqa TRY201 hors except).
+
+### État final
+
+- `pytest` : **205/205 PASSED** (42 → 205, +163 tests)
+- `ruff` : 1 erreur restante (TRY301 `ocr_sidecar.py:235`, pré-existante,
+  hors périmètre session — message court déjà, reste structurelle)
+- `mypy src` : 12 → **4 erreurs**, toutes sur `src/api/main.py` (pattern
+  `JSONResponse` vs `response_model` sur `/embed` `/ingest` `/ingest/file`
+  `/query`) — follow-up documenté
+- Couverture modules critiques : ollama 99%, vector 100%, ingestion 99%,
+  lexical 100%, reranker 100%, injection_filter 100%, memory_manager 88%,
+  settings 88%, relay 100%, agents 100%
+- Git : 12 commits sur main (42aa2a6 → 4618010), working tree propre
+
+### Follow-up (hors périmètre, non fait)
+
+- 4 erreurs mypy `src/api/main.py` (JSONResponse vs response_model)
+- TRY301 `ocr_sidecar.py:235` (raise à abstraire en fonction interne)
+- `test_vector.py` / `test_ingestion.py` : 9 warnings (UserWarning qdrant
+  check_compatibility, inoffensifs — option `check_compatibility=False` à
+  considérer)
+- `smoke_test_frontend_api.py` : toujours hors pytest (33 scénarios manuels,
+  documenté dans README)
+
+
 
 
 
