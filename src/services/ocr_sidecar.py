@@ -126,8 +126,10 @@ class PdfOcrSidecar:
         """OCR un PDF entier en un seul passage multi-page."""
         self._load_model()
         image_paths = self._pdf_to_images(pdf_path)
+        if self._model is None or self._tokenizer is None:
+            raise RuntimeError("Modèle OCR non chargé — appeler _load_model() d'abord")
         try:
-            raw = self._model.infer_multi(
+            raw = self._model.infer_multi(  # type: ignore[attr-defined]  # API custom Unlimited-OCR (trust_remote_code)
                 self._tokenizer,
                 prompt="<image>Multi page parsing.",
                 image_files=[str(p) for p in image_paths],
