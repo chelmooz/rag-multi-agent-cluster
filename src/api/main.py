@@ -17,7 +17,7 @@ from typing import Any, cast
 
 import asyncpg
 import httpx
-from fastapi import FastAPI, Form, Request, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -305,10 +305,7 @@ async def embed(request: EmbedRequest) -> EmbedResponse:
     """Embedding texte → vecteur dense (nomic-embed-text-v2-moe) + sparse (BM25)."""
     # Vérifier que les services sont initialisés
     if not hasattr(app.state, "ollama_pool") or not hasattr(app.state, "lexical_search"):
-        return JSONResponse(
-            status_code=503,
-            content={"detail": "Services not initialized - server starting up"}
-        )
+        raise HTTPException(status_code=503, detail="Services not initialized - server starting up")
 
     pool: OllamaClientPool = app.state.ollama_pool
     lexical: LexicalSearch = app.state.lexical_search
@@ -334,10 +331,7 @@ async def ingest(request: IngestRequest) -> IngestResponse:
     """Ingestion d'une source (texte) → chunks → embeddings → Qdrant."""
     # Vérifier que les services sont initialisés
     if not hasattr(app.state, "ingestion_service"):
-        return JSONResponse(
-            status_code=503,
-            content={"detail": "Services not initialized - server starting up"}
-        )
+        raise HTTPException(status_code=503, detail="Services not initialized - server starting up")
 
     service: IngestionService = app.state.ingestion_service
 
@@ -366,10 +360,7 @@ async def ingest_file(
     """Ingestion d'un fichier uploadé."""
     # Vérifier que les services sont initialisés
     if not hasattr(app.state, "ingestion_service"):
-        return JSONResponse(
-            status_code=503,
-            content={"detail": "Services not initialized - server starting up"}
-        )
+        raise HTTPException(status_code=503, detail="Services not initialized - server starting up")
 
     import json
 
@@ -396,13 +387,6 @@ async def ingest_file(
         errors=result.errors,
     )
 
-    return IngestResponse(
-        source_id=result.source_id,
-        chunks_created=result.chunks_created,
-        chunks_indexed=result.chunks_indexed,
-        errors=result.errors,
-    )
-
 
 @app.post(f"{settings.api_prefix}/query", response_model=QueryResponse, tags=["RAG"])
 async def query(request: QueryRequest) -> QueryResponse:
@@ -416,10 +400,7 @@ async def query(request: QueryRequest) -> QueryResponse:
     """
     # Vérifier que les services sont initialisés
     if not hasattr(app.state, "ollama_pool") or not hasattr(app.state, "vector_service"):
-        return JSONResponse(
-            status_code=503,
-            content={"detail": "Services not initialized - server starting up"}
-        )
+        raise HTTPException(status_code=503, detail="Services not initialized - server starting up")
 
     pool: OllamaClientPool = app.state.ollama_pool
     vector: VectorService = app.state.vector_service

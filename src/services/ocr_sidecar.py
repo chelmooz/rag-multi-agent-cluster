@@ -209,6 +209,32 @@ class PdfOcrSidecar:
 
     # ── Pipeline complet ──────────────────────────────────────────
 
+    async def _process_pdf(self, pdf_path: Path) -> int:
+        """OCR un PDF, écrit la note vault et l'indexe.
+
+        Retourne le nombre de chunks indexés. Lève si l'OCR est vide
+        (le fichier sera classé en `_failed` par l'appelant).
+        """
+        markdown_body = self._ocr_pdf(pdf_path)
+        if not markdown_body.strip():
+            raise ValueError("Sortie OCR vide")
+
+        note_path = self._write_vault_note(pdf_path, markdown_body)
+
+        chunks_indexed = 0
+        if self._ingestion is not None:
+            ingest_result = await self._ingestion.ingest(
+                text=markdown_body,
+                source_type="file",
+                source_id=pdf_path.stem,
+                metadata={
+                    "source_file": pdf_path.name,
+                    "vault_note": str(note_path),
+                },
+            )
+            chunks_indexed = ingest_result.chunks_indexed
+        return chunks_indexed
+
     async def run_once(self) -> OcrSidecarResult:
         """Scanne l'inbox, OCRise chaque PDF, écrit la note, indexe, archive."""
         result = OcrSidecarResult()
@@ -230,24 +256,7 @@ class PdfOcrSidecar:
             for pdf_path in pdfs:
                 try:
                     logger.info("OCR: %s", pdf_path.name)
-                    markdown_body = self._ocr_pdf(pdf_path)
-                    if not markdown_body.strip():
-                        raise ValueError("Sortie OCR vide")
-
-                    note_path = self._write_vault_note(pdf_path, markdown_body)
-
-                    if self._ingestion is not None:
-                        ingest_result = await self._ingestion.ingest(
-                            text=markdown_body,
-                            source_type="file",
-                            source_id=pdf_path.stem,
-                            metadata={
-                                "source_file": pdf_path.name,
-                                "vault_note": str(note_path),
-                            },
-                        )
-                        result.chunks_indexed += ingest_result.chunks_indexed
-
+                    result.chunks_indexed += await self._process_pdf(pdf_path)
                     shutil.move(str(pdf_path), str(processed_dir / pdf_path.name))
                     result.processed.append(pdf_path.name)
 
