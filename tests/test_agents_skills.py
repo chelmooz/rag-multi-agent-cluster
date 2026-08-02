@@ -8,6 +8,7 @@ fail-fast sur rôle/fichier manquant.
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -22,6 +23,26 @@ from src.agents.wiki_agent import WikiAgent
 @pytest.fixture(autouse=True)
 def _clear_skill_cache() -> None:
     clear_cache()
+
+
+def _pool() -> AsyncMock:
+    return AsyncMock()
+
+
+def _generator() -> GeneratorAgent:
+    return GeneratorAgent(_pool())  # type: ignore[arg-type]
+
+
+def _judge() -> JudgeAgent:
+    return JudgeAgent(_pool())  # type: ignore[arg-type]
+
+
+def _advocate() -> AdvocateAgent:
+    return AdvocateAgent(_pool())  # type: ignore[arg-type]
+
+
+def _evaluator() -> EvaluatorAgent:
+    return EvaluatorAgent(_pool())  # type: ignore[arg-type]
 
 
 # ── Loader ──────────────────────────────────────────────────────────
@@ -99,7 +120,7 @@ def test_skill_reference_unknown_role_raises() -> None:
 # ── build_prompt — GeneratorAgent ───────────────────────────────────
 
 def test_generator_build_prompt_contains_skill_and_payload() -> None:
-    agent = GeneratorAgent()
+    agent = _generator()
     prompt = agent.build_prompt("Quelle est la question ?", [{"source_id": "s1", "text": "ctx"}])
     assert load_skill("generator") in prompt
     payload = json.loads(prompt.split("---\n\n", 1)[1])
@@ -109,7 +130,7 @@ def test_generator_build_prompt_contains_skill_and_payload() -> None:
 
 
 def test_generator_build_prompt_with_history() -> None:
-    agent = GeneratorAgent()
+    agent = _generator()
     history = [{"role": "user", "content": "salut"}]
     prompt = agent.build_prompt(
         "q", [{"source_id": "s1", "text": "t"}], conversation_history=history
@@ -121,7 +142,7 @@ def test_generator_build_prompt_with_history() -> None:
 # ── build_prompt — JudgeAgent ───────────────────────────────────────
 
 def test_judge_build_prompt_contains_skill_and_payload() -> None:
-    agent = JudgeAgent()
+    agent = _judge()
     prompt = agent.build_prompt(
         "q", "réponse du générateur", [{"source_id": "s1", "text": "ctx"}]
     )
@@ -133,7 +154,7 @@ def test_judge_build_prompt_contains_skill_and_payload() -> None:
 
 
 def test_judge_build_prompt_with_metadata() -> None:
-    agent = JudgeAgent()
+    agent = _judge()
     prompt = agent.build_prompt(
         "q", "r", [], response_metadata={"latency_ms": 42}
     )
@@ -144,7 +165,7 @@ def test_judge_build_prompt_with_metadata() -> None:
 # ── build_prompt — AdvocateAgent ────────────────────────────────────
 
 def test_advocate_build_prompt_contains_skill_and_payload() -> None:
-    agent = AdvocateAgent()
+    agent = _advocate()
     judge_critique = {"score": 0.7, "critique": "ok", "flags": []}
     prompt = agent.build_prompt("q", "r", [{"source_id": "s1", "text": "t"}], judge_critique)
     assert load_skill("advocate") in prompt
@@ -156,7 +177,7 @@ def test_advocate_build_prompt_contains_skill_and_payload() -> None:
 # ── build_prompt — EvaluatorAgent ───────────────────────────────────
 
 def test_evaluator_build_prompt_contains_skill_and_payload() -> None:
-    agent = EvaluatorAgent()
+    agent = _evaluator()
     judge = {"score": 0.9, "flags": []}
     advocate = {"score": 0.8, "hallucination_risk": "low"}
     prompt = agent.build_prompt("q", "r", judge, advocate)
@@ -167,7 +188,7 @@ def test_evaluator_build_prompt_contains_skill_and_payload() -> None:
 
 
 def test_evaluator_prompt_mentions_publish_rules() -> None:
-    agent = EvaluatorAgent()
+    agent = _evaluator()
     prompt = agent.build_prompt("q", "r", {}, {})
     assert "publish" in prompt
     assert "verified_tier" in prompt

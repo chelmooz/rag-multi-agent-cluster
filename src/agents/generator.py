@@ -12,7 +12,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from src.agents.parsing import parse_model
 from src.agents.skills.loader import load_skill
+from src.services.ollama import OllamaClientPool
 
 _SKILL_ROLE = "generator"
 
@@ -28,6 +30,9 @@ class GeneratorOutput(BaseModel):
 
 class GeneratorAgent:
     """Génère la réponse brute sur BC-250, écrit dans relay.json pour Judge/Avocat."""
+
+    def __init__(self, pool: OllamaClientPool) -> None:
+        self._pool = pool
 
     def build_prompt(
         self,
@@ -45,4 +50,20 @@ class GeneratorAgent:
         return f"{skill}\n\n---\n\n{json.dumps(payload, ensure_ascii=False)}"
 
     async def generate(self, query: str, context: list[dict]) -> GeneratorOutput:
-        raise NotImplementedError
+        prompt = self.build_prompt(query, context)
+        try:
+            data = await self._pool.generate(prompt, format="json")
+        except Exception:
+            return GeneratorOutput(
+                answer="L'information n'est pas disponible dans les sources fournies.",
+                citations=[],
+                confidence=0.0,
+            )
+        output = parse_model(GeneratorOutput, data.get("response", ""))
+        if output is not None:
+            return output
+        return GeneratorOutput(
+            answer="L'information n'est pas disponible dans les sources fournies.",
+            citations=[],
+            confidence=0.0,
+        )

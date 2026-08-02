@@ -22,7 +22,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from src.agents.parsing import parse_model
 from src.agents.skills.loader import load_skill
+from src.services.ollama import OllamaClientPool
 
 _SKILL_ROLE = "advocate"
 
@@ -40,6 +42,9 @@ class AdvocateOutput(BaseModel):
 
 class AdvocateAgent:
     """Avocat du diable : cherche failles/hallucinations dans la réponse."""
+
+    def __init__(self, pool: OllamaClientPool) -> None:
+        self._pool = pool
 
     def build_prompt(
         self,
@@ -61,7 +66,25 @@ class AdvocateAgent:
     async def challenge(
         self, query: str, response: str, context: list[dict], judge_critique: dict
     ) -> AdvocateOutput:
-        raise NotImplementedError
+        prompt = self.build_prompt(query, response, context, judge_critique)
+        try:
+            data = await self._pool.advocate(prompt, format="json")
+        except Exception:
+            return self._fallback()
+        output = parse_model(AdvocateOutput, data.get("response", ""))
+        return output if output is not None else self._fallback()
+
+    def _fallback(self) -> AdvocateOutput:
+        """Avis de repli : échec signalé comme faille bloquante (prudence)."""
+        return AdvocateOutput(
+            score=0.0,
+            faille="Évaluation indisponible (modèle injoignable ou réponse illisible).",
+            claims_contested=[],
+            hallucination_risk="high",
+            missing_context=[],
+            confidence=0.0,
+        )
 
     async def unload(self) -> None:
-        raise NotImplementedError
+        """Décharge le modèle de la VRAM RTX 4000 (séquentiel avant retour)."""
+        await self._pool.m2.unload_model(self._pool._settings.advocate_model)

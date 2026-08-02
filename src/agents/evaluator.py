@@ -20,7 +20,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from src.agents.parsing import parse_model
 from src.agents.skills.loader import load_skill
+from src.services.ollama import OllamaClientPool
 
 _SKILL_ROLE = "evaluator"
 
@@ -38,6 +40,9 @@ class EvaluatorOutput(BaseModel):
 
 class EvaluatorAgent:
     """Synthèse finale : combine Judge + Avocat en réponse finale et décision de publication."""
+
+    def __init__(self, pool: OllamaClientPool) -> None:
+        self._pool = pool
 
     def build_prompt(
         self,
@@ -57,8 +62,59 @@ class EvaluatorAgent:
         return f"{skill}\n\n---\n\n{json.dumps(payload, ensure_ascii=False)}"
 
     async def synthesize(self, relay_data: dict) -> EvaluatorOutput:
-        raise NotImplementedError
+        query = relay_data.get("query", "")
+        response = relay_data.get("response", "")
+        judge = relay_data.get("judge", {})
+        advocate = relay_data.get("advocate", {})
+        prompt = self.build_prompt(query, response, judge, advocate)
+        try:
+            data = await self._pool.evaluate(prompt, format="json")
+        except Exception:
+            return self._fallback()
+        output = parse_model(EvaluatorOutput, data.get("response", ""))
+        return output if output is not None else self._fallback()
+
+    def _fallback(self) -> EvaluatorOutput:
+        """Décision de repli : refuse la publication (prudence)."""
+        return EvaluatorOutput(
+            decision="reject",
+            final_score=0.0,
+            reasoning="Évaluation indisponible (modèle injoignable ou réponse illisible).",
+            revision_instructions=None,
+            verified_tier="unverified",
+            confidence=0.0,
+        )
 
     async def update_frontmatter(self, page_path: str, trust_tier: str) -> None:
-        """Met à jour le champ verified: human-reviewed dans le frontmatter OKF."""
-        raise NotImplementedError
+        """Met à jour le champ verified du frontmatter OKF d'une page du vault.
+
+        ``trust_tier`` : ``machine-confirmed`` ou ``human-reviewed`` (jamais
+        automatique, cf. SKILL Evaluator). La page est relue puis réécrite
+        avec ``verified`` mis à jour — le reste du frontmatter est préservé.
+        """
+        from src.agents.wiki_agent import WikiAgent, WikiAgentError
+
+        if trust_tier not in ("unverified", "machine-confirmed", "human-reviewed"):
+            raise ValueError(f"trust_tier invalide: {trust_tier!r}")
+
+        wiki = WikiAgent()
+        target = wiki._resolve(page_path)
+        if not target.is_file():
+            raise WikiAgentError(f"Page introuvable: {page_path!r}")
+
+        text = target.read_text(encoding="utf-8")
+        if not text.startswith("---"):
+            raise WikiAgentError(f"Page sans frontmatter OKF: {page_path!r}")
+        end = text.find("\n---", 3)
+        if end == -1:
+            raise WikiAgentError(f"Frontmatter non fermé: {page_path!r}")
+
+        import yaml
+
+        fm = yaml.safe_load(text[3:end])
+        if not isinstance(fm, dict):
+            raise WikiAgentError(f"Frontmatter invalide: {page_path!r}")
+        fm["verified"] = trust_tier
+        body = text[end + 1 :]
+        new_text = f"---\n{yaml.safe_dump(fm, allow_unicode=True, sort_keys=False)}---{body}"
+        target.write_text(new_text, encoding="utf-8")
