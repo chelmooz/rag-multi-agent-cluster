@@ -61,6 +61,8 @@ Phase A (RAG core, mock-first) ──► Phase B (multi-agents, mock-first) ─�
 | C4.1 | Résolution Hugging Face exclusive (hf.co/...) pour Générateur (Qwen3-14B), Juge (DeepSeek-R1-Distill-Llama-8B), Avocat (Ministral-8B-2410) — cf. `docs/BRIEF-INTEGRATION-MODELES-Q4-HF.md` | `.env`, `settings.py` |
 | C4.2 | Résolution HF étendue aux 7 autres modèles (embedding, reranker, évaluateur, générateur alt, text2sql, vision, fastcheck) — cf. §8 du BRIEF | `.env`, `settings.py` |
 | C5 | Glances (`glances -w`) sur BC-250 (D9) **+ extension M2** (plugin GPU NVIDIA `nvidia-ml-py` pour RTX 4000) **+ M1** (CPU/RAM, déjà dispo non activé) | `infrastructure/bc250/`, `infrastructure/proxmox/` |
+| C5.1 | Script systemd core-unlock CPU BC-250 (Debian 12, non persistant BIOS — SMU msg 0x98 volatil, relance au boot) | `infrastructure/bc250/setup-core-unlock.service`, `bc250-core-unlock.sh` |
+| C5.2 | Hook kernel-postinst rebuild auto 40 CU après `apt upgrade` (`/etc/kernel/postinst.d/`) | `infrastructure/bc250/kernel-postinst-hook.sh` |
 | C6 | Smoke tests bout-en-bout sur le cluster réel + mesure de latence (4 appels LLM si éval activée) | `scripts/smoke_test_frontend_api.py` |
 
 ## Phase D — CI & Finalisation (Sprint 3)
@@ -89,6 +91,7 @@ Phase A (RAG core) ──bloquant──► Phase B (multi-agents) ──► Phas
 - **Pas d'API key** : pull des modèles fait, pas besoin d'auth applicative.
 - **D13 — Pas de MCP** (01/08/2026) : MCP sert à connecter des agents à des systèmes externes (Slack, GitHub, API tierces) ; architecture 100 % auto-contenue derrière pfSense, LAN-only, aucun outil externe à appeler. Ouvrir MCP créerait une surface d'attaque sans bénéfice. Décision définitive, pas un manque à combler.
 - **D14 — Mémoire progressive** (01/08/2026) : ne pas ajouter Mem0/Redis pour la mémoire conversationnelle avant d'avoir vérifié que `log.md` (vault, déjà prévu) ne suffit pas — cf. B10-B12. YAGNI tant que non prouvé insuffisant.
+- **D15 — OS M3 = Debian 12 stable** (03/08/2026, revu) : Mesa 25.1+ via `bookworm-backports`, kernel 6.18.18 LTS pinner, core-unlock CPU via service systemd oneshot (SMU msg 0x98 volatil, PAS BIOS persistant). Fedora 43 abandonné.
 
 ## État Sprint 1 — Hygiène & CI ⚠️ QUASI TERMINÉ (corrigé 01/08/2026)
 

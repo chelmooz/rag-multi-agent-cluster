@@ -17,8 +17,8 @@ Sources faisant autorité (à consulter avant toute modification des scripts `in
 - Ollama : `OLLAMA_VULKAN=1`, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q4_0` (KV cache 4-bit, quasi aucune perte de vitesse, 2x plus de contexte utilisable), `OLLAMA_CONTEXT_LENGTH=65536` comme plafond raisonnable pour de l'interactif.
 - Swap NVMe recommandé (~16 Go) : les modèles 11+ Go sur une machine à 16 Go RAM unifiée ont besoin de cette marge.
 - Gouverneur GPU obligatoire (`cyan-skillfish-governor-smu`) pour le scaling de fréquence — sans lui, pas de contrôle de clock fiable sur cette puce.
-- OS : **Fedora 43** (décision 02/08/2026) — Mesa 25.1+ en mainline, pas de experimental/compilation manuelle. Debian Testing/Sid abandonné. antiX-26 réservé au poste de travail de Michel, pas au BC-250.
-- BIOS : **moddé Forbidden-Darkness** (image complète, base P3.00 incluse — flash UEFI direct, aucun flash P3.00 stock préalable). Core unlock → **8c/16t persistant** (2 cores débloqués dès le boot) + carve-out VRAM dynamique 512 MB. Plus besoin du script volatil SMU (rw-r-r-0644), gardé en fallback.
+- OS : **Debian 12 (bookworm) stable** (décision 03/08/2026, revu) — Mesa 25.1+ via bookworm-backports, kernel 6.18.18 LTS pinner (apt-mark hold). Fedora 43 abandonné : nécessitait COPR pour le gouverneur GPU et `dnf versionlock` non natif.
+- BIOS : **moddé Forbidden-Darkness** (image complète, base P3.00 incluse — flash UEFI direct, aucun flash P3.00 stock préalable). **Carve-out VRAM dynamique 512 MB persistant**. Core unlock CPU **NON persistant** (SMU msg 0x98 volatil) — géré par service systemd bc250-core-unlock.service au boot.
 
 ## Ce que ce projet ne couvre pas encore
 

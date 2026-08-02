@@ -8,9 +8,9 @@
 # module amdgpu. Gain mesuré (A/B contrôlé) : +32% à +61% tok/s en génération
 # selon le modèle, +50% en moyenne en prefill. Coût : +30W, +4°C.
 #
-# OS : Fedora 43 (décision 02/08/2026) — OS 8 cores déjà débloqués par le BIOS
-# Forbidden-Darkness (docs/deployment-guide.md §3.0), CE script ne concerne que
-# les CU GPU.
+# OS : Debian 12 (bookworm) stable (décision 03/08/2026) — OS 8 cores déjà
+# débloqués par le service systemd bc250-core-unlock.service (cf. §3.0bis du
+# deployment-guide), CE script ne concerne que les CU GPU.
 #
 # STATUT : script de référence, non testé sur le matériel réel de Michel.
 set -euo pipefail
@@ -31,10 +31,10 @@ echo "  git clone https://github.com/duggasco/bc250-40cu-unlock.git"
 echo "  cd bc250-40cu-unlock"
 echo "  ./scripts/cu_map.sh   # à lancer et lire AVANT de patcher quoi que ce soit"
 
-echo "=== 3. Dépendances de build (Fedora 43) ==="
-echo "  sudo dnf install -y kernel-headers kernel-devel gcc make zstd"
+echo "=== 3. Dépendances de build (Debian 12) ==="
+echo "  sudo apt install -y linux-headers-\$(uname -r) build-essential gcc make zstd git"
 
-echo "=== 4. Build + activation (Fedora 43) ==="
+echo "=== 4. Build + activation (Debian 12) ==="
 echo "  sudo ./scripts/bc250-enable-40cu.sh build"
 echo "  sudo ./scripts/bc250-enable-40cu.sh enable    # écrit la config modprobe et reboote"
 
@@ -69,4 +69,5 @@ echo "=== Rollback si besoin ==="
 echo "  sudo ./scripts/bc250-enable-40cu.sh disable   # retour au 24 CU stock"
 echo "  sudo ./scripts/bc250-enable-40cu.sh restore   # restaure le module amdgpu d'origine"
 
-echo "=== Terminé — chaque kernel update écrase ce patch, prévoir un rebuild après upgrade ==="
+echo "=== Terminé — chaque apt upgrade du kernel écrase ce patch ==="
+echo "Hook automatique installé : cp infrastructure/bc250/kernel-postinst-hook.sh /etc/kernel/postinst.d/bc250-rebuild-40cu"

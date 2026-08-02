@@ -26,7 +26,7 @@ flowchart TB
         Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2)<br/>HDD 2TB (LUKS) · borg pull<br/>Qdrant + wiki + configs<br/>cron 02:00-05:00"]:::backup
     end
 
-    subgraph M3["⚡ M3 — BC-250 BAREMETAL · Fedora 43 · Zen 2 8c/16t (core unlock BIOS) · 40 CU RDNA2 · 16 GB GDDR6 (carve-out 512 MB) · Vulkan-only · 1GbE"]
+    subgraph M3["⚡ M3 — BC-250 BAREMETAL · Debian 12 · Zen 2 8c/16t (core unlock systemd) · 40 CU RDNA2 · 16 GB GDDR6 (carve-out 512 MB) · Vulkan-only · 1GbE"]
         Gen["🤖 Générateur<br/>Qwen3-14B (Q4_K_M ~9GB)<br/>ou Qwen3-30B-A3B MoE (Q2_K ~11.3GB)<br/>Ollama Vulkan natif · CPU au repos"]:::m3
         Variants["🔀 Variantes<br/>Text-to-SQL (Qwen3-Coder-30B-A3B)<br/>Vision (llava-v1.6-vicuna-13b)<br/>Fast-check (granite-4.0-h-tiny)"]:::m3
     end

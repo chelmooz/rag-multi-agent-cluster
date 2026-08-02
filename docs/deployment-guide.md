@@ -8,7 +8,7 @@ Plan d'installation pas-à-pas pour les 3 machines du cluster.
 
 1. [Machine 1 — Control Plane (Proxmox, LXC 100-101, VM 104)](#machine-1--control-plane)
 2. [Machine 2 — Compute & Storage Plane (Proxmox, LXC 105, 200-201)](#machine-2--gpu-worker--services-compute--storage-plane)
-3. [Machine 3 — BC-250 Baremetal (Fedora 43)](#machine-3--bc-250-baremetal)
+3. [Machine 3 — BC-250 Baremetal (Debian 12)](#machine-3--bc-250-baremetal)
 4. [Déploiement Docker & Services](#4-déploiement-docker--services)
 5. [Téléchargement des Modèles](#5-téléchargement-des-modèles)
 6. [Vérification du Cluster](#6-vérification-du-cluster)
@@ -233,74 +233,100 @@ borg init --encryption=repokey /srv/backup/borg-repo
 
 ## Machine 3 — BC-250 Baremetal
 
-**Matériel** : AMD BC-250 (Zen 2, 8c/16t core unlock BIOS, 40 CU unlock, 16 GB GDDR6 unifiée), **Fedora 43**
+**Matériel** : AMD BC-250 (Zen 2, 8c/16t core unlock à froid via SMU msg 0x98,
+40 CU unlock via duggasco, 16 GB GDDR6 unifiée), **Debian 12 (bookworm) stable**
 
-> **Décision 02/08/2026** : OS M3 = **Fedora 43** (recommandé #1 par la doc
-> communautaire [elektricm/amd-bc250-docs](https://elektricm.github.io/amd-bc250-docs/)
-> — Mesa 25.1+ dans les repos mainline, kernel LTS, scripts packagés, le plus
-> testé). Debian Testing/Sid abandonné : Mesa depuis experimental + compilation
-> manuelle + Xanmod requis = maintenance inutile pour un nœud baremetal.
+> **Décision 03/08/2026** : OS M3 = **Debian 12 stable** — Mesa 25.1+ via
+> `bookworm-backports`, kernel 6.18.18 LTS pinner (apt-mark hold), core-unlock
+> CPU **NON persistant** au flash BIOS (service systemd oneshot au boot requis,
+> cf. §3.0bis). Fedora 43 abandonné : nécessitait COPR pour le gouverneur GPU,
+> pas de `apt-mark hold` natif, et le core-unlock reste volatil dans tous les cas.
 
 ### 3.0 BIOS — flash Forbidden-Darkness (OBLIGATOIRE, une seule fois)
 
 Avant toute installation OS, flasher le BIOS moddé Forbidden-Darkness.
 C'est un BIOS **complet** (base P3.00 incluse, pas de flash P3.00 stock
-préalable). Il rend **persistant** le core unlock 6→8 et configure le
-**carve-out VRAM dynamique 512 MB** (rien à refaire après cold boot).
+préalable). Il configure le **carve-out VRAM dynamique 512 MB** (persistant
+après cold boot). Le core-unlock CPU n'est **PAS** rendu persistant par ce
+BIOS — un service systemd gère la relance au boot (cf. §3.0bis).
 
 | Élément | Détail |
 |---|---|
 | **Repo BIOS** | [Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script) |
-| **BIOS final** | BIOS moddé Forbidden-Darkness complet (base P3.00 + core unlock + VRAM 512 MB) — flash UEFI direct, AUCUN flash P3.00 stock préalable |
-| **Effet 1 — Core unlock** | **8c/16t** persistant (flash BIOS, plus de script volatil SMU) |
-| **Effet 2 — VRAM dynamique** | **512 MB carve-out** dynamique (~12 GB dispo IA sur 16 GB unifiée) |
+| **BIOS final** | BIOS moddé Forbidden-Darkness complet (base P3.00 + VRAM 512 MB) — flash UEFI direct, AUCUN flash P3.00 stock préalable |
+| **Effet — VRAM dynamique** | **512 MB carve-out** dynamique (~12 GB dispo IA sur 16 GB unifiée) — persistant |
+| **Core unlock CPU** | **NON persistant** — patch SMU msg 0x98 volatil. Service systemd obligatoire au boot (cf. §3.0bis) |
 | **Risque** | Flash BIOS = irréversible, pas de snapshot. Garder une sauvegarde du BIOS d'origine sur USB (rollback recovery) + backup config `/etc`. |
 
 ```bash
-# ⚠️ À faire une fois, hors ligne, avant d'installer Fedora.
+# ⚠️ À faire une fois, hors ligne, avant d'installer Debian.
 # Suivre le menu script du repo Forbidden-Darkness :
 git clone https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script.git
 cd AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script
 # Lire le README — le repo fournit l'image BIOS complète à flasher en UEFI
 # (dd de l'image sur une clé). Aucun flash P3.00 stock en amont.
-# Le BIOS inclu d'office : core unlock 8c/16t + carve-out VRAM dynamique 512 MB
 
 # Vérification après flash (dans le setup BIOS) :
-#   - 8 cores / 16 threads visibles
 #   - VRAM dynamic 512 MB
+#   - Ne pas s'attendre à 8c/16t ici — c'est géré au boot par systemd
 ```
 
 > ⚠️ **Ne pas utiliser** Smokeless_UMAF (dégâts permanents documentés) ni
 > `amd_iommu=on` dans les cmdlines GRUB.
 
-### 3.1 Installation Fedora 43
+### 3.0bis Service systemd core-unlock CPU (obligatoire)
+
+Le core-unlock CPU 6c/12t → 8c/16t utilise un patch SMU (msg 0x98)
+qui est **volatil** : il ne survit pas à une coupure d'alimentation complète
+(cold boot). Le service `bc250-core-unlock.service` le relance automatiquement
+à chaque démarrage.
 
 ```bash
-# 1. Télécharger l'ISO Fedora 43 Workstation
-#    https://fedoraproject.org/workstation/download
+# Copier le service et le script sur la machine M3 :
+sudo cp infrastructure/bc250/setup-core-unlock.service /etc/systemd/system/
+sudo cp infrastructure/bc250/bc250-core-unlock.sh /usr/local/bin/
+sudo chmod +x /usr/local/bin/bc250-core-unlock.sh
+
+# Activer le service (démarre avant Ollama) :
+sudo systemctl daemon-reload
+sudo systemctl enable bc250-core-unlock.service
+sudo systemctl start bc250-core-unlock.service
+
+# Vérification :
+sudo journalctl -u bc250-core-unlock.service --no-pager
+# Attendu : "Core unlock OK — 8c/16t actifs"
+
+# Vérifier le nombre de CPU actifs :
+lscpu | grep -E 'CPU\(s\)|Core\(s\) per socket'
+# Attendu : 16 CPU(s), 8 core(s) per socket
+```
+
+### 3.1 Installation Debian 12
+
+```bash
+# 1. Télécharger l'ISO Debian 12 (bookworm) netinst
+#    https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/
 
 # 2. Créer la clé USB bootable
-#    sudo dd if=Fedora-Workstation-Live-x86_64-43.iso of=/dev/sdX bs=1M status=progress
+#    sudo dd if=debian-12.x.x-amd64-netinst.iso of=/dev/sdX bs=1M status=progress
 
-# 3. Boot : sélectionner "Troubleshooting" → "Install in Basic Graphics Mode"
-#    (évite l'écran noir — no modele vidéo au boot)
+# 3. Boot : ajouter "nomodeset" aux paramètres de boot GRUB
+#    (appuyer sur Tab au menu d'installation, ajouter nomodeset)
+#    ou installer avec "Basic Graphics Mode"
 
 # 4. Partitionnement manuel (recommandé) :
 #    /boot/efi  1G   (esp)
 #    /boot      1G
-#    /          100G (btrfs/xfs — systèmes)
-#    swap       16G  (utile pour batch mémoire)
+#    /          100G (ext4)
+#    swap       16G  (utile pour batch mémoire, + particulièrement sur 16 GB unifiée)
 #    /var/lib/ollama  reste (~357 GB NVMe) — modèles 14B/30B
 
-# 5. Réseau : configurer l'interface Ethernet 1GbE en statique
-#    IP 10.10.0.3/24 · GW 10.10.0.254 (pfSense) · DNS 10.10.0.254
-#    nmcli con mod <IFACE> ipv4.method manual \
-#      ipv4.addresses 10.10.0.3/24 ipv4.gateway 10.10.0.254 ipv4.dns 10.10.0.254
+# 5. Après installation :
+apt update && apt upgrade -y
 
-# 6. Après installation : mises à jour
-sudo dnf update -y
-sudo dnf install -y mesa-vulkan-drivers vulkan-tools glmark2 \
-  kernel-headers kernel-devel gcc make curl git
+# Backports pour Mesa 25.1+ :
+echo "deb http://deb.debian.org/debian bookworm-backports main" >> /etc/apt/sources.list
+apt update
 ```
 
 ### 3.2 Kernel — pinner 6.18.18 LTS (CRITIQUE)
@@ -309,9 +335,11 @@ sudo dnf install -y mesa-vulkan-drivers vulkan-tools glmark2 \
 # Kernels CASSES sur BC-250 (panics) : 6.15.0-6.15.6 et 6.17.8-6.17.10
 # 6.18.18 LTS = recommandé, stable.
 
-sudo dnf install -y kernel-6.18.18   # si non déjà installé par défaut
-sudo dnf versionlock add kernel kernel-core kernel-modules
-# (ou) /etc/dnf/plugins/versionlock.list + dnf config-manager --save --setopt=excludepkgs
+# Installer depuis backports (si 6.18.18 y est disponible) :
+apt install -t bookworm-backports linux-image-6.18.18-0.deb12.1-amd64
+
+# Pinner le kernel (evite upgrade accidentel) :
+apt-mark hold linux-image-amd64 linux-headers-amd64
 
 # Vérifier la version active :
 uname -r   # attendu : 6.18.18
@@ -320,9 +348,15 @@ uname -r   # attendu : 6.18.18
 ### 3.3 Vérification stack Vulkan (Mesa/RADV)
 
 ```bash
+# Installer Mesa 25.1+ depuis backports :
+apt install -t bookworm-backports mesa-vulkan-drivers vulkan-tools mesa-utils
+apt install -y build-essential git curl
+
 vulkaninfo --summary | grep -i "deviceName\|apiVersion\|GFX1013"
-# Attendu : Mesa 25.1+ (Fedora 43 mainline), RADV GFX1013
-# Sinon : sudo dnf upgrade mesa-vulkan-drivers
+# Attendu : Mesa 25.1+ (bookworm-backports), RADV GFX1013
+# Si version insuffisante : vérifier que bookworm-backports est bien activé
+# et que les paquets mesa viennent de ce dépôt :
+apt policy libvulkan1
 ```
 
 ### 3.4 TTM pages_limit (critique — modèles 14B+)
@@ -340,7 +374,7 @@ cat /sys/module/ttm/parameters/pages_limit
 
 ```bash
 sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet amdgpu.gttsize=14750 ttm.pages_limit=3959290 ttm.page_pool_size=3959290 amdgpu.sg_display=0"/' /etc/default/grub
-sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+sudo update-grub
 sudo reboot
 ```
 
@@ -350,8 +384,8 @@ sudo reboot
 ### 3.6 Unlock 40 CU (duggasco, +32 à +61 % tok/s)
 
 > **Pré-requis** : stack Vulkan fonctionnelle (§3.3) et GRUB posé (§3.5).
-> Le core unlock 8c/16t est déjà fait par le BIOS (§3.0) — ce script ne
-> concerne QUE les Compute Units GPU (24 → 40).
+> Le core unlock CPU 8c/16t est géré par le service systemd (§3.0bis)
+> — ce script ne concerne QUE les Compute Units GPU (24 → 40).
 
 ```bash
 bash infrastructure/bc250/enable-40cu-unlock.sh
@@ -364,15 +398,23 @@ sudo dmesg | grep active_cu_number                      # → 40
 RADV_DEBUG=info vulkaninfo --summary 2>&1 | grep num_cu # → 40
 ```
 
-> ⚠️ Chaque `dnf upgrade` du kernel écrase le patch — rebuild à prévoir
-> (`sudo ./scripts/bc250-enable-40cu.sh build` puis `enable`).
+> ⚠️ Chaque `apt upgrade` du kernel écrase le patch — le hook
+> `/etc/kernel/postinst.d/bc250-rebuild-40cu` le rebuild automatiquement
+> (script fourni : `infrastructure/bc250/kernel-postinst-hook.sh`).
+> Vérifier après chaque mise à jour kernel.
 
 ### 3.7 Gouverneur GPU (cyan-skillfish-governor-smu — 1500 MHz / 900 mV)
 
 ```bash
-# Fedora : packagé via COPR (pas de compilation manuelle)
-sudo dnf copr enable filippor/bazzite
-sudo dnf install -y cyan-skillfish-governor-smu
+# Debian : pas de COPR. Compiler depuis source :
+git clone https://github.com/cyan-skillfish-governor-smu/cyan-skillfish-governor-smu.git
+cd cyan-skillfish-governor-smu
+make
+sudo make install
+
+# Alternative plus légère : utiliser amdgpu-smi pour forcer la fréquence :
+apt install -y rocm-smi-lib
+# sudo amdgpu-smi --setperflevel=high --setfan=75
 
 # Config safe-points (usage soutenu, pas d'overclock) :
 # /etc/cyan-skillfish-governor-smu/config.toml
@@ -414,9 +456,7 @@ ollama pull hf.co/ibm-granite/granite-4.0-h-tiny-GGUF:Q4_K_M@sha256:...      # F
 
 ```bash
 # Glances remplace Prometheus/Grafana (D9) — le BC-250 n'a pas Proxmox
-sudo dnf install -y glances
-sudo systemctl enable --now glances \
-  --no-pager 2>/dev/null || true
+sudo apt install -y glances
 
 # Mode web exposé sur :61208 (écoute réseau)
 sudo tee /etc/systemd/system/glances-web.service > /dev/null << 'EOF'
@@ -440,7 +480,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now glances-web.service
 ### 3.10 NFS mount (relay évaluation + vault en lecture)
 
 ```bash
-sudo dnf install -y nfs-utils
+sudo apt install -y nfs-common
 sudo mkdir -p /data/shared /data/wiki
 echo "10.10.0.1:/data/shared /data/shared nfs rw,hard,intr,noatime 0 0" | sudo tee -a /etc/fstab
 echo "10.10.0.1:/data/wiki /data/wiki nfs ro,hard,intr,noatime 0 0" | sudo tee -a /etc/fstab
@@ -455,10 +495,11 @@ sudo mkdir -p /root/.ssh && sudo chmod 700 /root/.ssh
 echo "ssh-ed25519 AAAA... root@lxc100" | sudo tee -a /root/.ssh/authorized_keys
 sudo chmod 600 /root/.ssh/authorized_keys
 
-# Firewall Fedora : ouvrir Ollama + Glances sur VLAN 10
-sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=10.10.0.0/24 port port=11434 protocol=tcp accept'
-sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=10.10.0.0/24 port port=61208 protocol=tcp accept'
-sudo firewall-cmd --reload
+# Firewall Debian (ufw) : ouvrir Ollama + Glances sur VLAN 10
+sudo apt install -y ufw
+sudo ufw allow from 10.10.0.0/24 to any port 11434 proto tcp
+sudo ufw allow from 10.10.0.0/24 to any port 61208 proto tcp
+sudo ufw enable
 ```
 
 ---

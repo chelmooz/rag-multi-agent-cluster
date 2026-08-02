@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Débloque les 2 cores CPU désactivés du BC-250 (6c/12t → 8c/16t).
 #
-# VOIE PRINCIPALE (décision 02/08/2026) : flash BIOS Forbidden-Darkness —
-# https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script
-# (core unlock PERSISTANT + carve-out VRAM dynamique 512 MB). Voir
-# docs/deployment-guide.md §3.0. CE SCRIPT n'est gardé qu'en FALLBACK.
+# VOIE PRINCIPALE (décision 03/08/2026) : service systemd au boot.
+# Le core-unlock CPU est VOLATIL (SMU msg 0x98, ne survit pas au cold boot).
+# Le service bc250-core-unlock.service (infrastructure/bc250/setup-core-unlock.service)
+# le relance à chaque démarrage. Voir docs/deployment-guide.md §3.0bis.
+# CE SCRIPT n'est gardé qu'en FALLBACK (exécution manuelle si le service échoue).
 #
 # Patch communautaire par rw-r-r-0644 : https://github.com/rw-r-r-0644/bc250-core-unlock
 # Résumé technique : le die (PS5 Oberon) a 8 cores physiques, l'AGESA/PSP en
@@ -73,7 +74,17 @@ pour être capricieuse sur ce kernel indépendamment du patch ; à surveiller
 mais pas nécessairement causé par ce script.
 EOF
 
-echo "=== 6. Reconduire le gouverneur SMU une fois validé ==="
+echo "=== 6. Service systemd automatique (Debian 12) ==="
+cat <<'EOF'
+  sudo cp infrastructure/bc250/setup-core-unlock.service /etc/systemd/system/
+  sudo cp infrastructure/bc250/bc250-core-unlock.sh /usr/local/bin/
+  sudo systemctl daemon-reload
+  sudo systemctl enable bc250-core-unlock.service
+  # Vérification :
+  sudo journalctl -u bc250-core-unlock.service --no-pager
+EOF
+
+echo "=== 7. Reconduire le gouverneur SMU une fois validé ==="
 echo "  sudo systemctl start cyan-skillfish-governor-smu"
 
 echo "=== Optionnel — bc250-dfps.py (P-state mémoire/fabric, même mailbox SMU) ==="

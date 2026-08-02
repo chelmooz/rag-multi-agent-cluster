@@ -6,10 +6,10 @@
 # ship pas les bibliothèques rocBLAS/Tensile pour GFX1013 (rocblas_abort() au
 # runtime). Le seul chemin de compute GPU qui fonctionne est Vulkan via
 # Mesa/RADV. Source : https://github.com/akandr/bc250 (§2 Driver & Compute Stack)
-# et https://elektricm.github.io/amd-bc250-docs/linux/fedora/
+# et https://elektricm.github.io/amd-bc250-docs/
 #
-# OS : Fedora 43 (décision 02/08/2026) — Mesa 25.1+ dans les repos mainline,
-# aucun experimental ni compilation manuelle. Voir docs/deployment-guide.md §3
+# OS : Debian 12 (bookworm) stable (décision 03/08/2026) — Mesa 25.1+ via
+# bookworm-backports, pas de compilation manuelle. Voir docs/deployment-guide.md §3
 # (Machine 3) pour l'installation complète, dont le BIOS Forbidden-Darkness.
 #
 # STATUT : script de référence basé sur la doc communautaire, non testé sur le
@@ -18,12 +18,12 @@ set -euo pipefail
 
 echo "=== 0. Prérequis / rappels avant exécution ==="
 cat <<'EOF'
-- OS : Fedora 43 Workstation (Mesa 25.1+ en mainline — OK tel quel).
+- OS : Debian 12 (bookworm) stable (Mesa 25.1+ via bookworm-backports).
 - Kernel : viser 6.18.18 LTS. ÉVITER 6.15.0-6.15.6 et 6.17.8-6.17.10
-  (bugs GPU driver connus). Pinner via versionlock (§3.2 du deployment-guide).
+  (bugs GPU driver connus). Pinner via apt-mark hold (§3.2 du deployment-guide).
 - BIOS : moddé Forbidden-Darkness (image complète, base P3.00 incluse —
-  core unlock 8c/16t + VRAM dynamique 512MB, flash UEFI direct). Voir
-  docs/deployment-guide.md §3.0.
+  VRAM dynamique 512 MB persistant, core unlock CPU via service systemd §3.0bis).
+  Voir docs/deployment-guide.md §3.0.
 - Paramètre de boot nomodeset nécessaire à l'installation, à retirer une fois
   Mesa installé.
 EOF
@@ -32,9 +32,10 @@ echo "=== 1. Vérification noyau ==="
 uname -r
 echo "TODO: comparer avec la liste des noyaux cassés ci-dessus avant de continuer"
 
-echo "=== 2. Stack de base + Mesa 25.1+ (repos mainline Fedora 43) ==="
-sudo dnf install -y mesa-vulkan-drivers vulkan-tools mesa-utils glmark2 \
-  kernel-headers kernel-devel gcc make git curl
+echo "=== 2. Stack de base + Mesa 25.1+ (backports Debian 12) ==="
+sudo apt update
+sudo apt install -t bookworm-backports -y mesa-vulkan-drivers vulkan-tools mesa-utils
+sudo apt install -y glmark2 linux-headers-\$(uname -r) build-essential gcc make git curl
 
 echo "=== 3. Vérification ==="
 glxinfo | grep "OpenGL version" || echo "glxinfo absent : sudo dnf install mesa-utils"
@@ -44,17 +45,24 @@ echo "Attendu : Mesa 25.1.X+ et un GPU RADV GFX1013"
 echo "=== 4. Paramètres kernel (grub) — triplet obligatoire ==="
 echo "TODO: dans /etc/default/grub, GRUB_CMDLINE_LINUX_DEFAULT :"
 echo "  amdgpu.gttsize=14750 ttm.pages_limit=3959290 ttm.page_pool_size=3959290 amdgpu.sg_display=0"
-echo "  puis : sudo grub2-mkconfig -o /boot/grub2/grub.cfg"
+echo "  puis : sudo update-grub"
 echo "  NE JAMAIS ajouter amd_iommu=on (bugs connus sur BC-250)."
 
 echo "=== 5. Gouverneur GPU (obligatoire pour le scaling de fréquence) ==="
-echo "Packagé via COPR (pas de .deb ni compilation manuelle) :"
+echo "Debian : pas de COPR. Compiler depuis source ou utiliser amdgpu-smi :"
 cat <<'EOF'
-  sudo dnf copr enable filippor/bazzite
-  sudo dnf install -y cyan-skillfish-governor-smu
+  # Option A (recommandé) : compiler cyan-skillfish-governor-smu
+  git clone https://github.com/cyan-skillfish-governor-smu/cyan-skillfish-governor-smu.git
+  cd cyan-skillfish-governor-smu
+  make
+  sudo make install
   # Config safe-points : /etc/cyan-skillfish-governor-smu/config.toml
   #   1500 MHz / 900 mV pour un usage soutenu (cf. settings BC250_GOV_*)
   sudo systemctl enable --now cyan-skillfish-governor-smu.service
+
+  # Option B (léger) : amdgpu-smi
+  sudo apt install -y rocm-smi-lib
+  # sudo amdgpu-smi --setperflevel=high --setfan=75
 EOF
 
 echo "=== 6. TTM pages_limit — CRITIQUE pour faire tourner des modèles 14B+ ==="

@@ -448,7 +448,7 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 |---|---|---|---|---|
 | **Machine 1** | **Master** (Orchestration, API, VectorDB, Évaluateur, Embedding CPU, Relay NFS) | 2× Xeon E5-2699 v4 / **32 GB ECC** | **AMD Radeon RX 580** (8 GB) — fallback léger uniquement | Proxmox VE 9.3 (LXC 100, 101, VM 104*) |
 | **Machine 2** | **GPU Worker + Services** (Inference, Reranking, Juge, Avocat, Backup Embedding CPU, Backup) | 1× Xeon E5-2698 v4 / **64 GB ECC** | **NVIDIA Quadro RTX 4000** (8 GB VRAM dédiée) | Proxmox VE 9.3 (LXC 105, 200 privilégié GPU, 201) |
-| **Machine 3** | **BC-250 Baremetal** (Générateur, Text-to-SQL, Vision, Fast-check) | Carte minage BIOS modifiée · Puce PS5 (BC-250, Zen 2, **8c/16t** — core unlock persistant par flash BIOS [Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script), BIOS complet (base P3.00 incluse) qui configure aussi le carve-out VRAM dynamique 512 MB) · **40 CU débloquées** via [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock) (séparé, GPU) | **16 GB GDDR6 unifiée** CPU+GPU · ~12 GB dispo pour IA (512 MB carve-out dynamique) | **BIOS moddé Forbidden-Darkness (flash UEFI direct) · VRAM dynamique 512 MB** · Fedora 43 (baremetal, Ollama Vulkan natif) |
+| **Machine 3** | **BC-250 Baremetal** (Générateur, Text-to-SQL, Vision, Fast-check) | Carte minage BIOS modifiée · Puce PS5 (BC-250, Zen 2, **8c/16t** — core unlock non persistant, via service systemd `bc250-core-unlock.service` au boot [rw-r-r-0644/bc250-core-unlock](https://github.com/rw-r-r-0644/bc250-core-unlock)) · BIOS moddé [Forbidden-Darkness](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script) pour carve-out VRAM dynamique 512 MB uniquement · **40 CU GPU** via [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock) | **16 GB GDDR6 unifiée** CPU+GPU · ~12 GB dispo pour IA (512 MB carve-out dynamique) | **Debian 12 (bookworm) stable** · Ollama Vulkan natif · Mesa 25.1+ via backports |
 | **Client** | Obsidian Vault (visualisation + ingestion) | Poste de travail | – | Native (Electron) |
 
 \* VM 104 = pfSense (reverse proxy + firewall + NAT), uniquement si pas d'appliance dédiée.
@@ -628,7 +628,7 @@ curl -X POST ${CLUSTER_API_URL}/api/v1/query -d '{"question":"..."}'
 
 Voir [ROADMAP.md](ROADMAP.md) pour le détail et l'état réel d'avancement (rien n'est encore fait — ce projet part de zéro sur le code, seule la conception documentaire existe).
 
-> ✅ **Déjà tranché** : Choix CrewAI vs LangGraph → **LangGraph** (écrit dans ce README et le backlog). OS M3 → **Fedora 43** (décision 02/08/2026, docs communautaires BC-250 ; Debian Testing/Sid et antiX-26 abandonnés pour ce nœud).
+> ✅ **Déjà tranché** : Choix CrewAI vs LangGraph → **LangGraph**. OS M3 → **Debian 12 stable** (décision 03/08/2026, revu — core-unlock CPU via systemd, pas BIOS persistant).
 
 ---
 

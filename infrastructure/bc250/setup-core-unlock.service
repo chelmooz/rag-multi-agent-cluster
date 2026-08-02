@@ -1,0 +1,15 @@
+[Unit]
+Description=BC-250 CPU Core Unlock (6c/12t -> 8c/16t) via SMU msg 0x98
+Documentation=https://github.com/rw-r-r-0644/bc250-core-unlock
+After=network.target
+Before=ollama.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/bc250-core-unlock.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

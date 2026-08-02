@@ -483,7 +483,7 @@ class Settings(BaseSettings):
     )
     bc250_cpu_cores_unlocked: bool = Field(
         default=False,
-        description="CPU core unlock appliqué (8c/16t via BIOS Forbidden-Darkness persistant ; fallback SMU msg 0x98 rw-r-r-0644 volatil)",
+        description="CPU core unlock appliqué (8c/16t via service systemd bc250-core-unlock.service au boot, PAS BIOS persistant — SMU msg 0x98 volatil, cold boot = relance)",
         validation_alias="BC250_CPU_CORES_UNLOCKED",
     )
     bc250_vram_gib: int = Field(
@@ -573,7 +573,7 @@ class Settings(BaseSettings):
     )
     glances_m3_url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://10.10.0.3:61208",
-        description="Glances web API BC-250 (M3, Fedora 43, port 61208)",
+        description="Glances web API BC-250 (M3, Debian 12, port 61208)",
         validation_alias="GLANCES_M3_URL",
     )
     chat_history_max: int = Field(
