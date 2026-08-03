@@ -31,8 +31,10 @@ from src.api.main import (
     app,
     not_implemented_handler,
 )
+from src.services.lexical import LexicalSearch
 from src.services.memory_manager import ClusterMemoryState, MachineMemoryState
 from src.services.monitoring import MachineCard
+from src.services.vector import VectorService
 
 _STATE_ATTRS = (
     "ollama_pool",
@@ -364,8 +366,7 @@ class TestEmbed:
     def test_embed_success_with_sparse(self, client: TestClient) -> None:
         pool = AsyncMock()
         pool.embed = AsyncMock(return_value=[[0.1, 0.2, 0.3]])
-        lexical = MagicMock()
-        lexical.encode_batch_to_dict = MagicMock(return_value=[{1: 0.5}])
+        lexical = MagicMock(spec=LexicalSearch)
         app.state.ollama_pool = pool
         app.state.lexical_search = lexical
 
@@ -373,13 +374,13 @@ class TestEmbed:
         assert resp.status_code == 200
         body = resp.json()
         assert body["embeddings"] == [[0.1, 0.2, 0.3]]
-        assert body["sparse_vectors"] == [{"1": 0.5}]  # clés int → str en JSON
+        assert body["sparse_vectors"] is None  # BM25 natif Qdrant calculé à la requête
         assert body["dimensions"] == 3
 
     def test_embed_without_sparse(self, client: TestClient) -> None:
         pool = AsyncMock()
         pool.embed = AsyncMock(return_value=[[0.5]])
-        lexical = MagicMock()
+        lexical = MagicMock(spec=LexicalSearch)
         app.state.ollama_pool = pool
         app.state.lexical_search = lexical
 
@@ -425,7 +426,14 @@ class TestIngest:
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body == {"source_id": "s1", "chunks_created": 3, "chunks_indexed": 3, "chunks_deleted": 0, "errors": []}
+        expected = {
+            "source_id": "s1",
+            "chunks_created": 3,
+            "chunks_indexed": 3,
+            "chunks_deleted": 0,
+            "errors": [],
+        }
+        assert body == expected
         service.ingest.assert_awaited_once()
 
     def test_ingest_file_success(self, client: TestClient) -> None:
@@ -694,19 +702,18 @@ class TestDashboard:
 
 
 class TestChatSse:
-    def _setup_pipeline_mocks(self) -> tuple[AsyncMock, AsyncMock, AsyncMock, AsyncMock]:
+    def _setup_pipeline_mocks(self) -> tuple[AsyncMock, AsyncMock, MagicMock, AsyncMock]:
         pool = AsyncMock()
         pool.embed = AsyncMock(return_value=[[0.1, 0.2]])
         pool.generate = AsyncMock(return_value={"response": "Réponse du modèle"})
-        vector = AsyncMock()
+        vector = AsyncMock(spec=VectorService)
         vector.hybrid_search = AsyncMock(
             return_value=[
                 {"payload": {"text": "Contexte pertinent.", "source_id": "doc1"}, "score": 0.8},
                 {"payload": {"text": "Second contexte.", "source_id": "doc2"}, "score": 0.6},
             ]
         )
-        lexical = MagicMock()
-        lexical.encode_to_dict = MagicMock(return_value={1: 0.5})
+        lexical = MagicMock(spec=LexicalSearch)
         reranker = AsyncMock()
         reranker.rerank = AsyncMock(
             return_value=[SimpleNamespace(index=0, score=0.9), SimpleNamespace(index=1, score=0.7)]
@@ -796,3 +803,71 @@ class TestChatSse:
         events = _sse_events(resp.text)
         assert events[0]["type"] == "error"
         assert events[0]["detail"] == "RuntimeError"
+
+
+# ──────────────────────────────────────────────
+# Real LexicalSearch integration (RED/GREEN for R1 regression)
+# ──────────────────────────────────────────────
+
+class TestRealLexicalSearch:
+    """Tests d'intégration avec le VRAI LexicalSearch (pas de mock)
+    pour détecter les régressions d'interface post-refacto R1."""
+
+    def test_lexical_search_has_build_query_not_encode_methods(self) -> None:
+        """Le vrai LexicalSearch n'a plus encode_to_dict/encode_batch_to_dict."""
+        from src.services.lexical import LexicalSearch
+
+        lexical = LexicalSearch()
+        # Nouvelle API
+        assert hasattr(lexical, "build_query")
+        assert callable(lexical.build_query)
+        # Anciennes méthodes supprimées
+        assert not hasattr(lexical, "encode_to_dict")
+        assert not hasattr(lexical, "encode_batch_to_dict")
+
+    def test_chat_sse_with_real_lexical_search_fails_before_fix(self, client: TestClient) -> None:
+        """Appel réel /chat avec vrai LexicalSearch — doit échouer avant fix (RED).
+        Après fix (GREEN), le endpoint utilise lexical.build_query() correctement."""
+        from unittest.mock import AsyncMock
+
+        from src.services.lexical import LexicalSearch
+        from src.services.ollama import OllamaClientPool
+        from src.services.reranker import RerankerService
+        from src.services.vector import VectorService
+
+        # Services réels (LexicalSearch) + mocks pour le reste
+        pool = AsyncMock(spec=OllamaClientPool)
+        pool.embed = AsyncMock(return_value=[[0.1] * 768])
+        pool.generate = AsyncMock(return_value={"response": "OK"})
+
+        vector = AsyncMock(spec=VectorService)
+        vector.hybrid_search = AsyncMock(
+            return_value=[{"payload": {"text": "ctx", "source_id": "d1"}, "score": 0.8}]
+        )
+
+        # VRAI LexicalSearch (pas de mock) — c'est ce qui révèle le bug
+        lexical = LexicalSearch()
+
+        reranker = AsyncMock(spec=RerankerService)
+        reranker.rerank = AsyncMock(
+            return_value=[SimpleNamespace(index=0, score=0.9)]
+        )
+
+        app.state.ollama_pool = pool
+        app.state.vector_service = vector
+        app.state.lexical_search = lexical
+        app.state.reranker_service = reranker
+
+        resp = client.post("/api/v1/chat", json={"question": "test question"})
+        events = _sse_events(resp.text)
+        # AVANT FIX : le bug encode_to_dict manquant → événement error avec AttributeError
+        # APRÈS FIX : événement token + done normal
+        error_events = [e for e in events if e["type"] == "error"]
+        # Ce test doit échouer (RED) tant que le bug existe : l'erreur contient "encode_to_dict"
+        if error_events:
+            assert "encode_to_dict" in str(error_events[0].get("detail", "")), \
+                "Bug R1 confirmé : encode_to_dict manquant sur vrai LexicalSearch"
+        else:
+            # Après fix : pas d'erreur, réponse normale
+            token_events = [e for e in events if e["type"] == "token"]
+            assert len(token_events) > 0

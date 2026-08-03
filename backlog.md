@@ -10,6 +10,7 @@
   - Correctifs : ExceptionKeyError→ATTRIBUTE via `type(section).model_fields` ; `monitoring.py` cast `int()` (mypy no-any-return) ; newline `routers/__init__.py`
 - [x] **§5.4** Retirer `# mypy: disable-error-code=no-untyped-def` fichier-entier de `src/agents/langgraph_orchestrator.py` — ajouté `-> None` sur `main()` (seule fct non typée), mypy 0 erreur sur 40 fichiers
 - [x] **§5.5** Trous de couverture (settings 87 %, memory_manager, wiki_agent) — tests branche par branche
+- [x] **§5.8** Fix régression R1 (03/08/2026) : `LexicalSearch` migré vers full-text natif Qdrant — deux callers legacy non mis à jour (`dashboard.py::_retrieve`, `embedding.py::embed`) causant `AttributeError` masqués par mocks non contraints (`MagicMock()` sans `spec=`). Corrections : `_retrieve` → `lexical.build_query()` + `query_text=` ; `embed` → `sparse_vectors=None` (BM25 natif calculé à la requête) ; durcissement mocks `spec=LexicalSearch`/`spec=VectorService` + test intégration réel `TestRealLexicalSearch` ; ruff/mypy 0, 422 tests passent.
 - [ ] **§5.6** Interface (Protocol) pour CUDA OCR et SSH async — test de logique métier sans matériel, AVANT Phase C
 - [ ] **§5.7** Cosmétique README (mypy "4 erreurs" → 0) + ROADMAP item 1.16 à re-vérifier
 

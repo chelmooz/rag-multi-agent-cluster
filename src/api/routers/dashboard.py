@@ -102,14 +102,14 @@ async def _retrieve(
     lexical: LexicalSearch,
     question: str,
 ) -> list[dict[str, Any]] | None:
-    """Recherche hybride (dense + sparse) ; None si l'embedding échoue."""
+    """Recherche hybride (dense + full-text BM25 natif) ; None si l'embedding échoue."""
     query_embeddings = await pool.embed([question])
     if not query_embeddings:
         return None
-    query_sparse = lexical.encode_to_dict(question)
+    query_text = lexical.build_query(question)
     return await vector.hybrid_search(
         query_vector=query_embeddings[0],
-        query_sparse=query_sparse,
+        query_text=query_text,
         top_k=settings.top_k_retrieval * 3,
         score_threshold=settings.similarity_threshold,
     )

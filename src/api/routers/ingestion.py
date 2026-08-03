@@ -20,7 +20,7 @@ def _get_service(http_request: Request) -> IngestionService:
     state = http_request.app.state
     if not hasattr(state, "ingestion_service"):
         raise HTTPException(status_code=503, detail="Services not initialized - server starting up")
-    return state.ingestion_service
+    return state.ingestion_service  # type: ignore[no-any-return]
 
 
 @router.post("/ingest", response_model=IngestResponse)
