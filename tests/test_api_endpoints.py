@@ -474,6 +474,59 @@ class TestIngest:
         assert meta["author"] == "ctos"
         assert meta["content_type"] == "text/markdown"
 
+    def test_delete_source_success(self, client: TestClient) -> None:
+        """DELETE /sources/{id} → 200, chunks_deleted renvoyé."""
+        service = AsyncMock()
+        service.delete_source = AsyncMock(return_value=3)
+        app.state.ingestion_service = service
+
+        resp = client.delete("/api/v1/sources/src-1")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"source_id": "src-1", "chunks_deleted": 3}
+        service.delete_source.assert_awaited_once_with("src-1")
+
+    def test_delete_source_500_on_failure(self, client: TestClient) -> None:
+        """DELETE /sources/{id} → 500 quand IngestionService.delete_source lève (ligne 89-90)."""
+        service = AsyncMock()
+        service.delete_source = AsyncMock(side_effect=RuntimeError("qdrant down"))
+        app.state.ingestion_service = service
+
+        resp = client.delete("/api/v1/sources/src-1")
+        assert resp.status_code == 500
+        assert "Échec suppression source" in resp.json()["detail"]
+
+    def test_list_source_chunks_success(self, client: TestClient) -> None:
+        """GET /sources/{id}/chunks → 200, chunks renvoyés."""
+        service = AsyncMock()
+        service.list_source_chunks = AsyncMock(
+            return_value=[{"id": "c1", "payload": {"text": "chunk1"}}]
+        )
+        app.state.ingestion_service = service
+
+        resp = client.get("/api/v1/sources/src-1/chunks")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["count"] == 1
+        assert body["chunks"][0]["id"] == "c1"
+        service.list_source_chunks.assert_awaited_once_with("src-1", limit=100)
+
+    def test_list_source_chunks_500_on_failure(self, client: TestClient) -> None:
+        """GET /sources/{id}/chunks → 500 quand IngestionService.list_source_chunks lève."""
+        service = AsyncMock()
+        service.list_source_chunks = AsyncMock(side_effect=RuntimeError("qdrant unreachable"))
+        app.state.ingestion_service = service
+
+        resp = client.get("/api/v1/sources/src-1/chunks")
+        assert resp.status_code == 500
+        assert "Échec listing source" in resp.json()["detail"]
+
+    def test_list_source_chunks_503_when_uninitialized(self, client: TestClient) -> None:
+        """GET /sources/{id}/chunks → 503 si IngestionService absent (ligne 86)."""
+        resp = client.get("/api/v1/sources/src-1/chunks")
+        assert resp.status_code == 503
+        assert "Services not initialized" in resp.json()["detail"]
+
 
 # ──────────────────────────────────────────────
 # /query — pipeline mocké
