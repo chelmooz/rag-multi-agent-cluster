@@ -1,4 +1,3 @@
-# mypy: disable-error-code=no-untyped-def
 """LangGraph Orchestrator — graphe d'état explicite du pipeline multi-agents.
 
 Workflow :
@@ -327,7 +326,7 @@ async def run_pipeline(
     return state
 
 
-def main():
+def main() -> None:
     """Point d'entrée pour le conteneur Docker langgraph-orchestrator."""
     build_graph()
     print("Graphe LangGraph construit.")  # noqa: T201

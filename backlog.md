@@ -1,5 +1,18 @@
 # Backlog — Cluster RAG Multi-Agents
 
+## Refacto roadmap d'audit (03/08/2026) — suivi §5
+- [x] **§5.1** Garde-fou cache tiktoken vendored — `cb1e5af` (échec clair si vendor/ absent)
+- [x] **§5.2** Éclatement `src/api/main.py` (779 l → ~façade) en routeurs SRP — `fc33db8`
+- [x] **§5.3** Éclatement `src/core/settings.py` (697 l) en 16 sous-modèles composés — `9755a66`
+  - `OllamaSettings`/`QdrantSettings`/`RedisSettings`/... avec préfixes env conservés à l'identique (`.env` intact)
+  - Façade compat : `__getattr__`/`__setattr__`/`__delattr__` déléguent les accès plats (`settings.ollama_m1_url`) vers les sections — résolution via `model_fields` (pas `object.__getattribute__`, qui casse après `delattr` des tests `patch.object`)
+  - réglages transverses restent racine (PostgreSQL, memory_manager_enabled, similarity_threshold, monitoring_offline, chat_max_context_chars), `_sections()` itère à la volée (pas de liste figée)
+  - Correctifs : ExceptionKeyError→ATTRIBUTE via `type(section).model_fields` ; `monitoring.py` cast `int()` (mypy no-any-return) ; newline `routers/__init__.py`
+- [x] **§5.4** Retirer `# mypy: disable-error-code=no-untyped-def` fichier-entier de `src/agents/langgraph_orchestrator.py` — ajouté `-> None` sur `main()` (seule fct non typée), mypy 0 erreur sur 40 fichiers
+- [ ] **§5.5** Trous de couverture (settings 87 %, memory_manager, wiki_agent) — tests branche par branche
+- [ ] **§5.6** Interface (Protocol) pour CUDA OCR et SSH async — test de logique métier sans matériel, AVANT Phase C
+- [ ] **§5.7** Cosmétique README (mypy "4 erreurs" → 0) + ROADMAP item 1.16 à re-vérifier
+
 ## Phase 0 — Squelette & Config (FONDATIONS — à faire AVANT tout code métier)
 - [x] 0.1 Structure `src/` complète (agents, tools, core, api, services) — **+ `src/{api` corrompu supprimé, `src/models/` mort supprimé (31/07/2026)**
 - [x] 0.2 Config centralisée `.env` + `settings.py` (Pydantic Settings) — **single source of truth** — **+ bug corrigé 31/07/2026 : `env_file` pointait sur `parents[3]` (H:\) au lieu de `parents[2]` → le .env n'était JAMAIS lu. `.env.example` réécrit aligné sur les `validation_alias` réels**
