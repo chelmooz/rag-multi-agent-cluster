@@ -42,9 +42,9 @@ Phase A (RAG core, mock-first) ──► Phase B (multi-agents, mock-first) ─�
 | B7 | `build_graph()` complet dans LangGraph (Planner → Rewriter → HybridSearch → Reranker → ContextAssembler → Generator → [Éval] → WikiUpdate) | `src/agents/langgraph_orchestrator.py` |
 | B8 | Endpoints OKF : `/api/v1/okf/validate`, `/list`, `/show` + `/api/v1/lint` + `okf-lint.py` | `src/api/main.py`, `scripts/okf_lint.py` |
 | B9 | Tests d'intégration séquentiels (relay mocké, LLM mocké) + smoke 32 scénarios mis à jour (plus de 500 NIE) | `tests/`, `scripts/smoke_test_frontend_api.py` |
-| B10 | Audit mémoire : vérifier si `log.md` (vault) suffit comme mémoire court-terme pour `QueryRewriterAgent` avant d'ajouter de l'infra (D14) | `docs/`, `wiki/log.md` |
-| B11 | Spike `QueryRewriterAgent` lisant uniquement les N dernières entrées `log.md` (pas de Redis) — mesurer latence/pertinence | `src/agents/query_rewriter.py` |
-| B12 | Si B11 insuffisant : buffer session chaud Redis sur M1 (mémoire court-terme), vault = mémoire froide durable | `src/services/memory.py` (à créer) |
+| B10 | Audit mémoire : vérifier si `log.md` (vault) suffit comme mémoire court-terme pour `QueryRewriterAgent` avant d'ajouter de l'infra (D14) | `docs/b10-memory-audit.md` (✅ fait, YAGNI confirmé — B12 différé) |
+| B11 | Spike `QueryRewriterAgent` lisant les N dernières entrées conversationnelles (in-memory `ChatMemory`) — mesurer latence/pertinence | `src/services/chat_memory.py` (✅ fait — L1 sliding window, tronqué `chat_history_max*2` + `max_chars`) |
+| B12 | Si B11 insuffisant : buffer session chaud Redis sur M1 (mémoire court-terme), vault = mémoire froide durable | `src/services/memory.py` (différé — YAGNI, B11 in-memory suffit) |
 | B13 | Config Web Clipper Obsidian → `POST /api/v1/ingest` (actuellement décrit en doc, jamais câblé) | `docs/deployment-guide.md` |
 | B14 | Évaluer le plugin Obsidian `okf-enforcer` (mentionné, jamais tranché) — go/no-go | `docs/` |
 | B15 | Script de validation de structure du vault (pages orphelines, frontmatter OKF invalide) — chevauche `/api/v1/lint` (B8), à fusionner ou distinguer | `scripts/`, `src/api/main.py` |

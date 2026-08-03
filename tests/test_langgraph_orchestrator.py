@@ -190,10 +190,42 @@ async def test_run_pipeline_with_conversation_history() -> None:
     await run_pipeline(
         "Question ?", services, conversation_history=history,
     )
-    rewrite_mock.assert_awaited_with("Question ?", history[-4:])
+    # ChatMemory avec 10 entrées (< 20 max) → historique complet
+    from src.services.chat_memory import ChatMemory
+    expected_window = ChatMemory(history).get_window()
+    rewrite_mock.assert_awaited_with("Question ?", expected_window)
     generate_mock.assert_awaited()
     _, kwargs = generate_mock.await_args
-    assert kwargs.get("conversation_history") == history[-4:]
+    assert kwargs.get("conversation_history") == expected_window
+
+
+async def test_run_pipeline_with_conversation_history_truncated() -> None:
+    """Plus de 20 messages (chat_history_max*2) → troncature par ChatMemory."""
+    services = _full_services()
+    rewrite_mock = services.rewriter.rewrite
+    from src.agents.generator import GeneratorOutput
+
+    services.generator.generate = AsyncMock(  # type: ignore[method-assign]
+        return_value=GeneratorOutput(
+            answer="Réponse générée [s1].",
+            citations=[],
+            confidence=0.9,
+            reasoning_trace=None,
+        )
+    )
+    generate_mock = services.generator.generate
+    history = [
+        {"role": "user", "content": f"msg {i}"} for i in range(25)
+    ]
+    await run_pipeline(
+        "Question ?", services, conversation_history=history,
+    )
+    from src.services.chat_memory import ChatMemory
+    expected_window = ChatMemory(history).get_window()
+    assert len(expected_window) == 20  # 1 ancre + 19 recent
+    rewrite_mock.assert_awaited_with("Question ?", expected_window)
+    _, kwargs = generate_mock.await_args
+    assert kwargs.get("conversation_history") == expected_window
 
 
 async def test_run_pipeline_without_conversation_history() -> None:
@@ -211,6 +243,6 @@ async def test_run_pipeline_without_conversation_history() -> None:
     )
     generate_mock = services.generator.generate
     await run_pipeline("Question ?", services, conversation_history=None)
-    rewrite_mock.assert_awaited_with("Question ?", None)
+    rewrite_mock.assert_awaited_with("Question ?", [])
     _, kwargs = generate_mock.await_args
-    assert kwargs.get("conversation_history") is None
+    assert kwargs.get("conversation_history") == []

@@ -29,6 +29,7 @@ from src.agents.judge import JudgeAgent
 from src.agents.planner import PlannerAgent, PlannerOutput, default_plan
 from src.agents.rewriter import RewriterAgent
 from src.agents.wiki_agent import WikiAgent
+from src.services.chat_memory import ChatMemory
 from src.services.lexical import LexicalSearch
 from src.services.ollama import OllamaClientPool
 from src.services.reranker import RerankerService
@@ -95,9 +96,7 @@ class PipelineServices:
 async def node_plan(state: PipelineState, services: PipelineServices) -> dict[str, Any]:
     if services.planner is None:
         return {"plan": default_plan(state.query)}
-    context = " ".join(
-        m.get("content", "") for m in state.conversation_history[-4:]
-    ) or None
+    context = ChatMemory(state.conversation_history).get_context_string()
     plan = await services.planner.plan(state.query, conversation_context=context)
     return {"plan": plan}
 
@@ -105,7 +104,7 @@ async def node_plan(state: PipelineState, services: PipelineServices) -> dict[st
 async def node_rewrite(state: PipelineState, services: PipelineServices) -> dict[str, Any]:
     if services.rewriter is None:
         return {"rewritten_query": state.query}
-    history = state.conversation_history[-4:] if state.conversation_history else None
+    history = ChatMemory(state.conversation_history).get_window()
     out = await services.rewriter.rewrite(state.query, history)
     return {"rewritten_query": out.rewritten_query or state.query}
 
@@ -156,13 +155,9 @@ async def node_generate(state: PipelineState, services: PipelineServices) -> dic
         }
         for c in (state.assembled.chunks if state.assembled else [])
     ]
-    history = (
-        state.conversation_history[-4:]
-        if state.conversation_history
-        else None
-    )
     generated = await services.generator.generate(
-        state.query, chunks, conversation_history=history,
+        state.query, chunks,
+        conversation_history=ChatMemory(state.conversation_history).get_window(),
     )
     return {"generated": generated}
 

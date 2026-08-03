@@ -72,11 +72,11 @@
 ## Phase 2 — Orchestrateur & Planificateur (LXC 100 - Machine 1)
 - [ ] 2.1 Orchestrator (flux principal)
 - [ ] 2.2 Planner (intention + stratégie)
-- [ ] 2.3 QueryRewriter (réécriture conversationnelle)
+- [x] 2.3 QueryRewriter (réécriture conversationnelle) — **ChatMemory L1 sliding window injecté (31/07/2026)**
 - [ ] 2.4 ContextAssembler (chunks + savoir interne + fenêtre)
 - [ ] 2.5 HTTP Client Pool (httpx avec retry/circuit-breaker + **mTLS**)
 - [ ] 2.6 **PlannerAgent** (nouveau fichier `src/agents/planner.py`) — analyse intention, décide stratégie outils/variantes
-- [ ] 2.7 **QueryRewriterAgent** (nouveau fichier `src/agents/query_rewriter.py`) — réécriture avec historique conversationnel
+- [x] 2.7 **QueryRewriterAgent** — réécriture avec historique conversationnel (via `ChatMemory`, troncé `chat_history_max*2`) — **déjà câblé dans `src/agents/query_rewriter.py` + `langgraph_orchestrator.py` node_rewrite (31/07/2026)**
 - [ ] 2.8 **ContextAssembler** (nouveau fichier `src/agents/context_assembler.py` ou service) — fusion chunks rerankés + savoir interne + fenêtre courte
 - [ ] 2.9 **LangGraph build_graph()** complet — relie Planner → Rewriter → HybridSearch → Reranker → ContextAssembler → Generator → Relay → Judge → Advocate → Evaluator → WikiUpdate
 
