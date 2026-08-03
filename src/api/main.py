@@ -7,6 +7,7 @@ Architecture :
 - Dashboard CTOS : GET / (SPA), /partials/* (fragments HTML), /api/v1/chat (SSE),
   /api/v1/monitoring (JSON poll)
 """
+
 import asyncio
 import json as jsonlib
 import logging
@@ -605,6 +606,7 @@ async def chat_sse(request: ChatRequest) -> StreamingResponse:
     Pipeline : /query (hybrid search + rerank) puis réponse structurée.
     Événements SSE : token (texte) puis done (elapsed_ms, sources).
     """
+
     async def event_stream() -> AsyncIterator[str]:
         started = asyncio.get_running_loop().time()
         try:
@@ -658,57 +660,59 @@ async def chat_sse(request: ChatRequest) -> StreamingResponse:
             else:
                 search_results = search_results[: settings.top_k_rerank]
 
-            chunks_used = len(search_results)
             sources: list[str] = []
             context_parts: list[str] = []
             budget = settings.chat_max_context_chars
+            used_chars = 0
 
             for i, result in enumerate(search_results):
                 payload = result.get("payload", {})
                 text = payload.get("text", "")
                 source_id = payload.get("source_id", f"doc_{i}")
                 score = result.get("rerank_score", result.get("score", 0.0))
-                sources.append(f"{source_id} (score: {score:.3f})")
-                snippet = f"[Source {i+1}] {text}"
-                if len("".join(context_parts)) + len(snippet) > budget:
+                snippet = f"[Source {i + 1}] {text}"
+                if used_chars + len(snippet) > budget:
                     break
                 context_parts.append(snippet)
+                used_chars += len(snippet)
+                sources.append(f"{source_id} (score: {score:.3f})")
+            chunks_used = len(context_parts)
 
-            context = (
-                "\n\n".join(context_parts) if context_parts
-                else "Aucun contexte pertinent trouvé."
-            )
-            prompt = (
-                "Tu es CTOS, assistant du cluster RAG maison (M1 master / M2 GPU / M3 BC-250). "
-                "Réponds en français, uniquement à partir du contexte fourni ci-dessous. "
-                "Si le contexte ne contient pas la réponse, dis-le clairement.\n\n"
-                f"CONTEXTE:\n{context}\n\n"
-                f"QUESTION: {request.question}\n\n"
-                "RÉPONSE:"
-            )
-
-            answer = ""
             if context_parts:
+                context = "\n\n".join(context_parts)
+                prompt = (
+                    "Tu es CTOS, assistant du cluster RAG maison (M1 master / M2 GPU / M3 BC-250). "
+                    "Réponds en français, uniquement à partir du contexte fourni ci-dessous. "
+                    "Si le contexte ne contient pas la réponse, dis-le clairement.\n\n"
+                    f"CONTEXTE:\n{context}\n\n"
+                    f"QUESTION: {request.question}\n\n"
+                    "RÉPONSE:"
+                )
+                answer = ""
                 try:
                     result = await pool.generate(prompt)
                     answer = str(result.get("response", "")).strip()
                 except Exception as e:
                     logger.warning("Génération LLM échouée (%s), repli sur contexte", e)
-                    answer = ""
-            if not answer:
-                answer = "\n\n".join(context_parts) if context_parts else "Pas de contexte trouvé."
+                if not answer:
+                    answer = "\n\n".join(context_parts)
+            else:
+                answer = "Pas de contexte trouvé."
 
             # Streaming par chunks (simulation naturelle de lecture)
             for chunk in _chunk_text(answer, size=24):
                 yield _sse({"type": "token", "token": chunk})
 
-            yield _sse({
-                "type": "done",
-                "elapsed_ms": _elapsed_ms(started),
-                "sources": sources,
-                "chunks_used": chunks_used,
-            })
+            yield _sse(
+                {
+                    "type": "done",
+                    "elapsed_ms": _elapsed_ms(started),
+                    "sources": sources,
+                    "chunks_used": chunks_used,
+                }
+            )
         except Exception as e:
+            logger.exception("Chat SSE échoué (%s)", type(e).__name__)
             yield _sse({"type": "error", "detail": type(e).__name__})
 
     return StreamingResponse(

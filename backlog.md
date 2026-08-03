@@ -1947,6 +1947,24 @@ Suite directe de la session nettoyage : élimination des 5 dernières violations
   37 errors `PermissionError` Windows inchangées (= environnement).
 - Graphify rafraîchi (`graphify update .` — 1712 nodes, 3458 edges, 140 communautés).
 
+## 03/08/2026 — Revue qualité `chat_sse` (4 fixes, main.py)
+
+### Constats corrigés
+1. **Dead code** : `context`/`prompt` calculés mais jamais servis quand `context_parts`
+   est vide (génération skippée) — message "Aucun contexte pertinent trouvé." jamais envoyé
+   au LLM. → `context`/`prompt` construits dans `if context_parts:` uniquement.
+2. **Perf** : `len("".join(context_parts))` O(n²) dans la boucle budget →
+   accumulateur `used_chars` linéaire.
+4. **Erreurs** : exception externe avalée sans trace → `logger.exception(...)` ajouté.
+5. **Incohérence** : `sources`/`chunks_used` remplis **avant** le `break` budget →
+   sources cohérentes avec le contexte réellement envoyé au LLM, `chunks_used = len(context_parts)`.
+
+### Vérification
+- `main.py` : couverture maintenue à **100 %** (352 stmts, 0 miss).
+- ruff 0, mypy 0, format ok — 57/57 tests API PASSED, suite complète 399 passed
+  (37 errors `PermissionError` Windows inchangées).
+- Graphify rafraîchi (`graphify update .` — 1716 nodes, 3462 edges, 132 communautés).
+
 
 
 
