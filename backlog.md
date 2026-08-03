@@ -1986,6 +1986,48 @@ Suite directe de la session nettoyage : élimination des 5 dernières violations
   (37 errors `PermissionError` Windows inchangées).
 - Graphify rafraîchi (`graphify update .` — 1727 nodes, 3486 edges, 134 communautés).
 
+## 03/08/2026 — Audit GO/No-Go (lecture intégrale + exécution) — item 1 : garde-fou tiktoken
+
+### Audit (rapport complet dans la session du 03/08)
+- **Verdict** : ✅ GO conditionnel — code solide (436 passed, ruff 0, mypy 0 sur 32 fichiers, couverture 87 %).
+- 2 zones à sécuriser avant Phase C : cache tiktoken (priorité haute) + proof-of-concept hardware absent (ocr_sidecar 0 %, ssh_client 40 %).
+- Roadmap 7 items : 1) garde-fou tiktoken, 2) éclatement main.py (779 l), 3) éclatement settings.py (697 l), 4) retirer `# mypy: disable-error-code=no-untyped-def` (langgraph_orchestrator.py), 5) fermeture trous couverture, 6) stratégie test hardware absent (Protocols), 7) nettoyage cosmétique README/ROADMAP.
+
+### Micro-tâche livrée (item 1 de la roadmap)
+- `tests/conftest.py` : garde-fou `VendoredCacheMissingError` — assertion au chargement que `vendor/tiktoken/9b5ad71b...` existe, sinon échec immédiat avec message actionnable (commande de régénération du cache), au lieu du 403 opaque.
+- Pattern TRY003 du projet respecté : classe d'exception custom (message dans `__init__`, docstring), comme `InsecurePasswordConfigError`.
+- Vérifié : le garde-fou s'active (simulation fichier absent → message clair), **pytest 436/436 PASSED** (basetemp dédié ; les 37 errors `PermissionError` `pytest-of-sangoku` = verrou environnement Windows, pré-existant, sans lien), ruff 0, mypy n/a (conftest hors `mypy src`).
+- Note : le répertoire `vendor/tiktoken/` n'a pas de README — ajout optionnel si le garde-fou se révèle insuffisant.
+
+### Prochaine étape (item 2) : éclatement `src/api/main.py` (779 l → routers/ + schemas.py) — NE PAS enchaîner avec settings.py dans la même session.
+
+### ✅ Micro-tâche suivante (item 2 de la roadmap) : éclatement `src/api/main.py` — TERMINÉ (03/08)
+- **Objectif** : passer de 779 lignes monolithiques à façade + routeurs SRP.
+- **Structure livrée** :
+  ```
+  src/api/
+    schemas.py           # tous les BaseModel (ChatMessage, QueryRequest, ... HealthResponse)
+    routers/__init__.py   # docstring paquet
+    routers/health.py     # _check_* + _run_checks + /health, /health/memory, /ready
+    routers/embedding.py  # /embed
+    routers/ingestion.py  # /ingest, /ingest/file
+    routers/rag.py        # /query (+ PipelineServices/run_pipeline via api_main)
+    routers/okf.py        # _wiki_agent(app) + /okf/validate, /okf/list, /okf/show
+    routers/dashboard.py  # _sse/_elapsed_ms/_chunk_text/_render_card + _retrieve/_rerank/_select_context/_chat_answer + _STATIC_DIR
+    main.py  (assemblage : FastAPI + lifespan + CORS + mount + include_router + __main__)
+  ```
+- **Contrainte respectée : AUCUN test modifié.** Les tests patchent et importent les symboles via `src.api.main.*`
+  → main.py est devenu le **namespace public** (ré-exports `__all__` des helpers, et attributs `httpx`/`asyncpg`/`Redis`/
+  `PipelineServices`/`run_pipeline`/classes services conservés pour les `patch()`).
+  → Les routeurs qui doivent voir ces patches les résolvent **au moment de l'appel** (`import src.api.main as api_main`
+  + `api_main._check_qdrant(...)`, `api_main.run_pipeline(...)`, `api_main.PipelineServices(...)`) — import circulaire
+  contrôle, zéro accès top-level aux attributs du module partiel.
+  → `request.app.state` remplace la référence globale `app.state` dans les handlers (même instance FastAPI).
+- **Vérifs (identiques à l'état de référence)** : pytest **436/436 PASSED** (basetemp dédié `opencode\pytest-ctst`, 51 s),
+  `ruff check .` **0 erreur**, `mypy src` **0 erreur (39 fichiers)**, routes `app.routes` strictement identiques à l'original.
+- Le `__init__.py` de `routers/` est présent (indispensable setuptools `find_packages`, sinon l'API ne serait pas embarquée dans le wheel).
+- Roadmap restante : **3)** settings.py, **4)** mypy no-untyped-def, **5)** trous couverture, **6)** stratégie hardware absent, **7)** cosmétique docs.
+
 
 
 
