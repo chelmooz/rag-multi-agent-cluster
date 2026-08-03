@@ -15,6 +15,7 @@
 - [x] **§5.7** Cosmétique README (mypy "4 erreurs" → 0) + ROADMAP item 1.16 à re-vérifier
 - [x] **§5.9** Tests R3.2 : branches d'erreur `ingestion.py` routeur (DELETE /sources, GET /sources/{id}/chunks) → 100 % — **04/08/2026** : 5 tests ajoutés dans `TestIngest` via `TestClient` (mock service). 470/470 tests passent, ruff/mypy 0.
 - [x] **§5.10** Exploiter §5.6 : tests implémentations `ssh_client.py`/`ocr_sidecar.py` — **04/08/2026** : `tests/test_ssh_client.py` (11 tests : connect/execute/timeout/erreur/close/context-manager via mock asyncssh) + `TestCleanDetTags` (3 tests `_clean_det_tags`). 484/484 tests passent, ruff/mypy 0.
+- [x] **§5.11** Tests R3.2 routeur `ingestion.py` (branched 86-108) → 100 % — **04/08/2026** : `tests/test_ingestion_router.py` (6 tests : DELETE success/500/503, GET chunks success/500/503 via TestClient). 490/490 tests passent, ruff/mypy 0.
 
 ## Phase 0 — Squelette & Config (FONDATIONS — à faire AVANT tout code métier)
 - [x] 0.1 Structure `src/` complète (agents, tools, core, api, services) — **+ `src/{api` corrompu supprimé, `src/models/` mort supprimé (31/07/2026)**
@@ -111,7 +112,7 @@
 - [x] R2.1 **P2 — Chunking structurel** : `src/services/structural_chunker.py` (parse_sections ligne-à-ligne — titres=frontières, frontmatter ignoré, tableaux/fences entiers, chemin h1>h2>h3 en métadonnées ; chunk_section token+overlap intra-section, sous-chunks préfixés) + branchement `IngestionService.chunk_text` (source md/markdown ou `_looks_like_markdown`), refactor `_make_chunk` partagé
 - [x] R2.2 **P2 — Tests** : `tests/test_structural_chunker.py` (22 tests) + intégration ingestion — ruff/mypy OK
 - [ ] R3.1 **P3 — Cycle de vie chunks** : VectorService.delete_source, IngestionService.replace=True, endpoints DELETE/GET sources
-- [ ] R3.2 **P3 — Tests** : ré-ingestion, delete, endpoints
+- [x] R3.2 **P3 — Tests** : ré-ingestion, delete, endpoints
 - [ ] R4.1 **P4 — Éval retrieval** : retrieval_eval.py (precision@k, recall@k, MRR, nDCG), dataset, script run_retrieval_eval.py
 - [ ] R4.2 **P4 — Tests** : métriques unitaires
 - [ ] R5.1 **P5 — Cache sémantique** : SemanticCache (Redis, cosinus numpy, off par défaut)
