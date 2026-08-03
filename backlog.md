@@ -14,6 +14,7 @@
 - [x] **§5.6** Interface (Protocol) pour CUDA OCR et SSH async — test de logique métier sans matériel, AVANT Phase C — **03/08/2026** : créés `SSHClientProtocol` (execute/close) et `OcrEngineProtocol` (ocr_pdf). `MemoryManager.__init__` accepte `ssh_m2`/`ssh_m3` injectables via Protocol (factory `_create_ssh_client` par défaut). `PdfOcrSidecar` implémente `OcrEngineProtocol` (`ocr_pdf` délègue à `_ocr_pdf`), injectable pour tests sans CUDA. Tests : `TestRealSSHInjection` (3 tests, mock `spec=SSHClientProtocol` injecté via constructeur) + `TestOcrEngineProtocol`/`TestWriteVaultNote` (3 tests, moteur mocké). 465/465 tests passent, ruff/mypy 0.
 - [x] **§5.7** Cosmétique README (mypy "4 erreurs" → 0) + ROADMAP item 1.16 à re-vérifier
 - [x] **§5.9** Tests R3.2 : branches d'erreur `ingestion.py` routeur (DELETE /sources, GET /sources/{id}/chunks) → 100 % — **04/08/2026** : 5 tests ajoutés dans `TestIngest` via `TestClient` (mock service). 470/470 tests passent, ruff/mypy 0.
+- [x] **§5.10** Exploiter §5.6 : tests implémentations `ssh_client.py`/`ocr_sidecar.py` — **04/08/2026** : `tests/test_ssh_client.py` (11 tests : connect/execute/timeout/erreur/close/context-manager via mock asyncssh) + `TestCleanDetTags` (3 tests `_clean_det_tags`). 484/484 tests passent, ruff/mypy 0.
 
 ## Phase 0 — Squelette & Config (FONDATIONS — à faire AVANT tout code métier)
 - [x] 0.1 Structure `src/` complète (agents, tools, core, api, services) — **+ `src/{api` corrompu supprimé, `src/models/` mort supprimé (31/07/2026)**

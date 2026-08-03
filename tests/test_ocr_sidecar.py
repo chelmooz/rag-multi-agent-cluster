@@ -59,3 +59,32 @@ class TestWriteVaultNote:
         pdf_path = tmp_path / "Mon Rapport.pdf"
         note_path = sidecar._write_vault_note(pdf_path, "x")
         assert note_path.name == "mon-rapport.md"
+
+
+class TestCleanDetTags:
+    """Tests réels de _clean_det_tags (post-traitement Unlimited-OCR)."""
+
+    def test_strips_det_bq_tags(self) -> None:
+        """Balises `<|det|>` retirees, blocs séparés par ligne vide."""
+        raw = (
+            "<|det|>text [1,2,3,4]<|/det|>premier bloc\n"
+            "<|det|>image [0,0,0,0]<|/det|>ignore moi\n"
+            "<|det|>titre [5,6,7,8]<|/det|>deuxième bloc"
+        )
+        result = PdfOcrSidecar._clean_det_tags(raw)
+        assert "premier bloc" in result
+        assert "deuxième bloc" in result
+        assert "ignore moi" not in result  # image tag → dropped
+        assert "<|" not in result
+
+    def test_groups_lines_into_blocks(self) -> None:
+        """Lignes consécutives (sans det) dans le même bloc → jointes par \\n."""
+        raw = "ligne A\nligne B\n\nligne C"
+        result = PdfOcrSidecar._clean_det_tags(raw)
+        assert "ligne A\nligne B" in result
+        assert "ligne C" in result
+
+    def test_empty_input(self) -> None:
+        """Entrée vide → sortie vide."""
+        assert PdfOcrSidecar._clean_det_tags("") == ""
+        assert PdfOcrSidecar._clean_det_tags("   \n  ") == ""
