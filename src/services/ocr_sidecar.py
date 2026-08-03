@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from src.core.settings import get_settings
 from src.services.ingestion import IngestionService
+from src.services.ocr_engine_protocol import OcrEngineProtocol
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -56,22 +57,31 @@ class OcrSidecarResult:
     chunks_indexed: int = 0
 
 
-class PdfOcrSidecar:
+class PdfOcrSidecar(OcrEngineProtocol):
     """Pipeline PDF -> texte structuré -> note vault -> index Qdrant.
 
     Le modèle Unlimited-OCR n'est chargé qu'au premier PDF rencontré dans un
     run, et explicitement déchargé (`_unload_model`) une fois le run terminé —
     pas de process long-vivant qui garde la VRAM du RTX 4000 occupée en
     permanence.
+
+    Accepte un ``ocr_engine`` (implémentant ``OcrEngineProtocol``) pour
+    injecter le moteur d'inférence — utile en test (pas de CUDA requis).
+    Par défaut, ``self`` est son propre moteur (`_ocr_pdf`).
     """
 
-    def __init__(self, ingestion_service: IngestionService | None = None) -> None:
+    def __init__(
+        self,
+        ingestion_service: IngestionService | None = None,
+        ocr_engine: OcrEngineProtocol | None = None,
+    ) -> None:
         settings = get_settings()
         self._inbox: Path = settings.raw_data_path
         self._vault_sources: Path = settings.wiki_vault_path / "sources"
         self._ingestion = ingestion_service
         self._model: AutoModel | None = None
         self._tokenizer: TokenizersBackend | SentencePieceBackend | None = None
+        self._ocr_engine: OcrEngineProtocol = ocr_engine or self
 
     # ── Modèle (chargement paresseux, une fois par run) ──────────
 
@@ -106,6 +116,12 @@ class PdfOcrSidecar:
         self._tokenizer = None
         gc.collect()
         torch.cuda.empty_cache()
+
+    # ── Interface OcrEngineProtocol (défaut = self) ─────────────────
+
+    def ocr_pdf(self, pdf_path: Path) -> str:
+        """Contractuel ``OcrEngineProtocol.ocr_pdf`` — délègue à ``_ocr_pdf``."""
+        return self._ocr_pdf(pdf_path)
 
     # ── PDF -> images -> texte ────────────────────────────────────
 
@@ -215,7 +231,7 @@ class PdfOcrSidecar:
         Retourne le nombre de chunks indexés. Lève si l'OCR est vide
         (le fichier sera classé en `_failed` par l'appelant).
         """
-        markdown_body = self._ocr_pdf(pdf_path)
+        markdown_body = self._ocr_engine.ocr_pdf(pdf_path)
         if not markdown_body.strip():
             raise ValueError("Sortie OCR vide")
 

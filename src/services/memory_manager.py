@@ -17,11 +17,13 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 from src.core.settings import get_settings
 from src.services.ollama import OllamaClient, OllamaClientPool
 from src.services.ssh_client import SSHClient, SSHClientError
+from src.services.ssh_client_protocol import SSHClientProtocol
 from src.services.vector import VectorService
 
 logger = logging.getLogger(__name__)
@@ -89,21 +91,37 @@ class MemoryManager:
         self,
         ollama_pool: OllamaClientPool | None = None,
         vector_service: VectorService | None = None,
+        ssh_m2: SSHClientProtocol | None = None,
+        ssh_m3: SSHClientProtocol | None = None,
     ) -> None:
         self._settings = get_settings()
         self.ollama_pool = ollama_pool or OllamaClientPool()
         self.vector_service = vector_service
-        self.ssh_m2 = SSHClient(
-            host=self._settings.m2_ssh_host,
-            user=self._settings.m2_ssh_user,
-            key_path=self._settings.m2_ssh_key_path,
-            port=self._settings.m2_ssh_port,
+        self.ssh_m2 = ssh_m2 or self._create_ssh_client(
+            self._settings.m2_ssh_host,
+            self._settings.m2_ssh_user,
+            self._settings.m2_ssh_key_path,
+            self._settings.m2_ssh_port,
         )
-        self.ssh_m3 = SSHClient(
-            host=self._settings.m3_ssh_host,
-            user=self._settings.m3_ssh_user,
-            key_path=self._settings.m3_ssh_key_path,
-            port=self._settings.m3_ssh_port,
+        self.ssh_m3 = ssh_m3 or self._create_ssh_client(
+            self._settings.m3_ssh_host,
+            self._settings.m3_ssh_user,
+            self._settings.m3_ssh_key_path,
+            self._settings.m3_ssh_port,
+        )
+
+    @staticmethod
+    def _create_ssh_client(
+        host: str,
+        user: str,
+        key_path: Path | None,
+        port: int,
+    ) -> SSHClient:
+        return SSHClient(
+            host=host,
+            user=user,
+            key_path=key_path,
+            port=port,
         )
 
     async def close(self) -> None:

@@ -1,11 +1,12 @@
 """Tests MemoryManager — mocks SSH/Ollama/Qdrant (aucune machine réelle requise)."""
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.core.settings import get_settings
 from src.services.memory_manager import MemoryManager
 from src.services.ssh_client import SSHCommandError
+from src.services.ssh_client_protocol import SSHClientProtocol
 
 
 @pytest.fixture
@@ -158,3 +159,50 @@ class TestAlerting:
 
         snapshot = await memory_manager.cluster_snapshot()
         assert snapshot.alerts == []
+
+
+class TestRealSSHInjection:
+    """Tests d'injection via constructeur avec spec=SSHClientProtocol (RED §5.6).
+
+    Au lieu de patcher un attribut (``mm.ssh_m2.execute = ...``), on injecte
+    un mock `spec=SSHClientProtocol` au constructeur — même contrainte de type
+    que l'implémentation réelle. Évite la classe de régression R1 où un
+    `MagicMock()` nu masquait une méthode disparue.
+    """
+
+    def _make_mocked_ssh(self) -> MagicMock:
+        mock: SSHClientProtocol = MagicMock(spec=SSHClientProtocol)
+        mock.execute = AsyncMock()
+        mock.close = AsyncMock()
+        return mock  # type: ignore[return-value]
+
+    def _make_mm_with_mocked_ssh(self) -> MemoryManager:
+        return MemoryManager(
+            ollama_pool=AsyncMock(),  # type: ignore[arg-type]
+            vector_service=AsyncMock(),  # type: ignore[arg-type]
+            ssh_m2=self._make_mocked_ssh(),
+            ssh_m3=self._make_mocked_ssh(),
+        )
+
+    async def test_ssh_injected_via_constructor(self) -> None:
+        """Le mock spec=SSHClientProtocol est accepté par le constructeur."""
+        mm = self._make_mm_with_mocked_ssh()
+        assert isinstance(mm.ssh_m2, SSHClientProtocol)
+        assert isinstance(mm.ssh_m3, SSHClientProtocol)
+
+    async def test_snapshot_m2_with_injected_ssh(self) -> None:
+        """nvidia-smi parsé via mock injecté (pas d'attribut patqué)."""
+        mm = self._make_mm_with_mocked_ssh()
+        mm.ssh_m2.execute = AsyncMock(return_value="3500\n")
+        mm.ollama_pool.m2.list_models = AsyncMock(return_value=[])
+
+        state = await mm.snapshot_m2()
+        assert state.rtx4000_vram_mb == 3500
+
+    async def test_close_calls_close_on_injected_ssh(self) -> None:
+        """MemoryManager.close → ssh_m2.close + ssh_m3.close (mocks distincts)."""
+        mm = self._make_mm_with_mocked_ssh()
+
+        await mm.close()
+        mm.ssh_m2.close.assert_awaited_once()
+        mm.ssh_m3.close.assert_awaited_once()
