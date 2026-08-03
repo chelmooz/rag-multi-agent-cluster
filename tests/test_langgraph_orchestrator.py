@@ -168,3 +168,49 @@ async def test_run_pipeline_planner_fallback() -> None:
     state = await run_pipeline("Question ?", services)
     assert state.plan is not None
     assert state.plan.sub_queries == ["Question ?"]
+
+
+async def test_run_pipeline_with_conversation_history() -> None:
+    services = _full_services()
+    rewrite_mock = services.rewriter.rewrite
+    from src.agents.generator import GeneratorOutput
+
+    services.generator.generate = AsyncMock(  # type: ignore[method-assign]
+        return_value=GeneratorOutput(
+            answer="Réponse générée [s1].",
+            citations=[],
+            confidence=0.9,
+            reasoning_trace=None,
+        )
+    )
+    generate_mock = services.generator.generate
+    history = [
+        {"role": "user", "content": f"msg {i}"} for i in range(10)
+    ]
+    await run_pipeline(
+        "Question ?", services, conversation_history=history,
+    )
+    rewrite_mock.assert_awaited_with("Question ?", history[-4:])
+    generate_mock.assert_awaited()
+    _, kwargs = generate_mock.await_args
+    assert kwargs.get("conversation_history") == history[-4:]
+
+
+async def test_run_pipeline_without_conversation_history() -> None:
+    services = _full_services()
+    rewrite_mock = services.rewriter.rewrite
+    from src.agents.generator import GeneratorOutput
+
+    services.generator.generate = AsyncMock(  # type: ignore[method-assign]
+        return_value=GeneratorOutput(
+            answer="Réponse générée [s1].",
+            citations=[],
+            confidence=0.9,
+            reasoning_trace=None,
+        )
+    )
+    generate_mock = services.generator.generate
+    await run_pipeline("Question ?", services, conversation_history=None)
+    rewrite_mock.assert_awaited_with("Question ?", None)
+    _, kwargs = generate_mock.await_args
+    assert kwargs.get("conversation_history") is None

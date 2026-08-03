@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -220,6 +220,90 @@ def _generator_output():
         citations=["s1"],
         confidence=0.9,
     )
+
+
+def test_query_with_messages_sends_conversation_history(
+    client: TestClient,
+) -> None:
+    """QueryRequest.messages extrait et passé à run_pipeline()."""
+    from unittest.mock import AsyncMock, patch
+
+    fake_pool = AsyncMock()
+    fake_pool.embed.return_value = [[0.1] * 768]
+
+    app.state.ollama_pool = fake_pool
+    app.state.vector_service = AsyncMock()
+    app.state.vector_service.hybrid_search.return_value = []
+    app.state.lexical_search = AsyncMock()
+    app.state.lexical_search.encode_to_dict.return_value = {1: 0.5}
+    app.state.reranker_service = AsyncMock()
+
+    messages_in = [
+        {"role": "user", "content": "C'est quoi le BC-250 ?"},
+        {"role": "assistant", "content": "Un GPU AMD."},
+    ]
+
+    mock_state = MagicMock()
+    mock_state.search_results = []
+    mock_state.assembled = None
+    mock_state.generated = None
+    mock_state.evaluator = None
+
+    with patch("src.api.main.run_pipeline", return_value=mock_state) as mock_run:
+        resp = client.post(
+            "/api/v1/query",
+            json={"question": "Et ensuite ?", "messages": messages_in},
+        )
+
+    del app.state.ollama_pool
+    del app.state.vector_service
+    del app.state.lexical_search
+    del app.state.reranker_service
+    assert resp.status_code == 200
+    mock_run.assert_called_once()
+    _, kwargs = mock_run.call_args
+    assert kwargs["conversation_history"] == [
+        {"role": "user", "content": "C'est quoi le BC-250 ?"},
+        {"role": "assistant", "content": "Un GPU AMD."},
+    ]
+
+
+def test_query_without_messages_passes_none(
+    client: TestClient,
+) -> None:
+    """QueryRequest sans messages passe conversation_history=None."""
+    from unittest.mock import AsyncMock, patch
+
+    fake_pool = AsyncMock()
+    fake_pool.embed.return_value = [[0.1] * 768]
+
+    app.state.ollama_pool = fake_pool
+    app.state.vector_service = AsyncMock()
+    app.state.vector_service.hybrid_search.return_value = []
+    app.state.lexical_search = AsyncMock()
+    app.state.lexical_search.encode_to_dict.return_value = {1: 0.5}
+    app.state.reranker_service = AsyncMock()
+
+    mock_state = MagicMock()
+    mock_state.search_results = []
+    mock_state.assembled = None
+    mock_state.generated = None
+    mock_state.evaluator = None
+
+    with patch("src.api.main.run_pipeline", return_value=mock_state) as mock_run:
+        resp = client.post(
+            "/api/v1/query",
+            json={"question": "Pas d'historique ?"},
+        )
+
+    del app.state.ollama_pool
+    del app.state.vector_service
+    del app.state.lexical_search
+    del app.state.reranker_service
+    assert resp.status_code == 200
+    mock_run.assert_called_once()
+    _, kwargs = mock_run.call_args
+    assert kwargs["conversation_history"] is None
 
 
 def test_query_evaluation_enabled_flag(client: TestClient, wiki_agent: WikiAgent) -> None:
