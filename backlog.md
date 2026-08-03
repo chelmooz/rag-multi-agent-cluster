@@ -1965,6 +1965,27 @@ Suite directe de la session nettoyage : élimination des 5 dernières violations
   (37 errors `PermissionError` Windows inchangées).
 - Graphify rafraîchi (`graphify update .` — 1716 nodes, 3462 edges, 132 communautés).
 
+## 03/08/2026 — SRP : `chat_sse` découpé en 4 helpers (main.py)
+
+### Livré
+- Extraction depuis `event_stream` (point 3 restant de la revue) :
+  - `_retrieve(pool, vector, lexical, question)` → recherche dense+sparse, `None` si échec
+    embedding.
+  - `_rerank_search_results(reranker, question, search_results)` → rerank si >1, sinon
+    tronque au `top_k_rerank`.
+  - `_select_context(search_results, budget)` → `(sources, context_parts)`, boucle budget
+    linéaire (pure, testable sans SSE).
+  - `_chat_answer(pool, question, context_parts)` → prompt + génération, repli contexte,
+    `"Pas de contexte trouvé."` si vide.
+- `chat_sse` réduit à une orchestration plate (~50 lignes) : guards, retrieval, rerank,
+  select, answer, streaming — 1 niveau d'abstraction, early returns conservés.
+
+### Vérification
+- `main.py` : couverture maintenue à **100 %** (359 stmts, 0 miss, +7 helpers).
+- ruff 0, mypy 0, format ok — 57/57 tests API PASSED, suite complète 399 passed
+  (37 errors `PermissionError` Windows inchangées).
+- Graphify rafraîchi (`graphify update .` — 1727 nodes, 3486 edges, 134 communautés).
+
 
 
 
