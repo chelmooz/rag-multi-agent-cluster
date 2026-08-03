@@ -1,16 +1,40 @@
-"""Configuration centralisée via Pydantic Settings.
+"""Configuration centralisée via Pydantic Settings — sous-modèles composés.
 
 Single source of truth pour toute la stack. Charge .env au démarrage.
+
+Architecture (item 3 de la roadmap d'audit) :
+- Une section `BaseSettings` par service (Ollama, Qdrant, Redis, SSH, ...)
+  avec préfixes/aliases d'environnement conservés à l'identique (`.env` intact).
+- `Settings` compose les sections ; les réglages transverses patchables par
+  les tests restent des champs racine (similarity_threshold, monitoring_offline,
+  memory_manager_enabled, chat_max_context_chars, bloc PostgreSQL).
+- Façade de compatibilité : `__getattr__`/`__setattr__` déléguent les accès
+  plats (`settings.ollama_m1_url`) vers les sections, pour préserver les
+  ~80 call-sites existants et les écritures directes des tests sans migration.
+  Les nouveaux accès peuvent utiliser la forme pointée (`settings.ollama.m1_url`).
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, HttpUrl, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+
+def _section_config(env_prefix: str = "") -> SettingsConfigDict:
+    return SettingsConfigDict(
+        env_file=_ENV_FILE,
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+        env_prefix=env_prefix,
+    )
 
 
 class InsecurePasswordConfigError(ValueError):
@@ -18,27 +42,16 @@ class InsecurePasswordConfigError(ValueError):
         super().__init__("postgres_password='CHANGE_ME' interdit avec environment='production'")
 
 
-class Settings(BaseSettings):
-    """Configuration globale du cluster RAG multi-agents."""
+# ──────────────────────────────────────────────
+# Sections par service
+# ──────────────────────────────────────────────
 
-    model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parents[2] / ".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore",
-    )
 
-    # ──────────────────────────────────────────────
-    # Environnement d'exécution
-    # ──────────────────────────────────────────────
-    environment: Literal["development", "staging", "production"] = Field(
-        default="development",
-        validation_alias="ENVIRONMENT",
-    )
+class ApiSettings(BaseSettings):
+    """API Cluster (LXC 100, exposée via pfSense VM 104)."""
 
-    # ──────────────────────────────────────────────
-    # API Cluster (LXC 100, exposée via pfSense VM 104)
-    # ──────────────────────────────────────────────
+    model_config = _section_config()
+
     cluster_api_url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://localhost:8000",
         description="URL de base de l'API cluster (exposée via pfSense VM 104)",
@@ -51,9 +64,12 @@ class Settings(BaseSettings):
         validation_alias="API_VERSION",
     )
 
-    # ──────────────────────────────────────────────
-    # Obsidian Vault (pattern Karpathy)
-    # ──────────────────────────────────────────────
+
+class VaultSettings(BaseSettings):
+    """Obsidian Vault (pattern Karpathy)."""
+
+    model_config = _section_config()
+
     wiki_vault_path: Path = Field(
         default=Path("/data/wiki"),
         description="Chemin absolu du vault partagé sur LXC Master (bind mount ou NFS)",
@@ -72,33 +88,36 @@ class Settings(BaseSettings):
         validation_alias="INDEX_DATA_PATH",
     )
 
-    # ──────────────────────────────────────────────
-    # Ollama Endpoints (3 nœuds)
-    # ──────────────────────────────────────────────
-    ollama_m1_url: HttpUrl = Field(  # type: ignore[assignment]
+
+class OllamaSettings(BaseSettings):
+    """Endpoints Ollama (3 nœuds)."""
+
+    model_config = _section_config(env_prefix="OLLAMA_")
+
+    m1_url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://10.10.0.1:11434",
         description="Ollama Machine 1 (Master) — Embedding CPU principal + Evaluator + fallback",
-        validation_alias="OLLAMA_M1_URL",
     )
 
-    ollama_m2_url: HttpUrl = Field(  # type: ignore[assignment]
+    m2_url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://10.10.0.2:11434",
         description="Ollama Machine 2 (GPU Worker) — Reranker, Judge, Avocat, Backup Embedding CPU",
-        validation_alias="OLLAMA_M2_URL",
     )
 
-    ollama_m3_url: HttpUrl = Field(  # type: ignore[assignment]
+    m3_url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://10.10.0.3:11434",
         description=(
             "Ollama Machine 3 (BC-250 Baremetal) — "
             "Generator 14B/MoE, Text-to-SQL, Vision, Vulkan ONLY"
         ),
-        validation_alias="OLLAMA_M3_URL",
     )
 
-    # ──────────────────────────────────────────────
-    # Modèles par rôle (digests SHA256 lockés dans .env pour reproductibilité)
-    # ──────────────────────────────────────────────
+
+class ModelsSettings(BaseSettings):
+    """Modèles par rôle (digests SHA256 lockés dans .env pour reproductibilité)."""
+
+    model_config = _section_config()
+
     # Embedding
     embedding_model: str = Field(
         default="hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:Q8_0",
@@ -223,58 +242,44 @@ class Settings(BaseSettings):
         validation_alias="FASTCHECK_MODEL_DIGEST",
     )
 
-    # ──────────────────────────────────────────────
-    # Vector Store (Qdrant)
-    # ──────────────────────────────────────────────
-    qdrant_url: HttpUrl = Field(  # type: ignore[assignment]
+
+class QdrantSettings(BaseSettings):
+    """Vector Store (Qdrant)."""
+
+    model_config = _section_config(env_prefix="QDRANT_")
+
+    url: HttpUrl = Field(  # type: ignore[assignment]
         default="http://10.10.0.1:6333",
         description="Qdrant sur Machine 1 (LXC 101)",
-        validation_alias="QDRANT_URL",
     )
-    qdrant_collection: str = Field(
+
+    collection: str = Field(
         default="rag-wiki",
         description="Nom de la collection Qdrant (hybrid search natif: dense + sparse BM25)",
-        validation_alias="QDRANT_COLLECTION",
     )
-    qdrant_api_key: str | None = Field(
+
+    api_key: str | None = Field(
         default=None,
         description="API key Qdrant si activée (optionnel en LAN de confiance)",
-        validation_alias="QDRANT_API_KEY",
     )
 
-    # ──────────────────────────────────────────────
-    # PostgreSQL (conversations, feedback, mémoire long-terme)
-    # ──────────────────────────────────────────────
-    postgres_host: str = Field(
-        default="10.10.0.1",
-        validation_alias="POSTGRES_HOST",
-    )
-    postgres_port: int = Field(default=5432, validation_alias="POSTGRES_PORT")
-    postgres_db: str = Field(default="rag_cluster", validation_alias="POSTGRES_DB")
-    postgres_user: str = Field(default="rag_user", validation_alias="POSTGRES_USER")
-    postgres_password: str = Field(
-        default="CHANGE_ME",
-        description="DOIT être changé via .env — jamais en dur",
-        validation_alias="POSTGRES_PASSWORD",
-    )
 
-    @model_validator(mode="after")
-    def _forbid_default_password_in_production(self) -> Settings:
-        if self.environment == "production" and self.postgres_password == "CHANGE_ME":
-            raise InsecurePasswordConfigError
-        return self
+class RedisSettings(BaseSettings):
+    """Cache, queue orchestrateur, sessions."""
 
-    # ──────────────────────────────────────────────
-    # Redis (cache, queue orchestrateur, sessions)
-    # ──────────────────────────────────────────────
-    redis_url: str = Field(
+    model_config = _section_config(env_prefix="REDIS_")
+
+    url: str = Field(
         default="redis://10.10.0.1:6379/0",
-        validation_alias="REDIS_URL",
+        description="URL Redis (cache, queue, sessions)",
     )
 
-    # ──────────────────────────────────────────────
-    # NFS Relay (évaluation séquentielle Judge → Avocat)
-    # ──────────────────────────────────────────────
+
+class RelaySettings(BaseSettings):
+    """NFS Relay (évaluation séquentielle Judge → Avocat)."""
+
+    model_config = _section_config()
+
     nfs_relay_path: Path = Field(
         default=Path("/data/shared/evaluation-relay.json"),
         description=(
@@ -293,9 +298,12 @@ class Settings(BaseSettings):
         validation_alias="JUDGE_TIMEOUT_SECONDS",
     )
 
-    # ──────────────────────────────────────────────
-    # SSH Access (MemoryManager — monitoring M2/M3)
-    # ──────────────────────────────────────────────
+
+class SSHSettings(BaseSettings):
+    """Accès SSH (MemoryManager — monitoring M2/M3)."""
+
+    model_config = _section_config()
+
     m2_ssh_host: str = Field(
         default="10.10.0.2",
         description="Adresse M2 pour SSH (monitoring nvidia-smi)",
@@ -336,14 +344,12 @@ class Settings(BaseSettings):
         validation_alias="M3_SSH_KEY_PATH",
     )
 
-    # ──────────────────────────────────────────────
-    # Memory Manager — configuration & seuils
-    # ──────────────────────────────────────────────
-    memory_manager_enabled: bool = Field(
-        default=True,
-        description="Activer MemoryManager pour monitoring cluster",
-        validation_alias="MEMORY_MANAGER_ENABLED",
-    )
+
+class MonitoringSettings(BaseSettings):
+    """Memory Manager — configuration, seuils et Glances."""
+
+    model_config = _section_config()
+
     memory_manager_persist_to_qdrant: bool = Field(
         default=False,
         description=(
@@ -409,9 +415,19 @@ class Settings(BaseSettings):
         validation_alias="M3_BC250_CPU_IDLE_TIMEOUT_SECONDS",
     )
 
-    # ──────────────────────────────────────────────
-    # Logging & Observabilité
-    # ──────────────────────────────────────────────
+    # Glances BC-250
+    glances_m3_url: HttpUrl = Field(  # type: ignore[assignment]
+        default="http://10.10.0.3:61208",
+        description="Glances web API BC-250 (M3, Debian 12, port 61208)",
+        validation_alias="GLANCES_M3_URL",
+    )
+
+
+class LoggingSettings(BaseSettings):
+    """Logging & Observabilité."""
+
+    model_config = _section_config()
+
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="INFO",
         validation_alias="LOG_LEVEL",
@@ -427,35 +443,30 @@ class Settings(BaseSettings):
         validation_alias="CORRELATION_ID_HEADER",
     )
 
-    # ──────────────────────────────────────────────
-    # mTLS / Sécurité interne (Phase 0.13)
-    # ──────────────────────────────────────────────
-    mtls_enabled: bool = Field(
+
+class MtlSSettings(BaseSettings):
+    """mTLS / Sécurité interne (Phase 0.13)."""
+
+    model_config = _section_config(env_prefix="MTLS_")
+
+    enabled: bool = Field(
         default=False,
         description="Activer mTLS pour communications inter-services (certs pfSense CA)",
-        validation_alias="MTLS_ENABLED",
     )
-    mtls_ca_path: Path | None = Field(
-        default=None,
-        validation_alias="MTLS_CA_PATH",
-    )
-    mtls_cert_path: Path | None = Field(
-        default=None,
-        validation_alias="MTLS_CERT_PATH",
-    )
-    mtls_key_path: Path | None = Field(
-        default=None,
-        validation_alias="MTLS_KEY_PATH",
-    )
+    ca_path: Path | None = Field(default=None)
+    cert_path: Path | None = Field(default=None)
+    key_path: Path | None = Field(default=None)
 
-    # ──────────────────────────────────────────────
-    # Paramètres pipeline RAG
-    # ──────────────────────────────────────────────
+
+class RagSettings(BaseSettings):
+    """Paramètres pipeline RAG."""
+
+    model_config = _section_config()
+
     chunk_size: int = Field(default=1024, validation_alias="CHUNK_SIZE")
     chunk_overlap: int = Field(default=128, validation_alias="CHUNK_OVERLAP")
     top_k_retrieval: int = Field(default=20, validation_alias="TOP_K_RETRIEVAL")
     top_k_rerank: int = Field(default=8, validation_alias="TOP_K_RERANK")
-    similarity_threshold: float = Field(default=0.7, validation_alias="SIMILARITY_THRESHOLD")
     evaluation_enabled: bool = Field(
         default=False,
         description=(
@@ -466,196 +477,95 @@ class Settings(BaseSettings):
         validation_alias="EVALUATION_ENABLED",
     )
 
-    # ──────────────────────────────────────────────
-    # BC-250 Baremetal (Machine 3 — Vulkan ONLY)
-    # ──────────────────────────────────────────────
-    bc250_enabled: bool = Field(
+
+class Bc250Settings(BaseSettings):
+    """BC-250 Baremetal (Machine 3 — Vulkan ONLY)."""
+
+    model_config = _section_config(env_prefix="BC250_")
+
+    enabled: bool = Field(
         default=True,
         description="BC-250 présent et configuré dans le cluster",
-        validation_alias="BC250_ENABLED",
     )
-    bc250_cu_count: int = Field(
+    cu_count: int = Field(
         default=24,
         ge=24,
         le=40,
         description="Compute Units actifs (24 stock, 40 via unlock patch duggasco)",
-        validation_alias="BC250_CU_COUNT",
     )
-    bc250_cpu_cores_unlocked: bool = Field(
+    cpu_cores_unlocked: bool = Field(
         default=False,
-        description="CPU core unlock appliqué (8c/16t via service systemd bc250-core-unlock.service au boot, PAS BIOS persistant — SMU msg 0x98 volatil, cold boot = relance)",
-        validation_alias="BC250_CPU_CORES_UNLOCKED",
+        description=(
+            "CPU core unlock appliqué (8c/16t via service systemd bc250-core-unlock.service "
+            "au boot, PAS BIOS persistant — SMU msg 0x98 volatil, cold boot = relance)"
+        ),
     )
-    bc250_vram_gib: int = Field(
+    vram_gib: int = Field(
         default=16,
         ge=8,
         description="VRAM GDDR6 unifiée en GiB (cpu+gpu même pool)",
-        validation_alias="BC250_VRAM_GIB",
     )
-    bc250_tdp_watts: int = Field(
+    tdp_watts: int = Field(
         default=235,
         description="TDP max watts (cpu+gpu combiné, format compact)",
-        validation_alias="BC250_TDP_WATTS",
     )
-    bc250_vulkan_mesa_version: str = Field(
+    vulkan_mesa_version: str = Field(
         default="25.1.3",
         description="Version minimum Mesa/RADV (Debian Experimental, pin-priority 500)",
-        validation_alias="BC250_VULKAN_MESA_VERSION",
     )
-    bc250_kernel_version: str = Field(
+    kernel_version: str = Field(
         default="6.18.18",
         description="Version noyau cible (pin apt-mark hold, éviter 6.15/6.17 buggés)",
-        validation_alias="BC250_KERNEL_VERSION",
     )
-    bc250_grub_cmdline: str = Field(
+    grub_cmdline: str = Field(
         default="amdgpu.gttsize=14750 ttm.pages_limit=3959290 ttm.page_pool_size=3959290",
         description="Paramètres GRUB obligatoires (triplet VRAM — jamais amd_iommu=on)",
-        validation_alias="BC250_GRUB_CMDLINE",
     )
-    bc250_ttm_pages_limit: int = Field(
+    ttm_pages_limit: int = Field(
         default=3959290,
         description="ttm.pages_limit sysfs (plafond mémoire GPU, ~15 GiB)",
-        validation_alias="BC250_TTM_PAGES_LIMIT",
     )
-    bc250_ttm_page_pool_size: int = Field(
+    ttm_page_pool_size: int = Field(
         default=3959290,
         description="ttm.page_pool_size (identique à pages_limit)",
-        validation_alias="BC250_TTM_PAGE_POOL_SIZE",
     )
-    bc250_gov_freq_mhz: int = Field(
+    gov_freq_mhz: int = Field(
         default=1500,
         description="Fréquence GPU max MHz (safe-point governor pour usage soutenu)",
-        validation_alias="BC250_GOV_FREQ_MHZ",
     )
-    bc250_gov_voltage_mv: int = Field(
+    gov_voltage_mv: int = Field(
         default=900,
         description="Voltage GPU mV (safe-point governor)",
-        validation_alias="BC250_GOV_VOLTAGE_MV",
     )
-    bc250_gov_config_path: str = Field(
+    gov_config_path: str = Field(
         default="/etc/cyan-skillfish-governor-smu/config.toml",
         description="Chemin absolu config cyan-skillfish-governor-smu",
-        validation_alias="BC250_GOV_CONFIG_PATH",
     )
-    bc250_setup_dir: str = Field(
+    setup_dir: str = Field(
         default="infrastructure/bc250",
         description="Chemin relatif (depuis racine projet) vers scripts BC-250",
-        validation_alias="BC250_SETUP_DIR",
     )
 
-    # ──────────────────────────────────────────────
-    # OKF (Open Knowledge Format) v0.2
-    # ──────────────────────────────────────────────
-    okf_stale_after_days: int = Field(
-        default=180,
-        description="Jours avant qu'une page wiki soit marquée stale (frontmatter stale_after)",
-        validation_alias="OKF_STALE_AFTER_DAYS",
-    )
-    okf_trust_tiers: list[str] = Field(
-        default=["unverified", "machine-confirmed", "human-reviewed"],
-        description="Tiers de confiance OKF pour champ verified.status",
-        validation_alias="OKF_TRUST_TIERS",
-    )
-
-    # ──────────────────────────────────────────────
-    # Dashboard CTOS (frontend single-page chat + monitoring)
-    # ──────────────────────────────────────────────
-    dashboard_enabled: bool = Field(
-        default=True,
-        description="Active le dashboard web (GET /, partials, /api/v1/monitoring)",
-        validation_alias="DASHBOARD_ENABLED",
-    )
-    dashboard_refresh_sec: int = Field(
-        default=10,
-        ge=2,
-        description="Intervalle de rafraîchissement du panneau monitoring (s)",
-        validation_alias="DASHBOARD_REFRESH_SEC",
-    )
-    glances_m3_url: HttpUrl = Field(  # type: ignore[assignment]
-        default="http://10.10.0.3:61208",
-        description="Glances web API BC-250 (M3, Debian 12, port 61208)",
-        validation_alias="GLANCES_M3_URL",
-    )
-    chat_history_max: int = Field(
-        default=10,
-        ge=2,
-        le=50,
-        description="Nombre max de messages (paires user/assistant) gardés en contexte chat",
-        validation_alias="CHAT_HISTORY_MAX",
-    )
-    chat_max_context_chars: int = Field(
-        default=12000,
-        ge=2000,
-        description="Plafond de caractères du contexte envoyé au LLM (anti lost-in-the-middle)",
-        validation_alias="CHAT_MAX_CONTEXT_CHARS",
-    )
-    dashboard_semi_light: bool = Field(
-        default=False,
-        description="Thème semi-éclairé par défaut (toggle UI sinon)",
-        validation_alias="DASHBOARD_SEMI_LIGHT",
-    )
-    monitoring_offline: bool = Field(
-        default=False,
-        description="Prédéploiement : monitoring sans sonde réseau (cartes n/a immédiates)",
-        validation_alias="MONITORING_OFFLINE",
-    )
-
-    # ──────────────────────────────────────────────
-    # Helpers
-    # ──────────────────────────────────────────────
+    # ── Helpers ────────────────────────────────
     @property
-    def api_prefix(self) -> str:
-        return f"/api/{self.api_version}"
+    def cu_unlock_script(self) -> str:
+        return f"{self.setup_dir}/enable-40cu-unlock.sh"
 
     @property
-    def embedding_endpoint(self) -> str:
-        host_url = self.ollama_m1_url if self.embedding_host == "m1" else self.ollama_m2_url
-        return f"{host_url}/api/embed"
+    def core_unlock_script(self) -> str:
+        return f"{self.setup_dir}/enable-cpu-core-unlock.sh"
 
     @property
-    def generator_endpoint(self) -> str:
-        return f"{self.ollama_m3_url}/api/generate"
+    def vulkan_setup_script(self) -> str:
+        return f"{self.setup_dir}/setup-vulkan-stack.sh"
 
     @property
-    def rerank_endpoint(self) -> str:
-        return f"{self.ollama_m2_url}/api/rerank"
-
-    @property
-    def judge_endpoint(self) -> str:
-        return f"{self.ollama_m2_url}/api/generate"
-
-    @property
-    def advocate_endpoint(self) -> str:
-        return f"{self.ollama_m2_url}/api/generate"
-
-    @property
-    def evaluator_endpoint(self) -> str:
-        return f"{self.ollama_m1_url}/api/generate"
-
-    @property
-    def postgres_dsn(self) -> str:
-        return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-
-    # ── BC-250 helpers ────────────────────────────
-    @property
-    def bc250_cu_unlock_script(self) -> str:
-        return f"{self.bc250_setup_dir}/enable-40cu-unlock.sh"
-
-    @property
-    def bc250_core_unlock_script(self) -> str:
-        return f"{self.bc250_setup_dir}/enable-cpu-core-unlock.sh"
-
-    @property
-    def bc250_vulkan_setup_script(self) -> str:
-        return f"{self.bc250_setup_dir}/setup-vulkan-stack.sh"
-
-    @property
-    def bc250_grub_cmdline_inject(self) -> str:
+    def grub_cmdline_inject(self) -> str:
         """Triplet GRUB prêt pour GRUB_CMDLINE_LINUX_DEFAULT."""
-        return self.bc250_grub_cmdline
+        return self.grub_cmdline
 
     @property
-    def bc250_ollama_systemd_override(self) -> dict[str, str]:
+    def ollama_systemd_override(self) -> dict[str, str]:
         """Envs Vulkan pour systemd override Ollama (Service/Environment)."""
         return {
             "HSA_OVERRIDE_GFX_VERSION": "10.3.0",
@@ -669,23 +579,246 @@ class Settings(BaseSettings):
             "GGML_VULKAN_DEVICE": "0",
         }
 
-    def bc250_healthcheck_cmds(self) -> list[str]:
+    def healthcheck_cmds(self) -> list[str]:
         """Commandes de vérification post-reboot BC-250."""
         cmds = []
-        if self.bc250_cu_count > 24:
+        if self.cu_count > 24:
             cmds.append("sudo dmesg | grep active_cu_number")
             cmds.append("RADV_DEBUG=info vulkaninfo --summary 2>&1 | grep num_cu")
-        if self.bc250_cpu_cores_unlocked:
+        if self.cpu_cores_unlocked:
             cmds.append("lscpu | grep -E 'CPU\\(s\\)|Core\\(s\\) per socket'")
             cmds.append("sudo dmesg | grep -E 'smp|lapic' | tail -5")
         cmds.extend(
             [
-                # ruff: noqa: E501 — commande shell lisible > longueur
-                f"cat /sys/module/ttm/parameters/pages_limit  # expect {self.bc250_ttm_pages_limit}",
+                f"cat /sys/module/ttm/parameters/pages_limit  # expect {self.ttm_pages_limit}",
                 "vulkaninfo --summary 2>&1 | grep deviceName",
             ]
         )
         return cmds
+
+
+class OkfSettings(BaseSettings):
+    """OKF (Open Knowledge Format) v0.2."""
+
+    model_config = _section_config(env_prefix="OKF_")
+
+    stale_after_days: int = Field(
+        default=180,
+        description="Jours avant qu'une page wiki soit marquée stale (frontmatter stale_after)",
+    )
+    trust_tiers: list[str] = Field(
+        default=["unverified", "machine-confirmed", "human-reviewed"],
+        description="Tiers de confiance OKF pour champ verified.status",
+    )
+
+
+class DashboardSettings(BaseSettings):
+    """Dashboard CTOS (frontend single-page chat + monitoring)."""
+
+    model_config = _section_config(env_prefix="DASHBOARD_")
+
+    enabled: bool = Field(
+        default=True,
+        description="Active le dashboard web (GET /, partials, /api/v1/monitoring)",
+    )
+    refresh_sec: int = Field(
+        default=10,
+        ge=2,
+        description="Intervalle de rafraîchissement du panneau monitoring (s)",
+    )
+    semi_light: bool = Field(
+        default=False,
+        description="Thème semi-éclairé par défaut (toggle UI sinon)",
+    )
+
+
+class ChatSettings(BaseSettings):
+    """Contexte chat (fenêtre glissante anti lost-in-the-middle)."""
+
+    model_config = _section_config(env_prefix="CHAT_")
+
+    history_max: int = Field(
+        default=10,
+        ge=2,
+        le=50,
+        description="Nombre max de messages (paires user/assistant) gardés en contexte chat",
+    )
+
+
+# ──────────────────────────────────────────────
+# Settings racine (composition)
+# ──────────────────────────────────────────────
+
+
+class Settings(BaseSettings):
+    """Configuration globale du cluster RAG multi-agents.
+
+    Réglages transverses conservés à plat : soit parce que les tests les
+    patchent directement (`src.api.main.settings.X`), soit parce que le
+    validateur production et les kwargs `Settings(POSTGRES_PASSWORD=...)`
+    l'exigent (bloc PostgreSQL).
+    """
+
+    model_config = _section_config()
+
+    # ── Environnement d'exécution ──────────────
+    environment: Literal["development", "staging", "production"] = Field(
+        default="development",
+        validation_alias="ENVIRONMENT",
+    )
+
+    # ── Sections composées ─────────────────────
+    api: ApiSettings = Field(default_factory=ApiSettings)
+    vault: VaultSettings = Field(default_factory=VaultSettings)
+    ollama: OllamaSettings = Field(default_factory=OllamaSettings)
+    models: ModelsSettings = Field(default_factory=ModelsSettings)
+    qdrant: QdrantSettings = Field(default_factory=QdrantSettings)
+    redis: RedisSettings = Field(default_factory=RedisSettings)
+    relay: RelaySettings = Field(default_factory=RelaySettings)
+    ssh: SSHSettings = Field(default_factory=SSHSettings)
+    monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
+    logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    mtls: MtlSSettings = Field(default_factory=MtlSSettings)
+    rag: RagSettings = Field(default_factory=RagSettings)
+    bc250: Bc250Settings = Field(default_factory=Bc250Settings)
+    okf: OkfSettings = Field(default_factory=OkfSettings)
+    dashboard: DashboardSettings = Field(default_factory=DashboardSettings)
+    chat: ChatSettings = Field(default_factory=ChatSettings)
+
+    # ── PostgreSQL (conversations, feedback, mémoire long-terme) ──
+    postgres_host: str = Field(default="10.10.0.1", validation_alias="POSTGRES_HOST")
+    postgres_port: int = Field(default=5432, validation_alias="POSTGRES_PORT")
+    postgres_db: str = Field(default="rag_cluster", validation_alias="POSTGRES_DB")
+    postgres_user: str = Field(default="rag_user", validation_alias="POSTGRES_USER")
+    postgres_password: str = Field(
+        default="CHANGE_ME",
+        description="DOIT être changé via .env — jamais en dur",
+        validation_alias="POSTGRES_PASSWORD",
+    )
+
+    @model_validator(mode="after")
+    def _forbid_default_password_in_production(self) -> Settings:
+        if self.environment == "production" and self.postgres_password == "CHANGE_ME":
+            raise InsecurePasswordConfigError
+        return self
+
+    # ── Réglages transverses (patchables par les tests) ──────────
+    memory_manager_enabled: bool = Field(
+        default=True,
+        description="Activer MemoryManager pour monitoring cluster",
+        validation_alias="MEMORY_MANAGER_ENABLED",
+    )
+
+    similarity_threshold: float = Field(
+        default=0.7,
+        description="Seuil de similarité minimal (retrieval + rerank)",
+        validation_alias="SIMILARITY_THRESHOLD",
+    )
+
+    monitoring_offline: bool = Field(
+        default=False,
+        description="Prédéploiement : monitoring sans sonde réseau (cartes n/a immédiates)",
+        validation_alias="MONITORING_OFFLINE",
+    )
+
+    chat_max_context_chars: int = Field(
+        default=12000,
+        ge=2000,
+        description="Plafond de caractères du contexte envoyé au LLM (anti lost-in-the-middle)",
+        validation_alias="CHAT_MAX_CONTEXT_CHARS",
+    )
+
+    # ── Helpers ────────────────────────────────
+    @property
+    def api_prefix(self) -> str:
+        return f"/api/{self.api.api_version}"
+
+    @property
+    def embedding_endpoint(self) -> str:
+        host_url = self.ollama.m1_url if self.models.embedding_host == "m1" else self.ollama.m2_url
+        return f"{host_url}/api/embed"
+
+    @property
+    def generator_endpoint(self) -> str:
+        return f"{self.ollama.m3_url}/api/generate"
+
+    @property
+    def rerank_endpoint(self) -> str:
+        return f"{self.ollama.m2_url}/api/rerank"
+
+    @property
+    def judge_endpoint(self) -> str:
+        return f"{self.ollama.m2_url}/api/generate"
+
+    @property
+    def advocate_endpoint(self) -> str:
+        return f"{self.ollama.m2_url}/api/generate"
+
+    @property
+    def evaluator_endpoint(self) -> str:
+        return f"{self.ollama.m1_url}/api/generate"
+
+    @property
+    def postgres_dsn(self) -> str:
+        return (
+            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    # ── Façade de compatibilité (accès plats) ─────────────────────
+
+    def _sections(self) -> Iterator[tuple[str, BaseSettings]]:
+        """Itère (nom, section) les sections composées instanciées."""
+        for field_name in type(self).model_fields:
+            try:
+                section = object.__getattribute__(self, field_name)
+            except AttributeError:
+                continue
+            if isinstance(section, BaseSettings):
+                yield field_name, section
+
+    def _resolve_flat(self, name: str) -> Any:
+        """Retrouve un champ plat (ex. `ollama_m1_url`) dans les sections."""
+        for section_name, section in self._sections():
+            if name in type(section).model_fields:
+                return getattr(section, name)
+            if name.startswith(f"{section_name}_"):
+                field = name[len(section_name) + 1 :]
+                if field in type(section).model_fields:
+                    return getattr(section, field)
+        raise AttributeError(name)
+
+    def __getattr__(self, name: str) -> Any:
+        """Délègue les accès plats (ex. settings.ollama_m1_url) aux sections."""
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return self._resolve_flat(name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Délègue les écritures plates (ex. tests patchant _settings.X) aux sections."""
+        if name.startswith("_") or name in type(self).model_fields:
+            return super().__setattr__(name, value)
+        for section_name, section in self._sections():
+            if name in type(section).model_fields:
+                return setattr(section, name, value)
+            if name.startswith(f"{section_name}_"):
+                field = name[len(section_name) + 1 :]
+                if field in type(section).model_fields:
+                    return setattr(section, field, value)
+        return super().__setattr__(name, value)
+
+    def __delattr__(self, name: str) -> None:
+        """Délègue les suppressions plates (ex. `patch.object` à la sortie)."""
+        if name.startswith("_") or name in type(self).model_fields:
+            return super().__delattr__(name)
+        for section_name, section in self._sections():
+            if name in type(section).model_fields:
+                return delattr(section, name)
+            if name.startswith(f"{section_name}_"):
+                field = name[len(section_name) + 1 :]
+                if field in type(section).model_fields:
+                    return delattr(section, field)
+        return super().__delattr__(name)
 
 
 @lru_cache(maxsize=1)

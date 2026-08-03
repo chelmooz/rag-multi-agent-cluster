@@ -307,7 +307,7 @@ class MonitoringService:
                 return False
             mtime = os.path.getmtime(path)
             age_s = datetime.now().timestamp() - mtime
-            return age_s < self._settings.relay_ttl_seconds * 3
+            return age_s < int(self._settings.relay_ttl_seconds) * 3
         except Exception:
             return False
 
