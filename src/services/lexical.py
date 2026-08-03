@@ -1,14 +1,9 @@
-"""Service de recherche lexicale — sparse vectors BM25 via Qdrant natif.
+"""Service de recherche lexicale — full-text BM25 natif Qdrant.
 
-Fournit des utilitaires pour encoder du texte en vecteurs sparse compatibles
-avec l'index BM25 de Qdrant (utilisé en complément du dense pour hybrid search).
+Fournit un utilitaire pour construire des requêtes full-text compatibles
+avec l'index BM25 natif de Qdrant (utilisé en complément du dense pour hybrid search).
 """
 from __future__ import annotations
-
-import math
-
-import tiktoken
-from qdrant_client.http import models as qmodels
 
 
 class LexicalSearchError(Exception):
@@ -16,19 +11,18 @@ class LexicalSearchError(Exception):
 
 
 class LexicalSearch:
-    """Encodeur de texte vers vecteurs sparse BM25.
+    """Constructeur de requêtes full-text pour BM25 natif Qdrant.
 
-    Utilise tiktoken pour tokenizer et construit des vecteurs sparse
-    compatibles avec l'index BM25 de Qdrant (nom de vecteur "bm25").
+    Remplace l'ancien encodeur de vecteurs sparse (hash TF normalisé L2)
+    par l'API full-text de Qdrant qui calcule le vrai BM25 avec IDF
+    au moment de la requête.
     """
 
     def __init__(
         self,
-        encoding_name: str = "cl100k_base",
-        sparse_dim: int = 100000,
+        max_query_length: int = 512,
     ) -> None:
-        self._encoding = tiktoken.get_encoding(encoding_name)
-        self._sparse_dim = sparse_dim
+        self._max_query_length = max_query_length
 
     @classmethod
     def from_settings(cls) -> LexicalSearch:
@@ -37,79 +31,26 @@ class LexicalSearch:
         _ = get_settings()
         return cls()
 
-    # ── Encodage ────────────────────────────────────────────────
+    # ── Construction de requête full-text ──────────────────────────
 
-    def encode(self, text: str) -> qmodels.SparseVector:
-        """Encode un texte en SparseVector Qdrant (TF normalisé L2)."""
-        tokens = self._encoding.encode(text.lower())
+    def build_query(self, text: str) -> str | None:
+        """Nettoie et valide une requête full-text pour BM25 natif.
 
-        # Compter fréquences avec hash dans l'espace sparse
-        freq: dict[int, float] = {}
-        for token in tokens:
-            idx = token % self._sparse_dim
-            freq[idx] = freq.get(idx, 0.0) + 1.0
+        Args:
+            text: Texte de la requête (sera tronqué si trop long)
 
-        # Normalisation L2 pour BM25
-        norm = math.sqrt(sum(v * v for v in freq.values()))
-        if norm > 0:
-            freq = {k: v / norm for k, v in freq.items()}
+        Returns:
+            Texte nettoyé prêt pour Prefetch, ou None si texte vide.
+        """
+        if not text or not text.strip():
+            return None
 
-        return qmodels.SparseVector(
-            indices=list(freq.keys()),
-            values=list(freq.values()),
-        )
+        cleaned = text.strip()[:self._max_query_length]
+        if not cleaned:
+            return None
 
-    def encode_batch(self, texts: list[str]) -> list[qmodels.SparseVector]:
-        """Encode une liste de textes en SparseVectors."""
-        return [self.encode(t) for t in texts]
-
-    def encode_to_dict(self, text: str) -> dict[int, float]:
-        """Encode en dict {index: value} pour utilisation directe."""
-        tokens = self._encoding.encode(text.lower())
-
-        freq: dict[int, float] = {}
-        for token in tokens:
-            idx = token % self._sparse_dim
-            freq[idx] = freq.get(idx, 0.0) + 1.0
-
-        norm = math.sqrt(sum(v * v for v in freq.values()))
-        if norm > 0:
-            freq = {k: v / norm for k, v in freq.items()}
-        return freq
-
-    def encode_batch_to_dict(self, texts: list[str]) -> list[dict[int, float]]:
-        """Encode une liste en liste de dicts."""
-        return [self.encode_to_dict(t) for t in texts]
-
-    # ── Utilitaires ─────────────────────────────────────────────
-
-    @staticmethod
-    def merge_sparse_vectors(
-        vectors: list[qmodels.SparseVector],
-        weights: list[float] | None = None,
-    ) -> qmodels.SparseVector:
-        """Fusionne plusieurs vecteurs sparse (somme pondérée)."""
-        if not vectors:
-            return qmodels.SparseVector(indices=[], values=[])
-
-        if weights is None:
-            weights = [1.0] * len(vectors)
-
-        merged: dict[int, float] = {}
-        for vec, weight in zip(vectors, weights, strict=True):
-            for idx, val in zip(vec.indices, vec.values, strict=True):
-                merged[idx] = merged.get(idx, 0.0) + val * weight
-
-        # Renormaliser
-        norm = math.sqrt(sum(v * v for v in merged.values()))
-        if norm > 0:
-            merged = {k: v / norm for k, v in merged.items()}
-
-        return qmodels.SparseVector(
-            indices=list(merged.keys()),
-            values=list(merged.values()),
-        )
+        return cleaned
 
     @property
-    def sparse_dim(self) -> int:
-        return self._sparse_dim
+    def max_query_length(self) -> int:
+        return self._max_query_length

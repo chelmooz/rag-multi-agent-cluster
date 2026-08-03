@@ -41,7 +41,24 @@ class IngestResponse(BaseModel):
     source_id: str
     chunks_created: int
     chunks_indexed: int
+    chunks_deleted: int = 0
     errors: list[str] = []
+
+
+class SourceChunk(BaseModel):
+    id: str
+    payload: dict[str, Any]
+
+
+class SourceChunksResponse(BaseModel):
+    source_id: str
+    chunks: list[SourceChunk]
+    count: int
+
+
+class DeleteSourceResponse(BaseModel):
+    source_id: str
+    chunks_deleted: int
 
 
 class EmbedRequest(BaseModel):

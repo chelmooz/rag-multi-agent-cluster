@@ -117,13 +117,13 @@ async def node_retrieve(state: PipelineState, services: PipelineServices) -> dic
     if not embeddings:
         return {"search_results": []}
     query_dense = embeddings[0]
-    query_sparse = services.lexical.encode_to_dict(query)
+    query_text = query
     top_k = state.top_k if state.top_k else (state.plan.rerank_top_k if state.plan else 8)
     use_reranker = state.use_reranker and services.reranker is not None
 
     results = await services.vector.hybrid_search(
         query_vector=query_dense,
-        query_sparse=query_sparse,
+        query_text=query_text,
         top_k=top_k * 3 if use_reranker else top_k,
         score_threshold=state.score_threshold,
     )

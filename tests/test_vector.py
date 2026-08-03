@@ -27,13 +27,19 @@ class TestCreateCollection:
             )
         )
         vector_service._client.create_collection = AsyncMock()
+        vector_service._client.create_payload_index = AsyncMock()
 
         await vector_service.create_collection(vector_size=512)
 
         vector_service._client.create_collection.assert_awaited_once()
         args = vector_service._client.create_collection.call_args.kwargs
         assert args["collection_name"] == vector_service.collection
-        assert args["sparse_vectors_config"]["bm25"] is not None
+        assert "sparse_vectors_config" not in args
+        # Vérifier que le full-text index est créé
+        vector_service._client.create_payload_index.assert_awaited_once()
+        payload_args = vector_service._client.create_payload_index.call_args.kwargs
+        assert payload_args["field_name"] == "text"
+        assert payload_args["field_schema"].type == "text"
 
     async def test_skips_when_exists(self, vector_service: VectorService) -> None:
         vector_service._client.get_collection = AsyncMock(return_value="exists")
@@ -60,7 +66,7 @@ class TestUpsertPoints:
     async def test_empty_returns_zero(self, vector_service: VectorService) -> None:
         assert await vector_service.upsert_points([]) == 0
 
-    async def test_upsert_dict_sparse(self, vector_service: VectorService) -> None:
+    async def test_upsert_basic(self, vector_service: VectorService) -> None:
         vector_service._client.upsert = AsyncMock(
             return_value=SimpleNamespace(operation_id=None)
         )
@@ -68,7 +74,6 @@ class TestUpsertPoints:
             {
                 "id": "abc",
                 "vector": [0.1, 0.2],
-                "sparse_vector": {1: 0.5, 2: 0.5},
                 "payload": {"text": "hello"},
             }
         ]
@@ -77,7 +82,8 @@ class TestUpsertPoints:
         call = vector_service._client.upsert.call_args
         qpoint = call.kwargs["points"][0]
         assert qpoint.id == "abc"
-        assert "bm25" in qpoint.vector
+        assert qpoint.vector == [0.1, 0.2]
+        assert qpoint.payload == {"text": "hello"}
 
     async def test_upsert_returns_operation_id(self, vector_service: VectorService) -> None:
         vector_service._client.upsert = AsyncMock(
@@ -86,17 +92,6 @@ class TestUpsertPoints:
         points = [{"id": "x", "vector": [1.0], "payload": {}}]
         result = await vector_service.upsert_points(points)
         assert result == 42
-
-    async def test_upsert_without_sparse(self, vector_service: VectorService) -> None:
-        vector_service._client.upsert = AsyncMock(
-            return_value=SimpleNamespace(operation_id=None)
-        )
-        points = [{"id": "x", "vector": [1.0, 0.0], "payload": {"text": "a"}}]
-        result = await vector_service.upsert_points(points)
-        assert result == 1
-        call = vector_service._client.upsert.call_args
-        qpoint = call.kwargs["points"][0]
-        assert "bm25" not in qpoint.vector
 
 
 class TestHybridSearch:
@@ -111,26 +106,17 @@ class TestHybridSearch:
         call = vector_service._client.query_points.call_args.kwargs
         assert len(call["prefetch"]) == 1  # dense only
 
-    async def test_dense_and_sparse(self, vector_service: VectorService) -> None:
+    async def test_dense_and_fulltext(self, vector_service: VectorService) -> None:
         vector_service._client.query_points = AsyncMock(
             return_value=SimpleNamespace(points=[])
         )
-        sparse = {1: 0.5, 2: 0.5}
-        await vector_service.hybrid_search([0.1], sparse, top_k=10)
+        await vector_service.hybrid_search([0.1], query_text="test query", top_k=10)
         call = vector_service._client.query_points.call_args.kwargs
-        assert len(call["prefetch"]) == 2
+        assert len(call["prefetch"]) == 2  # dense + fulltext
         assert call["limit"] == 10
-
-    async def test_sparse_as_object(self, vector_service: VectorService) -> None:
-        from qdrant_client.http import models as qmodels
-
-        vector_service._client.query_points = AsyncMock(
-            return_value=SimpleNamespace(points=[])
-        )
-        sv = qmodels.SparseVector(indices=[1], values=[0.5])
-        await vector_service.hybrid_search([0.1], sv)
-        call = vector_service._client.query_points.call_args.kwargs
-        assert len(call["prefetch"]) == 2
+        # Vérifier que le second prefetch contient le texte en query
+        second_prefetch = call["prefetch"][1]
+        assert second_prefetch.query == "test query"
 
     async def test_score_threshold_and_filter(self, vector_service: VectorService) -> None:
         from qdrant_client.http import models as qmodels
@@ -147,6 +133,67 @@ class TestHybridSearch:
         call = vector_service._client.query_points.call_args.kwargs
         assert call["score_threshold"] == 0.5
         assert call["query_filter"] == filt
+
+
+class TestDeleteSource:
+    async def test_deletes_matching_points(self, vector_service: VectorService) -> None:
+        vector_service._client.scroll = AsyncMock(
+            return_value=(
+                [SimpleNamespace(id="1"), SimpleNamespace(id="2")],
+                None,
+            )
+        )
+        vector_service._client.delete = AsyncMock(
+            return_value=SimpleNamespace(operation_id=99)
+        )
+
+        count = await vector_service.delete_source("source-1")
+        assert count == 2
+        vector_service._client.scroll.assert_awaited_once()
+        delete_call = vector_service._client.delete.call_args.kwargs
+        assert delete_call["points_selector"].points == ["1", "2"]
+
+    async def test_no_matches_returns_zero(self, vector_service: VectorService) -> None:
+        vector_service._client.scroll = AsyncMock(
+            return_value=([], None)
+        )
+        vector_service._client.delete = AsyncMock()
+
+        count = await vector_service.delete_source("source-none")
+        assert count == 0
+        vector_service._client.delete.assert_not_awaited()
+
+    async def test_multi_page_scroll(self, vector_service: VectorService) -> None:
+        vector_service._client.scroll = AsyncMock(
+            side_effect=[
+                ([SimpleNamespace(id="1")], "next"),
+                ([SimpleNamespace(id="2")], None),
+            ]
+        )
+        vector_service._client.delete = AsyncMock()
+
+        count = await vector_service.delete_source("source-2")
+        assert count == 2
+
+
+class TestScrollSourceChunks:
+    async def test_returns_payloads(self, vector_service: VectorService) -> None:
+        vector_service._client.scroll = AsyncMock(
+            return_value=(
+                [SimpleNamespace(id="1", payload={"text": "a"})],
+                None,
+            )
+        )
+        chunks = await vector_service.scroll_source_chunks("src-1")
+        assert chunks == [{"id": "1", "payload": {"text": "a"}}]
+        call = vector_service._client.scroll.call_args.kwargs
+        assert call["limit"] == 100
+
+    async def test_respects_limit(self, vector_service: VectorService) -> None:
+        vector_service._client.scroll = AsyncMock(return_value=([], None))
+        await vector_service.scroll_source_chunks("src-1", limit=25)
+        call = vector_service._client.scroll.call_args.kwargs
+        assert call["limit"] == 25
 
 
 class TestStatsHealth:

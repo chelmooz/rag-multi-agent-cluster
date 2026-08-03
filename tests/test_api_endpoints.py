@@ -414,7 +414,7 @@ class TestIngest:
         service = AsyncMock()
         service.ingest = AsyncMock(
             return_value=SimpleNamespace(
-                source_id="s1", chunks_created=3, chunks_indexed=3, errors=[]
+                source_id="s1", chunks_created=3, chunks_indexed=3, chunks_deleted=0, errors=[]
             )
         )
         app.state.ingestion_service = service
@@ -425,14 +425,14 @@ class TestIngest:
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body == {"source_id": "s1", "chunks_created": 3, "chunks_indexed": 3, "errors": []}
+        assert body == {"source_id": "s1", "chunks_created": 3, "chunks_indexed": 3, "chunks_deleted": 0, "errors": []}
         service.ingest.assert_awaited_once()
 
     def test_ingest_file_success(self, client: TestClient) -> None:
         service = AsyncMock()
         service.ingest = AsyncMock(
             return_value=SimpleNamespace(
-                source_id="f1", chunks_created=1, chunks_indexed=1, errors=[]
+                source_id="f1", chunks_created=1, chunks_indexed=1, chunks_deleted=0, errors=[]
             )
         )
         app.state.ingestion_service = service
@@ -451,7 +451,7 @@ class TestIngest:
         service = AsyncMock()
         service.ingest = AsyncMock(
             return_value=SimpleNamespace(
-                source_id="f2", chunks_created=1, chunks_indexed=1, errors=[]
+                source_id="f2", chunks_created=1, chunks_indexed=1, chunks_deleted=0, errors=[]
             )
         )
         app.state.ingestion_service = service

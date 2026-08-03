@@ -40,6 +40,8 @@ def ingestion_service() -> IngestionService:
     )
     vector = AsyncMock()
     vector.upsert_points = AsyncMock(return_value=1)
+    vector.delete_source = AsyncMock(return_value=3)
+    vector.scroll_source_chunks = AsyncMock(return_value=[])
     return IngestionService(
         ollama_pool=pool,  # type: ignore[arg-type]
         vector_service=vector,  # type: ignore[arg-type]
@@ -154,15 +156,16 @@ class TestIndexChunks:
         points = ingestion_service._vector_service.upsert_points.call_args.args[0]
         assert points[0]["id"] == embedded[0].id
         assert points[0]["vector"] == [0.1] * 768
-        assert "bm25" not in points[0]["sparse_vector"] or points[0]["sparse_vector"]
+        assert "sparse_vector" not in points[0]  # plus de sparse, full-text Qdrant
         assert points[0]["payload"]["text"]
 
-    async def test_sparse_vector_built(self, ingestion_service: IngestionService) -> None:
+    async def test_fulltext_text_in_payload(self, ingestion_service: IngestionService) -> None:
         chunks = ingestion_service.chunk_text("texte", "s1", "text")
         embedded = await ingestion_service.embed_chunks(chunks)
         await ingestion_service.index_chunks(embedded)
         points = ingestion_service._vector_service.upsert_points.call_args.args[0]
-        assert points[0]["sparse_vector"]
+        assert "text" in points[0]["payload"]
+        assert points[0]["payload"]["text"] == "texte"
 
 
 class TestIngest:
@@ -193,6 +196,63 @@ class TestIngest:
         assert result.chunks_created == 0
         assert result.errors
         assert "RuntimeError" in result.errors[0]
+
+    async def test_replace_deletes_old_chunks(
+        self, ingestion_service: IngestionService
+    ) -> None:
+        result = await ingestion_service.ingest(LONG_TEXT, "file", source_id="src-x")
+        assert result.chunks_deleted == 3
+        ingestion_service._vector_service.delete_source.assert_awaited_once_with(
+            "src-x"
+        )
+
+    async def test_replace_false_skips_delete(self, ingestion_service: IngestionService) -> None:
+        result = await ingestion_service.ingest(
+            LONG_TEXT, "file", source_id="src-x", replace=False
+        )
+        assert result.chunks_deleted == 0
+        ingestion_service._vector_service.delete_source.assert_not_awaited()
+
+    async def test_replace_delete_failure_recorded(
+        self, ingestion_service: IngestionService
+    ) -> None:
+        ingestion_service._vector_service.delete_source = AsyncMock(
+            side_effect=RuntimeError("qdrant down")
+        )
+        result = await ingestion_service.ingest(LONG_TEXT, "file", source_id="src-x")
+        assert any("delete_source" in e for e in result.errors)
+        assert result.chunks_deleted == 0
+        assert result.chunks_created > 0  # l'ingestion continue quand même
+
+    async def test_ingest_without_vector_service(self) -> None:
+        svc = IngestionService(ollama_pool=AsyncMock(), vector_service=None)
+        result = await svc.ingest("texte", "text", "s1")
+        assert result.chunks_deleted == 0
+
+    async def test_delete_source_delegates(self, ingestion_service: IngestionService) -> None:
+        deleted = await ingestion_service.delete_source("src-1")
+        assert deleted == 3
+        ingestion_service._vector_service.delete_source.assert_awaited_once_with("src-1")
+
+    async def test_delete_source_without_vector_raises(self) -> None:
+        svc = IngestionService(ollama_pool=None, vector_service=None)
+        with pytest.raises(RuntimeError, match="VectorService"):
+            await svc.delete_source("src-1")
+
+    async def test_list_source_chunks_delegates(self, ingestion_service: IngestionService) -> None:
+        ingestion_service._vector_service.scroll_source_chunks = AsyncMock(
+            return_value=[{"id": "c1", "payload": {"text": "x"}}]
+        )
+        chunks = await ingestion_service.list_source_chunks("src-1", limit=50)
+        assert chunks == [{"id": "c1", "payload": {"text": "x"}}]
+        ingestion_service._vector_service.scroll_source_chunks.assert_awaited_once_with(
+            "src-1", limit=50
+        )
+
+    async def test_list_source_chunks_without_vector_raises(self) -> None:
+        svc = IngestionService(ollama_pool=None, vector_service=None)
+        with pytest.raises(RuntimeError, match="VectorService"):
+            await svc.list_source_chunks("src-1")
 
     async def test_close_closes_deps(self, ingestion_service: IngestionService) -> None:
         await ingestion_service.close()

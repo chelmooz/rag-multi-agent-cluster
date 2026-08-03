@@ -1,4 +1,4 @@
-"""Service vectoriel (Qdrant) — hybrid search natif dense + sparse (BM25).
+"""Service vectoriel (Qdrant) — hybrid search natif dense + full-text BM25.
 
 Aligné sur le choix d'architecture : Qdrant (pas Chroma) pour le search hybride natif.
 """
@@ -17,7 +17,7 @@ class VectorServiceError(Exception):
 
 
 class VectorService:
-    """Client Qdrant async avec support hybrid search (dense + sparse).
+    """Client Qdrant async avec support hybrid search (dense + full-text BM25).
 
     Collections :
     - rag-wiki : pages du vault Obsidian (embeddings nomic-embed-text-v2-moe 768d)
@@ -48,7 +48,11 @@ class VectorService:
     # ── Collection management ────────────────────────────────────
 
     async def create_collection(self, vector_size: int = 768) -> None:
-        """Crée la collection Qdrant avec config hybrid search (dense + sparse BM25)."""
+        """Crée la collection Qdrant avec config hybrid search (dense + full-text BM25).
+
+        Le full-text index est créé sur le champ payload "text" pour un vrai BM25
+        avec IDF calculé nativement par Qdrant à la requête.
+        """
         self._vector_size = vector_size
 
         # Vérifier si la collection existe déjà
@@ -59,7 +63,7 @@ class VectorService:
         else:
             return  # Déjà existante
 
-        # Configuration hybrid search : dense vector + sparse BM25
+        # Configuration hybrid search : dense vector + full-text index sur payload.text
         await self._client.create_collection(
             collection_name=self.collection,
             vectors_config=models.VectorParams(
@@ -67,16 +71,24 @@ class VectorService:
                 distance=models.Distance.COSINE,
                 on_disk=True,  # Économise RAM pour gros index
             ),
-            sparse_vectors_config={
-                "bm25": models.SparseVectorParams(
-                    index=models.SparseIndexParams(
-                        on_disk=True,
-                    )
-                )
-            },
+            # Full-text index pour BM25 natif (remplace l'ancien sparse vector "bm25")
+            # Le champ payload "text" doit exister sur les points
             optimizers_config=models.OptimizersConfigDiff(
                 default_segment_number=2,
                 indexing_threshold=0,  # Index immédiat pour dev
+            ),
+        )
+
+        # Créer l'index full-text sur le champ "text" du payload
+        await self._client.create_payload_index(
+            collection_name=self.collection,
+            field_name="text",
+            field_schema=models.TextIndexParams(
+                type="text",
+                tokenizer=models.TokenizerType.WORD,
+                lowercase=True,
+                min_token_len=2,
+                max_token_len=20,
             ),
         )
 
@@ -89,7 +101,6 @@ class VectorService:
             points: Liste de dicts avec clés:
                 - id: str | int (UUID ou hash)
                 - vector: list[float] (dense 768d)
-                - sparse_vector: dict | models.SparseVector (BM25 sparse)
                 - payload: dict (métadonnées : text, source, type, etc.)
 
         Returns:
@@ -100,23 +111,11 @@ class VectorService:
 
         qdrant_points = []
         for p in points:
-            sparse_vec = p.get("sparse_vector")
-            if isinstance(sparse_vec, dict):
-                # Convertir dict {index: value} -> SparseVector
-                sparse_vec = models.SparseVector(
-                    indices=list(sparse_vec.keys()),
-                    values=list(sparse_vec.values()),
-                )
-
-            # Construire le dict vector pour named vectors (dense + sparse)
-            vector_dict: dict[str, Any] = {"": p["vector"]}  # "" = vecteur dense par défaut
-            if sparse_vec:
-                vector_dict["bm25"] = sparse_vec
-
+            # Seul le vecteur dense est stocké ; le full-text utilise le payload "text"
             qdrant_points.append(
                 models.PointStruct(
                     id=p["id"],
-                    vector=vector_dict,
+                    vector=p["vector"],
                     payload=p.get("payload", {}),
                 )
             )
@@ -133,18 +132,18 @@ class VectorService:
     async def hybrid_search(
         self,
         query_vector: list[float],
-        query_sparse: dict[int, float] | models.SparseVector | None,
+        query_text: str | None = None,
         top_k: int = 20,
         score_threshold: float | None = None,
         filter_: models.Filter | None = None,
     ) -> list[dict[str, Any]]:
-        """Recherche hybride : vecteur dense (sémantique) + sparse (BM25 lexical).
+        """Recherche hybride : vecteur dense (sémantique) + full-text BM25 (lexical).
 
         Utilise la fusion RRF (Reciprocal Rank Fusion) native de Qdrant.
 
         Args:
             query_vector: Embedding dense de la requête (768d)
-            query_sparse: Vecteur sparse BM25 de la requête (dict index->value ou SparseVector)
+            query_text: Texte brut pour le full-text search BM25 (optionnel)
             top_k: Nombre de résultats à retourner
             score_threshold: Seuil de score minimum (optionnel)
             filter_: Filtre Qdrant (ex: par type, source, etc.)
@@ -152,17 +151,6 @@ class VectorService:
         Returns:
             Liste de résultats avec payload, score, id.
         """
-        # Préparer le vecteur sparse
-        sparse_vector: models.SparseVector | None = None
-        if query_sparse:
-            if isinstance(query_sparse, dict):
-                sparse_vector = models.SparseVector(
-                    indices=list(query_sparse.keys()),
-                    values=list(query_sparse.values()),
-                )
-            else:
-                sparse_vector = query_sparse
-
         # Recherche hybride via Query API (Qdrant 1.9+)
         prefetch = []
         # Dense vector search
@@ -173,12 +161,11 @@ class VectorService:
                 limit=top_k * 2,  # Large candidate set pour RRF
             )
         )
-        # Sparse BM25 search
-        if sparse_vector:
+        # Full-text BM25 search (Qdrant accepte une chaîne brute comme requête full-text)
+        if query_text:
             prefetch.append(
                 models.Prefetch(
-                    query=sparse_vector,
-                    using="bm25",
+                    query=query_text,
                     limit=top_k * 2,
                 )
             )
@@ -203,6 +190,82 @@ class VectorService:
             }
             for hit in results.points
         ]
+
+    # ── Lifecycle des sources ────────────────────────────────────
+
+    async def delete_source(self, source_id: str) -> int:
+        """Supprime tous les chunks d'une source donnée.
+
+        Args:
+            source_id: Identifiant de la source à supprimer
+
+        Returns:
+            Nombre de points supprimés.
+        """
+        # Scroll pour récupérer tous les IDs des points de cette source
+        ids_to_delete: list[models.ExtendedPointId] = []
+        offset: models.ExtendedPointId | None = None
+        while True:
+            result = await self._client.scroll(
+                collection_name=self.collection,
+                scroll_filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="source_id",
+                            match=models.MatchValue(value=source_id),
+                        )
+                    ]
+                ),
+                limit=100,
+                offset=offset,
+                with_payload=False,
+                with_vectors=False,
+            )
+            points, next_offset = result
+            ids_to_delete.extend(p.id for p in points)
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        if not ids_to_delete:
+            return 0
+
+        # Suppression par IDs
+        await self._client.delete(
+            collection_name=self.collection,
+            points_selector=models.PointIdsList(points=ids_to_delete),
+            wait=True,
+        )
+        return len(ids_to_delete)
+
+    async def scroll_source_chunks(
+        self, source_id: str, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Liste les chunks d'une source (payloads sans vecteurs).
+
+        Args:
+            source_id: Identifiant de la source
+            limit: Nombre maximum de chunks à retourner
+
+        Returns:
+            Liste de dicts {id, payload} des chunks de la source.
+        """
+        result = await self._client.scroll(
+            collection_name=self.collection,
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="source_id",
+                        match=models.MatchValue(value=source_id),
+                    )
+                ]
+            ),
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+        points, _ = result
+        return [{"id": p.id, "payload": p.payload} for p in points]
 
     # ── Health & Backup ──────────────────────────────────────────
 

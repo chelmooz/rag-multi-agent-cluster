@@ -9,7 +9,7 @@
   - réglages transverses restent racine (PostgreSQL, memory_manager_enabled, similarity_threshold, monitoring_offline, chat_max_context_chars), `_sections()` itère à la volée (pas de liste figée)
   - Correctifs : ExceptionKeyError→ATTRIBUTE via `type(section).model_fields` ; `monitoring.py` cast `int()` (mypy no-any-return) ; newline `routers/__init__.py`
 - [x] **§5.4** Retirer `# mypy: disable-error-code=no-untyped-def` fichier-entier de `src/agents/langgraph_orchestrator.py` — ajouté `-> None` sur `main()` (seule fct non typée), mypy 0 erreur sur 40 fichiers
-- [ ] **§5.5** Trous de couverture (settings 87 %, memory_manager, wiki_agent) — tests branche par branche
+- [x] **§5.5** Trous de couverture (settings 87 %, memory_manager, wiki_agent) — tests branche par branche
 - [ ] **§5.6** Interface (Protocol) pour CUDA OCR et SSH async — test de logique métier sans matériel, AVANT Phase C
 - [ ] **§5.7** Cosmétique README (mypy "4 erreurs" → 0) + ROADMAP item 1.16 à re-vérifier
 
@@ -98,6 +98,27 @@
 - [ ] 3.2 Judge (hf.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M sur RTX 4000 - Machine 2 LXC 200) — **séquentiel, unload après écriture relay**
 - [ ] 3.3 Devil's Advocate (hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M sur RTX 4000 - Machine 2 LXC 201) — **séquentiel après Judge, lit relay**
 - [ ] 3.4 Evaluator (hf.co/ibm-granite/granite-4.1-8b-instruct-GGUF:Q4_K_M sur Machine 1 CPU) — **lit relay.json complet, synthèse finale**
+
+## Phase RAG-Refactor — Corrections post-audit (03/08/2026)
+- [x] R1.1 **P1 — BM25 réel via full-text Qdrant** : collection dense + text index, suppression sparse hash, hybrid_search full-text prefetch RRF — `src/services/vector.py` (Prefetch query=texte brut full-text, create_payload_index sur "text")
+- [x] R1.2 **P1 — LexicalSearch refactor** : encode* → build_query(str nettoyé), suppression sparse_dim/merge — `src/services/lexical.py`
+- [x] R1.3 **P1 — Ingestion** : suppression _build_sparse_vector + sparse_vector dans index_chunks — `src/services/ingestion.py`
+- [x] R1.4 **P1 — Orchestrator node_retrieve** : encode_to_dict → query_text — `src/agents/langgraph_orchestrator.py`
+- [x] R1.5 **P1 — Tests** : test_vector (fulltext create+hybrid+delete_source), test_lexical (build_query), test_ingestion (plus de sparse) — ruff/mypy OK
+- [x] R2.1 **P2 — Chunking structurel** : `src/services/structural_chunker.py` (parse_sections ligne-à-ligne — titres=frontières, frontmatter ignoré, tableaux/fences entiers, chemin h1>h2>h3 en métadonnées ; chunk_section token+overlap intra-section, sous-chunks préfixés) + branchement `IngestionService.chunk_text` (source md/markdown ou `_looks_like_markdown`), refactor `_make_chunk` partagé
+- [x] R2.2 **P2 — Tests** : `tests/test_structural_chunker.py` (22 tests) + intégration ingestion — ruff/mypy OK
+- [ ] R3.1 **P3 — Cycle de vie chunks** : VectorService.delete_source, IngestionService.replace=True, endpoints DELETE/GET sources
+- [ ] R3.2 **P3 — Tests** : ré-ingestion, delete, endpoints
+- [ ] R4.1 **P4 — Éval retrieval** : retrieval_eval.py (precision@k, recall@k, MRR, nDCG), dataset, script run_retrieval_eval.py
+- [ ] R4.2 **P4 — Tests** : métriques unitaires
+- [ ] R5.1 **P5 — Cache sémantique** : SemanticCache (Redis, cosinus numpy, off par défaut)
+- [ ] R5.2 **P5 — Branchement /query** + settings
+- [ ] R5.3 **P5 — Tests** : stub storage dict
+- [ ] R6.1 **P6 — Contrôle d'accès** : AccessPolicy protocol, NoAuthPolicy/ScopePolicy, payload access_scope/owner
+- [ ] R6.2 **P6 — Branchement pipeline** : PipelineState.user_filter, rag.py policy par requête
+- [ ] R6.3 **P6 — Tests** : policies, passthrough filtre
+- [ ] R7.1 **P7 — E2E** : test_pipeline_e2e.py (contrats fakes), scripts/e2e_pipeline.py
+- [ ] R7.2 **P7 — README** mise à jour post-contrats
 - [ ] 3.5 **Évaluateur écrit `verified: human-reviewed` dans frontmatter pages validées (OKF trust tier)**
 - [ ] 3.6 **Ollama model unload séquentiel** : `ollama unload` + vérif VRAM libérée entre Judge → Avocat
 

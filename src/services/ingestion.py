@@ -2,11 +2,13 @@
 
 Pipeline offline asynchrone (hors chemin critique requête) :
 Source → Chunking → Augmentation → Embedding (Ollama M1) → Qdrant upsert
+Le full-text BM256 est assuré par l'index natif Qdrant sur le champ payload "text".
 """
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from typing import Any
 
 import tiktoken
@@ -14,6 +16,8 @@ import tiktoken
 from src.services.ollama import OllamaClientPool
 from src.services.vector import VectorService
 from src.tools.injection_filter import InjectionRisk, scan
+
+_MARKDOWN_HEADING_RE = re.compile(r"^\s*#{1,6}\s+\S+")
 
 
 @dataclass(frozen=True)
@@ -35,7 +39,8 @@ class IngestionResult:
     source_id: str
     chunks_created: int
     chunks_indexed: int
-    errors: list[str]
+    chunks_deleted: int = 0
+    errors: list[str] = field(default_factory=list)
 
 
 class IngestionService:
@@ -79,9 +84,17 @@ class IngestionService:
         source_type: str,
         base_metadata: dict[str, Any] | None = None,
     ) -> list[Chunk]:
-        """Découpe un texte en chunks avec overlap (tiktoken)."""
+        """Découpe un texte en chunks avec overlap (tiktoken).
+
+        Les sources markdown (``md``/``markdown`` ou texte ressemblant à du
+        markdown) passent par le chunker structurel : frontières de sections,
+        tableaux/fences entiers, chemin de section en métadonnées.
+        """
         if not text or not text.strip():
             return []
+
+        if source_type in ("md", "markdown") or _looks_like_markdown(text):
+            return self._chunk_markdown(text, source_id, source_type, base_metadata)
 
         tokens = self._encoding.encode(text)
         if not tokens:
@@ -93,43 +106,85 @@ class IngestionService:
 
         while start < len(tokens):
             end = min(start + self._chunk_size, len(tokens))
-            chunk_tokens = tokens[start:end]
-            chunk_text = self._encoding.decode(chunk_tokens)
+            chunk_text = self._encoding.decode(tokens[start:end])
 
-            # Métadonnées du chunk
             metadata = {
                 "source_id": source_id,
                 "source_type": source_type,
                 "chunk_index": chunk_index,
-                "token_count": len(chunk_tokens),
+                "token_count": len(tokens[start:end]),
             }
             if base_metadata:
                 metadata.update(base_metadata)
 
-            # Scan anti-injection
-            injection_risk = scan(chunk_text)
-
-            chunk_id = hashlib.sha256(
-                f"{source_id}:{chunk_index}:{chunk_text[:100]}".encode()
-            ).hexdigest()[:16]
-
             chunks.append(
-                Chunk(
-                    id=chunk_id,
-                    text=chunk_text,
-                    source_id=source_id,
-                    source_type=source_type,
-                    chunk_index=chunk_index,
-                    token_count=len(chunk_tokens),
-                    metadata=metadata,
-                    injection_risk=injection_risk,
-                )
+                self._make_chunk(chunk_text, source_id, source_type, chunk_index, metadata)
             )
 
             chunk_index += 1
             start += self._chunk_size - self._chunk_overlap
 
         return chunks
+
+    def _chunk_markdown(
+        self,
+        text: str,
+        source_id: str,
+        source_type: str,
+        base_metadata: dict[str, Any] | None,
+    ) -> list[Chunk]:
+        """Découpe structurelle markdown → Chunk (chemin de section en métadonnées)."""
+        from src.services.structural_chunker import MarkdownChunker
+
+        chunker = MarkdownChunker(
+            chunk_size=self._chunk_size,
+            chunk_overlap=self._chunk_overlap,
+        )
+        chunks: list[Chunk] = []
+        for chunk_index, sc in enumerate(chunker.chunk(text)):
+            metadata = {
+                "source_id": source_id,
+                "source_type": source_type,
+                "chunk_index": chunk_index,
+                "token_count": sc.token_count,
+            }
+            if sc.heading_path:
+                metadata["section_title"] = sc.heading_path[-1]
+                metadata["heading_path"] = sc.heading_path
+            if sc.heading_level:
+                metadata["heading_level"] = sc.heading_level
+            if base_metadata:
+                metadata.update(base_metadata)
+            chunks.append(
+                self._make_chunk(sc.text, source_id, source_type, chunk_index, metadata)
+            )
+        return chunks
+
+    def _make_chunk(
+        self,
+        chunk_text: str,
+        source_id: str,
+        source_type: str,
+        chunk_index: int,
+        metadata: dict[str, Any],
+    ) -> Chunk:
+        """Construit un Chunk : id déterministe + scan anti-injection."""
+        injection_risk = scan(chunk_text)
+
+        chunk_id = hashlib.sha256(
+            f"{source_id}:{chunk_index}:{chunk_text[:100]}".encode()
+        ).hexdigest()[:16]
+
+        return Chunk(
+            id=chunk_id,
+            text=chunk_text,
+            source_id=source_id,
+            source_type=source_type,
+            chunk_index=chunk_index,
+            token_count=metadata.get("token_count", 0),
+            metadata=metadata,
+            injection_risk=injection_risk,
+        )
 
     # ── Augmentation ────────────────────────────────────────────
 
@@ -210,14 +265,9 @@ class IngestionService:
             if not embedding:
                 continue
 
-            # Construire vecteur sparse BM25 basique (TF-IDF simplifié)
-            # En production, utiliser un vrai BM25 encoder
-            sparse_vec = self._build_sparse_vector(chunk.text)
-
             points.append({
                 "id": chunk.id,
                 "vector": embedding,
-                "sparse_vector": sparse_vec,
                 "payload": {
                     "text": chunk.text,
                     "source_id": chunk.source_id,
@@ -235,25 +285,6 @@ class IngestionService:
 
         return await self._vector_service.upsert_points(points)
 
-    def _build_sparse_vector(self, text: str) -> dict[int, float]:
-        """Construit un vecteur sparse BM25 basique (token frequency).
-
-        Note: Pour production, utiliser un vrai BM25 encoder (ex: bge-m3 sparse).
-        Ici on utilise une approximation simple : hash du token -> index, freq -> value.
-        """
-        tokens = self._encoding.encode(text.lower())
-        freq: dict[int, float] = {}
-        for token in tokens:
-            idx = token % 100000  # Hash space pour sparse vector
-            freq[idx] = freq.get(idx, 0.0) + 1.0
-
-        # Normaliser (L2)
-        import math
-        norm = math.sqrt(sum(v * v for v in freq.values()))
-        if norm > 0:
-            freq = {k: v / norm for k, v in freq.items()}
-        return freq
-
     # ── Pipeline complet ────────────────────────────────────────
 
     async def ingest(
@@ -263,12 +294,25 @@ class IngestionService:
         source_id: str | None = None,
         metadata: dict[str, Any] | None = None,
         context: str | None = None,
+        replace: bool = True,
     ) -> IngestionResult:
-        """Pipeline complet d'ingestion : chunk → augment → embed → index."""
+        """Pipeline complet d'ingestion : (résuppression) → chunk → augment → embed → index.
+
+        ``replace=True`` : les chunks d'une source déjà ingérée sont supprimés
+        avant l'upsert (ré-ingestion = mise à jour, pas de doublons).
+        """
         if source_id is None:
             source_id = hashlib.sha256(text.encode()).hexdigest()[:16]
 
         errors: list[str] = []
+        chunks_deleted = 0
+
+        # 0. Remplacement : purge des chunks existants de la source
+        if replace and self._vector_service is not None:
+            try:
+                chunks_deleted = await self._vector_service.delete_source(source_id)
+            except Exception as e:
+                errors.append(f"delete_source: {type(e).__name__}: {e}")
 
         try:
             # 1. Chunking
@@ -278,6 +322,7 @@ class IngestionService:
                     source_id=source_id,
                     chunks_created=0,
                     chunks_indexed=0,
+                    chunks_deleted=chunks_deleted,
                     errors=["Aucun chunk généré (texte vide ?)"],
                 )
 
@@ -294,6 +339,7 @@ class IngestionService:
                 source_id=source_id,
                 chunks_created=len(chunks),
                 chunks_indexed=indexed,
+                chunks_deleted=chunks_deleted,
                 errors=errors,
             )
 
@@ -303,8 +349,25 @@ class IngestionService:
                 source_id=source_id,
                 chunks_created=0,
                 chunks_indexed=0,
+                chunks_deleted=chunks_deleted,
                 errors=errors,
             )
+
+    async def delete_source(self, source_id: str) -> int:
+        """Supprime tous les chunks d'une source (délégué à VectorService)."""
+        if self._vector_service is None:
+            raise RuntimeError("VectorService non initialisé")
+        return await self._vector_service.delete_source(source_id)
+
+    async def list_source_chunks(
+        self, source_id: str, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Liste les chunks d'une source (pour l'endpoint GET)."""
+        if self._vector_service is None:
+            raise RuntimeError("VectorService non initialisé")
+        return await self._vector_service.scroll_source_chunks(
+            source_id, limit=limit
+        )
 
     async def close(self) -> None:
         if self._ollama_pool:
@@ -317,3 +380,13 @@ class IngestionService:
 
     async def __aexit__(self, *args: object) -> None:
         await self.close()
+
+
+def _looks_like_markdown(text: str) -> bool:
+    """Détection heuristique d'un document markdown sur les 15 premières lignes."""
+    lines = [ln.strip() for ln in text.splitlines()[:15] if ln.strip()]
+    if not lines:
+        return False
+    return any(_MARKDOWN_HEADING_RE.match(ln) for ln in lines) or any(
+        "```" in ln or "|" in ln for ln in lines[:5]
+    )
