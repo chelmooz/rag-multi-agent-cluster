@@ -22,7 +22,7 @@
 |---|---|
 | Conception documentaire (README, docs, diagrammes) | ✅ Terminée |
 | Squelette (settings, `/health` `/ready`, relay.json, injection_filter) | ✅ Implémenté — tests 16/16 |
-| Sprint 1 Hygiène/CI (ruff 0, mypy 4 résiduelles sur `main.py`, .gitattributes, nginx/LXC 102-103 retirés) | ⚠️ **Quasi terminé** — ruff 0 erreur ✅, mypy 4 erreurs résiduelles (`response_model` vs `JSONResponse` d'erreur sur `/embed` `/ingest` `/query`) |
+| Sprint 1 Hygiène/CI (ruff 0, mypy 0, .gitattributes, nginx/LXC 102-103 retirés) | ✅ Terminé |
 | **Phase A — Pipeline RAG core** (OllamaClient, VectorService, Ingestion, endpoints) | ⏳ **EN COURS** (mock-first, D10) |
 | **Phase B — Multi-agents** (Planner, Judge/Advocate/Evaluator, build_graph) | ⏳ à faire |
 | Phase C — Déploiement hardware (LXC, Ollama, OMV, Glances) | ⏳ bloquée (machines à livrer) |
