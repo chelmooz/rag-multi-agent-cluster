@@ -1884,6 +1884,70 @@ Suite directe de la session nettoyage : élimination des 5 dernières violations
 - Smoke test 35/35 scénarios — plus aucun endpoint 500 NotImplementedError.
 - Backlog Phase 0.7/0.8 (OKF/Lint) **CLOTURÉ**.
 
+---
+
+## 03/08/2026 — Couverture `monitoring.py` 30% → 100% (46 nouveaux tests)
+
+### Contexte
+- Point ouvert audit : `src/services/monitoring.py` à 30 % — le module n'était
+  importé par aucun test existant.
+
+### Livré
+- **`tests/test_monitoring.py`** (46 tests, nouveau) :
+  - `MachineMetric`/`MachineCard` : dataclasses + `to_dict()` (raw exclu du JSON).
+  - Helpers `_status()` / `MonitoringService._fmt_mb()` (n/a, MB, GB).
+  - Offline (prédéploiement) : `summary()` cartes n/a + alert deployment —
+    fixture restore l'attribut `monitoring_offline` (évite la fuite du settings
+    singleton entre tests).
+  - Cartes M1/M2/M3 : état None (crit), nominal, seuils warn/crit (RAM Qdrant
+    28 GB, VRAM, unified BC-250, CPU load), formatage (`/ 8 GB`, `a, b`).
+  - `_cluster_checks` : httpx mocké (all up, un down, exception → tout False),
+    `_card_cluster` (ok / warn), relay via `_check_relay` (absent, trop vieux,
+    récent, erreur OS).
+  - Intégration `summary()` : snapshot complet, exception snapshot (cartes crit),
+    alerts vides, `close()`, lazy init MemoryManager.
+
+### Vérification
+- **Couverture `monitoring.py` : 100 %** (149 stmts, 0 miss).
+- ruff 0, mypy 0, format ok — 46/46 PASSED.
+- Suite complète : 342 passed (37 errors `PermissionError` Windows
+  `pytest-of-sangoku` = environnement, pré-existants, non liés).
+- Dossier orphelin `-p` (mkdir -p mal quoté) supprimé de la racine.
+- Graphify rafraîchi (`graphify update .` — 1560 nodes, 3021 edges).
+
+## 03/08/2026 — Couverture `src/api/main.py` 52% → 100% (57 nouveaux tests)
+
+### Contexte
+- Point ouvert audit : `src/api/main.py` à 52 % — helpers et endpoints non testés.
+
+### Livré
+- **`tests/test_api_endpoints.py`** (57 tests, nouveau) :
+  - Checks santé : `_check_ollama`/`_check_qdrant`/`_check_postgres`/`_check_redis`
+    (ok, error, exception), `_run_checks` (patched, with-s + asyncio.run).
+  - Lifespan : services init puis `close()`.awaité (Patch constructeurs, TestClient).
+  - Exception handler + helpers : `not_implemented_handler` (500), `_sse`/`_elapsed_ms`/
+    `_chunk_text`/`_render_card` (dict, objet, statut inconnu).
+  - `/ready` : dégradé 503 (checks Qdrant patchés) + all ok 200.
+  - `/health/memory` : disabled (memory_manager_enabled False) / enabled (snapshot).
+  - `/embed` : 503 non initialisé, succès avec/sans sparse (liste de dicts).
+  - `/ingest` : 503 texte+fichier sans init, texte OK, fichier OK ± metadata JSON.
+  - `/query` : succès, override confidence evaluator, aucun doc, conversation_history
+    passé à `run_pipeline`.
+  - OKF/lint : validate succès/400, list, show 404/400, lint.
+  - Dashboard : index HTML, partials chat/monitoring (503 et rendu), monitoring JSON.
+  - Chat SSE : offline, non initialisé, échec embedding, aucun résultat, pipeline
+    complet (tokens + done + chunks_used + sources), 1 résultat sans rerank, repli
+    contexte si génération KO, **budget `chat_max_context_chars`** (break boucle),
+    exception externe (detail = `type(e).__name__`).
+
+### Vérification
+- **Couverture `src/api/main.py` : 100 %** (349 stmts, 0 miss).
+- ruff 0, mypy 0, format ok — 57/57 PASSED.
+- Suite complète : **399 passed** (342 pré-existants + 46 monitoring + 11 net API),
+  37 errors `PermissionError` Windows inchangées (= environnement).
+- Graphify rafraîchi (`graphify update .` — 1712 nodes, 3458 edges, 140 communautés).
+
+
 
 
 
