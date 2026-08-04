@@ -19,7 +19,7 @@ Sources faisant autorité (à consulter avant toute modification des scripts `in
 - Swap NVMe recommandé (~16 Go) : les modèles 11+ Go sur une machine à 16 Go RAM unifiée ont besoin de cette marge.
 - Gouverneur GPU obligatoire (`cyan-skillfish-governor-smu`) pour le scaling de fréquence — sans lui, pas de contrôle de clock fiable sur cette puce.
 - OS : **Debian 12 (bookworm) stable** (décision 03/08/2026, revu) — Mesa 25.1+ via bookworm-backports, kernel 6.18.18 LTS pinner (apt-mark hold). Fedora 43 abandonné : nécessitait COPR pour le gouverneur GPU et `dnf versionlock` non natif.
-- BIOS : **moddé Forbidden-Darkness** (image complète, base P3.00 incluse — flash UEFI direct, aucun flash P3.00 stock préalable). **Carve-out VRAM dynamique 512 MB persistant**. Core unlock CPU **NON persistant** (SMU msg 0x98 volatil) — géré par service systemd bc250-core-unlock.service au boot.
+- BIOS : **moddé Forbidden-Darkness v2.2** (image complète, base P3.00 incluse — flash UEFI direct, aucun flash P3.00 stock préalable). **Carve-out VRAM dynamique 512 MB persistant**. Core unlock CPU **volatil** (SMU msg 0x98) — géré par service systemd `bc250-core-unlock.service` au boot.
 
 ## Ce que ce projet ne couvre pas encore
 
