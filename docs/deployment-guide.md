@@ -89,7 +89,7 @@ cd /path/to/infrastructure/docker
 docker compose -f docker-compose.vector-db.yml up -d
 
 # Vérifier
-curl http://localhost:6333/health
+curl http://localhost:6333/healthz
 curl http://localhost:6333/collections
 ```
 
@@ -267,12 +267,12 @@ df -h /data/shared                     # NFS monté depuis M1
 
 ```bash
 # Edit crontab on OMV (via SSH or WebGUI > Scheduled Jobs)
-0 2 * * * /usr/bin/borg pull --log-json root@10.10.0.1:/var/lib/qdrant/snapshots /srv/backup/borg-repo::qdrant-{hostname}-{now:%Y-%m-%d_%H-%M-%S} >> /var/log/borg/qdrant_pull.log 2>&1
+0 2 * * * /usr/bin/rsync -avz --delete root@10.10.0.1:/var/lib/qdrant/snapshots/ /srv/backup/qdrant/ >> /var/log/borg/qdrant_sync.log 2>&1
 30 2 * * * /usr/bin/rsync -avz --delete root@10.10.0.1:/data/wiki/ /srv/backup/wiki/ >> /var/log/borg/wiki_sync.log 2>&1
 30 2 * * * /usr/bin/rsync -avz --delete root@10.10.0.1:/etc/ /srv/backup/configs/m1/ >> /var/log/borg/config_sync.log 2>&1
 30 2 * * * /usr/bin/rsync -avz --delete root@10.10.0.2:/etc/ /srv/backup/configs/m2/ >> /var/log/borg/config_sync.log 2>&1
 30 2 * * * /usr/bin/rsync -avz --delete root@10.10.0.3:/etc/ /srv/backup/configs/m3/ >> /var/log/borg/config_sync.log 2>&1
-0 3 * * * /usr/bin/borg create --compression lz2 /srv/backup/borg-repo::backup-{now:%Y-%m-%d_%H-%M-%S} /srv/backup/wiki/ /srv/backup/configs/ /srv/backup/ollama-cache/ >> /var/log/borg/borg_create.log 2>&1
+0 3 * * * /usr/bin/borg create --compression zstd,6 /srv/backup/borg-repo::backup-{now:%Y-%m-%d_%H-%M-%S} /srv/backup/qdrant/ /srv/backup/wiki/ /srv/backup/configs/ /srv/backup/ollama-cache/ >> /var/log/borg/borg_create.log 2>&1
 0 5 * * 0 /usr/bin/borg prune -v --list /srv/backup/borg-repo --keep-daily=14 --keep-monthly=3 >> /var/log/borg/borg_prune.log 2>&1
 ```
 
@@ -768,7 +768,7 @@ ollama pull hf.co/ibm-granite/granite-4.1-8b-instruct-GGUF:Q4_K_M@sha256:...  # 
 ```bash
 # Depuis n'importe quel nœud du VLAN 10 (10.10.0.0/24) :
 curl http://10.10.0.100:8000/api/v1/health     # LXC 100 FastAPI
-curl http://10.10.0.101:6333/health            # LXC 101 Qdrant
+curl http://10.10.0.101:6333/healthz           # LXC 101 Qdrant
 curl http://10.10.0.105:80                      # LXC 105 OMV Web UI
 curl http://10.10.0.200:11434/api/tags         # LXC 200 Ollama GPU
 curl http://10.10.0.201:11434/api/tags         # LXC 201 Ollama CPU

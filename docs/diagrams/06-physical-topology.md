@@ -29,7 +29,7 @@ flowchart TB
         Glances["📊 Glances -w :61208<br/>Monitoring BC-250 (décision D9)<br/>CPU/RAM/temp — seul nœud hors Proxmox"]:::m3
     end
 
-    Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2) → HDD 2TB<br/>borg pull M1/M3 → borg create<br/>cron 02:00-05:00 · retention 14j/3m"]:::cold
+    Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2) → HDD 2TB<br/>rsync M1/M3 (staging) → borg create<br/>cron 02:00-05:00 · retention 14j/3m"]:::cold
 
     WAN --> GW
     GW -->|NAT + inter-VLAN| Client

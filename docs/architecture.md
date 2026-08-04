@@ -110,7 +110,7 @@ flowchart TB
 
     Relay["📄 relay.json<br/>Handoff séquentiel — 1 seul modèle<br/>chargé à la fois sur RTX 4000"]:::op
 
-    Cold["🧊 Cold save<br/>OMV LXC 105 (M2) → HDD 2TB (LUKS)<br/>borg pull M1/M3 + rsync — Qdrant + wiki + configs<br/>cron 02:00-05:00 · retention 14j/3m"]:::cold
+    Cold["🧊 Cold save<br/>OMV LXC 105 (M2) → HDD 2TB (LUKS)<br/>rsync M1/M3 (staging local) puis borg create — Qdrant + wiki + configs<br/>cron 02:00-05:00 · retention 14j/3m"]:::cold
 
     M1_100 --> M1_101
     M1_wiki --> M1_vault

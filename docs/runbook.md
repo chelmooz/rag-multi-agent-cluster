@@ -8,7 +8,7 @@ Chaque scénario = symptôme clé + commande de diagnostic + action correctrice.
 | BC250 ne boote plus | M3 | Kernel panic / freeze post-upgrade | `ssh root@m3 journalctl -b -1 -p err` |
 | RTX 4000 OOM | M2 | Juge/Avocat tué par OOM killer | `ssh root@m2 dmesg \| tail -20` |
 | NFS stale handle | M1/M2 | Relay évaluation bloqué | `showmount -e m1` depuis M2 |
-| Qdrant corruption | M1 | `/health` 503 ou erreur index | `curl -s localhost:6333/health` |
+| Qdrant corruption | M1 | `/healthz` 503 ou erreur index | `curl -s localhost:6333/healthz` |
 | OMV HDD failure | M2 | Cold save borg erreurs écriture | `ssh root@omv smartctl -a /dev/disk/by-id/...` |
 
 ---
@@ -46,7 +46,7 @@ curl -s localhost:11434/api/ps  # modèles chargés
 # Redémarrer LXC 200 (GPU passthrough)
 pct restart 200
 # Vérifier recovery
-ssh root@m2 nvidia-smi && curl -s localhost:11434/health
+ssh root@m2 nvidia-smi && curl -s localhost:11434/api/tags
 ```
 
 ## 3. NFS stale handle
@@ -68,11 +68,11 @@ systemctl restart nfs-client.target
 ```
 
 ## 4. Qdrant corruption
-**Symptôme** : `/health` de l'API renvoie 503 (Qdrant dégradé).
+**Symptôme** : `/healthz` de Qdrant renvoie 503 (Qdrant dégradé).
 
 **Diagnostic** :
 ```bash
-curl -s localhost:6333/health          # Qdrant health
+curl -s localhost:6333/healthz         # Qdrant health
 curl -s localhost:6333/collections     # liste collections
 tail -50 /var/log/qdrant/qdrant.log    # crash récent ?
 ```

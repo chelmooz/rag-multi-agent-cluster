@@ -23,7 +23,7 @@ flowchart TB
         Judge["⚖️ Juge ①<br/>DeepSeek-R1-Distill-Llama-8B · CUDA · Qualité + Cohérence"]:::m2
         Advocate["😈 Avocat ②<br/>Ministral-8B-Instruct-2410 · CUDA · Failles + Hallucinations"]:::m2
         BackupEmbed["🔢 Backup Embedding<br/>nomic-v2-moe · CPU · Xeon 20c/40t"]:::m2
-        Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2)<br/>HDD 2TB (LUKS) · borg pull<br/>Qdrant + wiki + configs<br/>cron 02:00-05:00"]:::backup
+        Cold["🧊 COLD SAVE<br/>OMV LXC 105 (M2)<br/>HDD 2TB (LUKS) · rsync staging + borg create<br/>Qdrant + wiki + configs<br/>cron 02:00-05:00"]:::backup
     end
 
     subgraph M3["⚡ M3 — BC-250 BAREMETAL · Debian 12 · Zen 2 8c/16t (core unlock systemd) · 40 CU RDNA2 · 16 GB GDDR6 (carve-out 512 MB) · Vulkan-only · 1GbE"]
@@ -43,7 +43,7 @@ flowchart TB
     Advocate -.->|②| Relay
     Relay -.-> Eval
     BackupEmbed -.-> Advocate
-    Cold -.->|borg pull M1/M3 + rsync| Orch
+    Cold -.->|rsync M1/M3 puis borg create| Orch
 
     %% RÈGLE D'OR BC-250 : le CPU est le serviteur du GPU.
     %% Toute charge CPU = vol de bande passante mémoire au Générateur 14B.
