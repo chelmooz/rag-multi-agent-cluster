@@ -245,11 +245,14 @@ class WikiAgent:
             for p in self.vault.rglob("*.md")
             if p.name not in (_INDEX_FILENAME, _LOG_FILENAME)
         ]
+        # Lire une fois chaque page pour éviter O(n²) reads
+        page_contents: list[tuple[str, str]] = []
         for page in pages:
             rel = page.relative_to(self.vault).as_posix()
             fm = self._read_frontmatter(page)
             if not fm:
                 frontmatter_issues.append(f"{rel}: frontmatter absent/invalide")
+                page_contents.append((rel, ""))
                 continue
             stale_after = fm.get("stale_after")
             if stale_after:
@@ -260,14 +263,14 @@ class WikiAgent:
                     )
                 elif date.today() > cutoff:
                     stale.append(rel)
+            page_contents.append((rel, page.read_text(encoding="utf-8")))
 
-        for page in pages:
-            rel = page.relative_to(self.vault).as_posix()
+        for rel, _content in page_contents:
             referenced = False
-            for other in pages:
-                if other is page:
+            for other_rel, other_content in page_contents:
+                if other_rel == rel:
                     continue
-                if f"[[{rel}]]" in other.read_text(encoding="utf-8"):
+                if f"[[{rel}]]" in other_content:
                     referenced = True
                     break
             if not referenced:

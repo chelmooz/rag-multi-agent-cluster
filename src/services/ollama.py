@@ -157,6 +157,28 @@ class OllamaClient:
             done: bool = data.get("done", False)
             return done
 
+    async def generate_with_images(
+        self, model: str, prompt: str, images: list[str], **kwargs: Any
+    ) -> dict[str, Any]:
+        """Génération avec images (Vision) via /api/generate.
+
+        Args:
+            model: Nom du modèle à utiliser
+            prompt: Prompt textuel
+            images: Liste d'images encodées en base64
+
+        Returns:
+            Réponse JSON complète d'Ollama.
+        """
+        payload: dict[str, Any] = {
+            "model": model,
+            "prompt": prompt,
+            "images": images,
+            "stream": False,
+        }
+        payload.update(kwargs)
+        return await self._request("POST", "/api/generate", json=payload)
+
     async def close(self) -> None:
         await self._client.aclose()
 
@@ -283,14 +305,7 @@ class OllamaClientPool:
     async def vision(self, prompt: str, image_base64: str, **kwargs: Any) -> dict[str, Any]:
         """Vision : M3 (BC250) avec image."""
         model = kwargs.pop("model", self._settings.vision_model)
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "images": [image_base64],
-            "stream": False,
-        }
-        payload.update(kwargs)
-        return await self.m3._request("POST", "/api/generate", json=payload)
+        return await self.m3.generate_with_images(model, prompt, [image_base64], **kwargs)
 
     async def fastcheck(self, prompt: str, **kwargs: Any) -> dict[str, Any]:
         """Fast-check lexical : M3 (BC250)."""

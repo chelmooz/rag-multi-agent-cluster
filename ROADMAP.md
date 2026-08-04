@@ -19,11 +19,11 @@ Phase A (RAG core, mock-first) ──► Phase B (multi-agents, mock-first) ─�
 | A5 | `LexicalSearch` helper : sparse vectors BM25 via Qdrant natif | `src/services/lexical.py` |
 | A6 | `RerankerService` : bge-reranker-v2-m3 via Ollama M2 | `src/services/reranker.py` |
 | A7 | Endpoints `/api/v1/embed`, `/api/v1/ingest`, `/api/v1/query` (hybrid search) — remplacent les stubs `NotImplementedError` | `src/api/main.py` |
-| A8 | Tests d'intégration hybrid search bout-en-bout (mocks) — `tests/test_hybrid_search.py` n'existe pas encore, sous-tâches ci-dessous mesurées par couverture réelle (01/08/2026) | `tests/test_hybrid_search.py` |
-| A8.1 | Tests unitaires `IngestionService` (chunking, augmentation, embedding batch) | `tests/test_ingestion.py` — couverture actuelle 27 % |
-| A8.2 | Tests unitaires `VectorService` (create_collection, upsert, hybrid_search) | `tests/test_vector.py` — couverture actuelle 26 % |
-| A8.3 | Tests unitaires `LexicalSearch` (BM25 sparse) | `tests/test_lexical.py` — couverture actuelle 31 % |
-| A8.4 | Tests unitaires `RerankerService` + `OllamaClient`/`OllamaClientPool` (retry, circuit-breaker, fallback) | `tests/test_reranker.py`, `tests/test_ollama.py` — couverture actuelle 33 % / 30 % |
+| A8 | Tests d'intégration hybrid search bout-en-bout (mocks) — tests répartis dans `test_vector.py`, `test_ingestion.py`, `test_api_endpoints.py::TestRealLexicalSearch`, `test_chat_memory.py`, `test_context_assembler.py`. Plus de fichier `test_hybrid_search.py` séparé (DRY — tests co-localisés avec les modules qu'ils couvrent) | `tests/test_vector.py`, `tests/test_ingestion.py`, `tests/test_api_endpoints.py` |
+| A8.1 | Tests unitaires `IngestionService` (chunking, augmentation, embedding batch) | `tests/test_ingestion.py` — ✅ 98 % |
+| A8.2 | Tests unitaires `VectorService` (create_collection, upsert, hybrid_search) | `tests/test_vector.py` — ✅ 100 % |
+| A8.3 | Tests unitaires `LexicalSearch` (BM25 sparse) | `tests/test_lexical.py` — ✅ 95 % |
+| A8.4 | Tests unitaires `RerankerService` + `OllamaClient`/`OllamaClientPool` (retry, circuit-breaker, fallback) | `tests/test_reranker.py`, `tests/test_ollama.py` — ✅ 100 % / 97 % |
 
 ## Phase B — Pipeline Multi-Agents (Sprint 2 partie 2)
 

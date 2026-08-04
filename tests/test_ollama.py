@@ -324,11 +324,12 @@ class TestPoolRouting:
 
     async def test_vision_sends_image(self, pool: OllamaClientPool) -> None:
         pool._settings.vision_model = "vision"
-        pool.m3._request = AsyncMock(return_value={})
+        pool.m3.generate_with_images = AsyncMock(return_value={})
         await pool.vision("p", "BASE64IMG")
-        call = pool.m3._request.call_args
-        assert call.args[1] == "/api/generate"
-        assert call.kwargs["json"]["images"] == ["BASE64IMG"]
+        call = pool.m3.generate_with_images.call_args
+        assert call.args[0] == "vision"
+        assert call.args[1] == "p"
+        assert call.args[2] == ["BASE64IMG"]
 
     async def test_fastcheck_routes_m3(self, pool: OllamaClientPool) -> None:
         pool._settings.fastcheck_model = "fast"
