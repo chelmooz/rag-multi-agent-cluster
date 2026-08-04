@@ -6,7 +6,7 @@ validant que ``_process_pdf``/_write_vault_note`` fonctionnent réellement.
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -88,3 +88,48 @@ class TestCleanDetTags:
         """Entrée vide → sortie vide."""
         assert PdfOcrSidecar._clean_det_tags("") == ""
         assert PdfOcrSidecar._clean_det_tags("   \n  ") == ""
+
+
+class TestProcessPdfAtomicity:
+    """_process_pdf : la note vault et l'indexation Qdrant sont une seule unité.
+
+    Régression : avant correction, un échec d'indexation après l'écriture de
+    la note laissait une page `verified: machine-confirmed` dans le vault
+    sans aucun chunk indexé derrière.
+    """
+
+    async def test_removes_note_when_ingestion_fails(
+        self, sidecar: PdfOcrSidecar, tmp_path: Path
+    ) -> None:
+        sidecar._ingestion = MagicMock()
+        sidecar._ingestion.ingest = AsyncMock(side_effect=RuntimeError("Qdrant indisponible"))
+        pdf_path = tmp_path / "rapport.pdf"
+
+        with pytest.raises(RuntimeError, match="Qdrant indisponible"):
+            await sidecar._process_pdf(pdf_path)
+
+        assert not (sidecar._vault_sources / "rapport.md").exists()
+
+    async def test_keeps_note_when_ingestion_succeeds(
+        self, sidecar: PdfOcrSidecar, tmp_path: Path
+    ) -> None:
+        sidecar._ingestion = MagicMock()
+        sidecar._ingestion.ingest = AsyncMock(return_value=MagicMock(chunks_indexed=3))
+        pdf_path = tmp_path / "rapport.pdf"
+
+        chunks_indexed = await sidecar._process_pdf(pdf_path)
+
+        assert chunks_indexed == 3
+        assert (sidecar._vault_sources / "rapport.md").exists()
+
+    async def test_no_ingestion_service_skips_indexing_without_error(
+        self, sidecar: PdfOcrSidecar, tmp_path: Path
+    ) -> None:
+        """sidecar._ingestion is None (mode OCR-seul) : note conservée, 0 chunk."""
+        sidecar._ingestion = None
+        pdf_path = tmp_path / "rapport.pdf"
+
+        chunks_indexed = await sidecar._process_pdf(pdf_path)
+
+        assert chunks_indexed == 0
+        assert (sidecar._vault_sources / "rapport.md").exists()

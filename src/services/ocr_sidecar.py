@@ -125,24 +125,32 @@ class PdfOcrSidecar(OcrEngineProtocol):
 
     # ── PDF -> images -> texte ────────────────────────────────────
 
-    def _pdf_to_images(self, pdf_path: Path, dpi: int = 300) -> list[Path]:
+    def _pdf_to_images(self, pdf_path: Path, dpi: int = 300) -> tuple[Path, list[Path]]:
+        """Rasterise chaque page en PNG dans un dossier temporaire dédié.
+
+        Retourne ``(tmp_dir, paths)`` — ``tmp_dir`` est toujours renvoyé, même
+        si ``paths`` est vide (PDF sans page), pour que l'appelant puisse
+        nettoyer le dossier sans dépendre du contenu de la liste.
+        """
         import fitz  # PyMuPDF
 
         tmp_dir = Path(tempfile.mkdtemp(prefix="ocr_sidecar_"))
-        doc = fitz.open(pdf_path)
-        mat = fitz.Matrix(dpi / 72, dpi / 72)
         paths: list[Path] = []
-        for i, page in enumerate(doc):
-            out = tmp_dir / f"page_{i + 1:04d}.png"
-            page.get_pixmap(matrix=mat).save(str(out))
-            paths.append(out)
-        doc.close()
-        return paths
+        doc = fitz.open(pdf_path)
+        try:
+            mat = fitz.Matrix(dpi / 72, dpi / 72)
+            for i, page in enumerate(doc):
+                out = tmp_dir / f"page_{i + 1:04d}.png"
+                page.get_pixmap(matrix=mat).save(str(out))
+                paths.append(out)
+        finally:
+            doc.close()
+        return tmp_dir, paths
 
     def _ocr_pdf(self, pdf_path: Path) -> str:
         """OCR un PDF entier en un seul passage multi-page."""
         self._load_model()
-        image_paths = self._pdf_to_images(pdf_path)
+        tmp_dir, image_paths = self._pdf_to_images(pdf_path)
         if self._model is None or self._tokenizer is None:
             raise RuntimeError("Modèle OCR non chargé")
         try:
@@ -158,8 +166,7 @@ class PdfOcrSidecar(OcrEngineProtocol):
                 save_results=False,
             )
         finally:
-            if image_paths:
-                shutil.rmtree(image_paths[0].parent, ignore_errors=True)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
         return self._clean_det_tags(raw)
 
     @staticmethod
@@ -230,6 +237,13 @@ class PdfOcrSidecar(OcrEngineProtocol):
 
         Retourne le nombre de chunks indexés. Lève si l'OCR est vide
         (le fichier sera classé en `_failed` par l'appelant).
+
+        La note vault et l'indexation Qdrant sont traitées comme une seule
+        unité : si l'indexation échoue après l'écriture de la note, la note
+        est supprimée avant de relever l'exception. Sans ce nettoyage, un
+        échec Qdrant laisserait une page `verified: machine-confirmed` dans
+        le vault sans aucun chunk indexé derrière — une source qui se dit
+        fiable alors qu'elle est invisible du RAG.
         """
         markdown_body = self._ocr_engine.ocr_pdf(pdf_path)
         if not markdown_body.strip():
@@ -237,8 +251,9 @@ class PdfOcrSidecar(OcrEngineProtocol):
 
         note_path = self._write_vault_note(pdf_path, markdown_body)
 
-        chunks_indexed = 0
-        if self._ingestion is not None:
+        if self._ingestion is None:
+            return 0
+        try:
             ingest_result = await self._ingestion.ingest(
                 text=markdown_body,
                 source_type="file",
@@ -248,8 +263,10 @@ class PdfOcrSidecar(OcrEngineProtocol):
                     "vault_note": str(note_path),
                 },
             )
-            chunks_indexed = ingest_result.chunks_indexed
-        return chunks_indexed
+        except Exception:
+            note_path.unlink(missing_ok=True)
+            raise
+        return ingest_result.chunks_indexed
 
     async def run_once(self) -> OcrSidecarResult:
         """Scanne l'inbox, OCRise chaque PDF, écrit la note, indexe, archive."""
