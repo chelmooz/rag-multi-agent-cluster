@@ -34,8 +34,9 @@ echo "TODO: comparer avec la liste des noyaux cassés ci-dessus avant de continu
 
 echo "=== 2. Stack de base + Mesa 25.1+ (backports Debian 12) ==="
 sudo apt update
+KERNEL_HEADERS="linux-headers-$(uname -r)"
 sudo apt install -t bookworm-backports -y mesa-vulkan-drivers vulkan-tools mesa-utils
-sudo apt install -y glmark2 linux-headers-\$(uname -r) build-essential gcc make git curl
+sudo apt install -y glmark2 "$KERNEL_HEADERS" build-essential gcc make git curl
 
 echo "=== 3. Vérification ==="
 glxinfo | grep "OpenGL version" || echo "glxinfo absent : sudo dnf install mesa-utils"
