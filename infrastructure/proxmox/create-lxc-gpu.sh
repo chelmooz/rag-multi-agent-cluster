@@ -79,6 +79,7 @@ else
     --cores 6 --memory 8192 --swap 2048 \
     --rootfs local:30 \
     --net0 name=eth0,bridge=$BRIDGE,firewall=1,ip=10.10.0.200/24,gw=$GATEWAY,type=veth \
+    --nameserver "$DNS" \
     --unprivileged 0 \
     --features nesting=1,mount=cgroup2 \
     --ostype debian \
@@ -91,9 +92,11 @@ fi
 if grep -qF "$GPU_MARKER" /etc/pve/lxc/200.conf; then
   info "Devices GPU déjà présents dans /etc/pve/lxc/200.conf — injection ignorée."
 else
-  echo "" >> /etc/pve/lxc/200.conf
-  echo "$GPU_MARKER" >> /etc/pve/lxc/200.conf
-  cat /var/lib/lxc/200/devices.conf >> /etc/pve/lxc/200.conf
+  {
+    echo ""
+    echo "$GPU_MARKER"
+    cat /var/lib/lxc/200/devices.conf
+  } >> /etc/pve/lxc/200.conf
   info "Devices GPU injectés dans /etc/pve/lxc/200.conf."
 fi
 
@@ -111,6 +114,7 @@ else
     --cores 4 --memory 8192 --swap 2048 \
     --rootfs local:30 \
     --net0 name=eth0,bridge=$BRIDGE,firewall=1,ip=10.10.0.201/24,gw=$GATEWAY,type=veth \
+    --nameserver "$DNS" \
     --unprivileged 1 --features nesting=1 \
     --ostype debian \
     --password "$PASSWORD" \

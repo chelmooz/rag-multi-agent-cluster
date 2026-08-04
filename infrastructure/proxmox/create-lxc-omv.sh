@@ -53,6 +53,7 @@ else
     --cores 2 --memory 4096 --swap 2048 \
     --rootfs local:20 \
     --net0 name=eth0,bridge=$BRIDGE,firewall=1,ip=10.10.0.105/24,gw=$GATEWAY,type=veth \
+    --nameserver "$DNS" \
     --unprivileged 1 --features nesting=1 \
     --ostype debian \
     --password "$PASSWORD" \
