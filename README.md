@@ -494,6 +494,25 @@ Ressources : [Obsidian](https://obsidian.md) · [pattern Karpathy LLM Wiki](http
 
 **Endpoints :** Ollama M1 = `http://10.10.0.1:11434`, Ollama M2 = `http://10.10.0.2:11434`, Qdrant = `http://10.10.0.1:6333`, Gateway = `10.10.0.1:80/443`
 
+### Hostnames Proxmox (infrastructure)
+
+| Machine | LXC/VM | Hostname |
+|---|---|---|
+| **M1** (Master) | `100` | `rag-master` |
+| | `101` | `rag-vectordb` |
+| | `104` (VM) | `rag-pfsense` |
+| **M2** (GPU Worker) | `105` | `rag-workers` |
+| | `200` | `rag-gpu-inference` |
+| | `201` | `rag-workers` |
+| **M3** (BC-250) | — | `rag-bc250` |
+| **Client** | — | `rag-client` |
+
+> 🔐 **Mots de passe défauts** :
+> - **root** : `root` (PVE host, LXC root, Debian admin, Docker root)
+> - **user** : `user` (LXC unprivileged containers, Docker non-root, VM users)
+>
+> Changer après installation en production.
+
 ### 🖥️ Topologie physique : machines, LXC & flux
 
 ```mermaid

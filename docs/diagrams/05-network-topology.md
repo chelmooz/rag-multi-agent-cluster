@@ -11,11 +11,11 @@ flowchart TB
 
     subgraph VLAN20["VLAN 20 · WAN — 192.168.1.0/24"]
         Internet["🌐 Internet<br/>Updates OS / modèles LLM"]:::wan
-        pfSense["🛡️ pfSense — Passerelle<br/>VM Proxmox M1 (VM 104)<br/>Routes inter-VLAN + NAT sortant + DNAT"]:::wan
+        pfSense["🛡️ pfSense — rag-pfsense<br/>VM Proxmox M1 (VM 104)<br/>Routes inter-VLAN + NAT sortant + DNAT"]:::wan
     end
 
     subgraph VLAN40["VLAN 40 · Client — 192.168.10.0/24"]
-        Obsidian["🧠 Client Obsidian<br/>Vault + Web Clipper · Web UI"]:::client
+        Obsidian["🧠 Client Obsidian — rag-client<br/>Vault + Web Clipper · Web UI"]:::client
     end
 
     subgraph VLAN30["VLAN 30 · Mgmt — 172.16.0.0/24"]
@@ -23,9 +23,9 @@ flowchart TB
     end
 
     subgraph VLAN10["VLAN 10 · Cluster — 10.10.0.0/24 — backbone 10G · MTU 9000 (jumbo frames, +15% débit)"]
-        M1["M1 — Master · 10.10.0.1<br/>2× Xeon E5-2699v4 / 32GB ECC<br/>LXC 100 Orchestrator+Wiki · LXC 101 Qdrant<br/>VM 104 pfSense · Export NFS /data/shared"]:::m1
-        M2["M2 — GPU Worker · 10.10.0.2<br/>Xeon E5-2698v4 / 64GB ECC · RTX 4000 8GB<br/>LXC 105 OMV Backup (HDD 2TB)<br/>LXC 200 Inference GPU (Reranker+Juge)<br/>LXC 201 Workers Agents (Avocat+Backup Embedding)<br/>Mount NFS /data/shared"]:::m2
-        M3["M3 — BC-250 Baremetal<br/>Zen 2 8c/16t (core unlock BIOS) · 16GB GDDR6 unifiée<br/>40 CU débloquées · Vulkan/Mesa (RADV)<br/>Générateur · Text-to-SQL · Vision · Fast-check<br/>Ollama Vulkan natif (pas de LXC)"]:::m3
+        M1["M1 — rag-master · 10.10.0.1<br/>2× Xeon E5-2699v4 / 32GB ECC<br/>LXC 100 Orchestrator+Wiki · LXC 101 Qdrant<br/>VM 104 pfSense · Export NFS /data/shared"]:::m1
+        M2["M2 — rag-gpu-inference · 10.10.0.2<br/>Xeon E5-2698v4 / 64GB ECC · RTX 4000 8GB<br/>LXC 105 OMV Backup (HDD 2TB)<br/>LXC 200 Inference GPU (Reranker+Juge)<br/>LXC 201 Workers Agents (Avocat+Backup Embedding)<br/>Mount NFS /data/shared"]:::m2
+        M3["M3 — rag-bc250 · BC-250 Baremetal<br/>Zen 2 8c/16t (core unlock BIOS) · 16GB GDDR6 unifiée<br/>40 CU débloquées · Vulkan/Mesa (RADV)<br/>Générateur · Text-to-SQL · Vision · Fast-check<br/>Ollama Vulkan natif (pas de LXC)"]:::m3
         Relay["relay.json<br/>TTL 300s"]:::relay
     end
 
