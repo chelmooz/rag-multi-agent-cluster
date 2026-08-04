@@ -5,7 +5,6 @@
 # Note : LXC 103 Monitoring retiré (décision D9) — graphs natifs Proxmox + Glances BC-250.
 set -euo pipefail
 
-PASSWORD="${PASSWORD:-root}"
 TEMPLATE="debian-12-standard_12.7-1_amd64.tar.zst"
 BRIDGE="vmbr10"
 GATEWAY="10.10.0.1"
@@ -15,6 +14,10 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()   { echo -e "${RED}[ERR]${NC} $*"; }
+
+# Pas de mot de passe root faible par défaut (ancien défaut "ctos"/"root" prévisible
+# et présent en clair dans un repo public) : PASSWORD doit être positionnée explicitement.
+[[ -n "${PASSWORD:-}" ]] || { err "Variable PASSWORD non définie. Exécuter : PASSWORD='<mot-de-passe-fort>' $0"; exit 1; }
 
 # === 0. Vérifications
 [[ $EUID -eq 0 ]] || { err "Root requis."; exit 1; }
@@ -47,6 +50,7 @@ NVIDIA_ID=$(lspci -nn -s "$NVIDIA_PCI" | grep -oP '\[\K[0-9a-f]{4}:[0-9a-f]{4}(?
 info "GPU détecté : PCI=$NVIDIA_PCI  ID=$NVIDIA_ID"
 
 # Création du fichier devices.conf pour le LXC 200
+GPU_MARKER="# CTOS GPU passthrough NVIDIA RTX 4000"
 mkdir -p /var/lib/lxc/200
 cat > /var/lib/lxc/200/devices.conf << 'NVDEV'
 lxc.cgroup2.devices.allow: c 195:* rwm
@@ -83,10 +87,15 @@ else
   info "LXC 200 créé."
 fi
 
-# Injecter les devices GPU dans la config LXC
-echo "" >> /etc/pve/lxc/200.conf
-echo "# GPU passthrough NVIDIA RTX 4000" >> /etc/pve/lxc/200.conf
-cat /var/lib/lxc/200/devices.conf >> /etc/pve/lxc/200.conf
+# Injecter les devices GPU dans la config LXC (idempotent : garde sur le marqueur)
+if grep -qF "$GPU_MARKER" /etc/pve/lxc/200.conf; then
+  info "Devices GPU déjà présents dans /etc/pve/lxc/200.conf — injection ignorée."
+else
+  echo "" >> /etc/pve/lxc/200.conf
+  echo "$GPU_MARKER" >> /etc/pve/lxc/200.conf
+  cat /var/lib/lxc/200/devices.conf >> /etc/pve/lxc/200.conf
+  info "Devices GPU injectés dans /etc/pve/lxc/200.conf."
+fi
 
 # ============================================================
 # LXC 201 — Workers Agents (Avocat + Backup Embedding CPU)
@@ -118,9 +127,9 @@ echo -e "LXC 201  ${YELLOW}10.10.0.201${NC}  Workers Agents   (4 vCPU, 8 GB, Oll
 echo -e "${GREEN}==================================${NC}"
 echo ""
 echo "Post-installation obligatoire :"
-echo "  Dans LXC 200 : installer NVIDIA drivers + Ollama CUDA"
-echo "    pct enter 200 && bash /root/setup-gpu-lxc.sh"
-echo "  Dans LXC 201 : installer Ollama CPU + NFS mount"
-echo "    pct enter 201 && bash /root/setup-worker-lxc.sh"
+echo "  LXC 200 (drivers NVIDIA + Ollama CUDA + modèles) :"
+echo "    docs/deployment-guide.md §2.4"
+echo "  LXC 201 (Ollama CPU + modèles + NFS mount) :"
+echo "    docs/deployment-guide.md §2.6"
 echo ""
 echo "ATTENTION : la VM hôte doit être rebootée après config IOMMU."

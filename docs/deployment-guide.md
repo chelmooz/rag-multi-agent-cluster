@@ -206,6 +206,7 @@ mkdir -p /srv/backup
 # HDD should be passed through from host: pct set 105 -mp0 /dev/disk/by-id/<HDD-ID>,mp=/srv/backup
 
 # Deploy OMV via Docker
+# Example --device line: adjust to actual HDD device
 docker run -d \
   --name openmediavault \
   --restart=unless-stopped \
@@ -213,7 +214,7 @@ docker run -d \
   -v /srv/backup:/srv/backup \
   -v /omv/config:/app/openmediavault/config \
   -v /omv/data:/var/lib/openmediavault \
-  --device /dev/sda:/dev/sda \  # Example - adjust to actual HDD device
+  --device /dev/sda:/dev/sda \
   --privileged \
   linuxserver/openmediavault
 

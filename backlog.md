@@ -24,6 +24,8 @@
   - **Bloqueur 2 — mot de passe LXC par défaut (déjà corrigé en `bc9fa54`)** : `PASSWORD="${PASSWORD:-ctos}"` → `root` dans `create-lxc-master.sh` + `create-lxc-gpu.sh` (exigence utilisateur root/root).
   - **Tests ajoutés** : `test_process_job_returns_serializable_result`, `test_process_job_with_minimal_services`, `test_job_result_drops_non_json_fields` (tests/test_langgraph_orchestrator.py). **493/493 tests passent** (basetemp valide ; sans basetemp : 451 pass + 39 PermissionError Windows tmp_path connus), ruff/mypy 0.
   - Non-bloquants #3-#7 conservés au backlog : API key Qdrant (D13 LAN-only), USER non-root Dockerfiles, mem_limit/cpus compose orchestrateur, CI `.github/workflows` (Phase D), NFS `/data/shared` (C2).
+- [x] **§5.16 Application non-bloquants §5.15 + correctifs (05/08/2026)** : Qdrant API key (`QDRANT_API_KEY` dans `.env.example` + `QDRANT__SERVICE__API_KEY` compose vector-db + orchestrator), USER non-root dans les 3 Dockerfiles, `cpus`/`mem_limit` compose orchestrateur + vector-db, volume NFS `/data/shared:rw` (api/langgraph/wiki). **Correctifs au passage** : `docker-compose.orchestrator.yml` avait une indentation YAML cassée (`fastapi-api:` dés-indenté sous `services:` → parser error) — corrigé, des 2 fichiers reparsables. Checks de liveness Qdrant migrés vers `/healthz` (exempt d'API key, cf. docs Qdrant) dans `health.py::_check_qdrant`, `monitoring.py::_cluster_checks` et healthcheck qdrant vector-db — évite 401 une fois la clé active. **493/493 tests passent** (basetemp valide), ruff/mypy 0.
+- [x] **§5.17 Correctifs audit scripts LXC + doc (05/08/2026)** : (1) `create-lxc-gpu.sh` — injection devices GPU idempotente : marqueur `GPU_MARKER` + `grep -qF` avant append (relance du script ne duplique plus `lxc.cgroup2.devices.allow`/`lxc.mount.entry` dans `/etc/pve/lxc/200.conf`) ; (2) références mortes `setup-gpu-lxc.sh`/`setup-worker-lxc.sh` supprimées → pointeurs vers `deployment-guide.md` §2.4/§2.6 ; (3) `deployment-guide.md` §2.5 — commentaire inline après backslash de continuation cassait `docker run` OMV → commentaire déplacé sur sa propre ligne. Vérifs : grep `\\\s*#` 0 occurrence restante, grep `setup-*-lxc` 0 occurrence. Aucune autre occurrence du piège, pas de doublon d'IP ni sur-allocation entre les 3 scripts.
 
 ## Phase 0 — Squelette & Config (FONDATIONS — à faire AVANT tout code métier)
 - [x] 0.1 Structure `src/` complète (agents, tools, core, api, services) — **+ `src/{api` corrompu supprimé, `src/models/` mort supprimé (31/07/2026)**
@@ -31,9 +33,9 @@
 - [x] 0.3 Docker Compose VectorDB (**Qdrant** + PostgreSQL + Redis) — **aligné Qdrant, restart policies ajoutées**
 - [x] 0.4 Docker Compose Orchestrator (FastAPI + LangGraph workers + Wiki Agent) — **build.context corrigé** *(nginx retiré, pfSense gère reverse proxy)*
 - [x] 0.5 Scripts Proxmox LXC (master + GPU passthrough RTX 4000) — **mis à jour D9 (31/07/2026) : LXC 102 nginx et LXC 103 Monitoring retirés des scripts**
-- [ ] 0.6 **Créer `docs/claude-md-template.md` → template CLAUDE.md pour wiki (frontmatter OKF v0.2)**
-- [ ] 0.7 **Créer `scripts/okf-lint.py` : validation frontmatter OKF + détection stale/orphelins/contradictions**
-- [ ] 0.8 **Endpoints OKF wrapper : `/api/v1/okf/validate`, `/api/v1/okf/list`, `/api/v1/okf/show`**
+- [ ] 0.6 **Créer `docs/vault-agents-template.md` → template AGENTS.md pour wiki (frontmatter OKF v0.2, renommé depuis CLAUDE.md — pas de dépendance à un modèle Claude)** — template créé, reste à copier dans le vault en prod
+- [x] 0.7 Créer `scripts/okf_lint.py` : validation frontmatter OKF + détection stale/orphelins/contradictions
+- [x] 0.8 Endpoints OKF wrapper : `/api/v1/okf/validate`, `/api/v1/okf/list`, `/api/v1/okf/show` (`src/api/routers/okf.py`)
 - [x] 0.9 Créer `infrastructure/proxmox/create-lxc-wiki-agent.sh` (LXC 100 complet) — **couvert par `create-lxc-master.sh` (LXC 100 Orchestrator + Wiki Agent, 8 vCPU/10 GB)**
 - [x] 0.10 Créer `infrastructure/docker/orchestrator.yml` + `nginx.conf` (pour dev) + 3 Dockerfiles (api, wiki-agent, langgraph) — **fix Poetry→pip install .** — **nginx.conf supprimé (D4/D9, 31/07/2026), pfSense gère le reverse proxy**
 - [x] 0.11 Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback) — **implémenté dans l'API : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé (`/health` + `/ready`)**
@@ -119,20 +121,20 @@
 - [x] R1.5 **P1 — Tests** : test_vector (fulltext create+hybrid+delete_source), test_lexical (build_query), test_ingestion (plus de sparse) — ruff/mypy OK
 - [x] R2.1 **P2 — Chunking structurel** : `src/services/structural_chunker.py` (parse_sections ligne-à-ligne — titres=frontières, frontmatter ignoré, tableaux/fences entiers, chemin h1>h2>h3 en métadonnées ; chunk_section token+overlap intra-section, sous-chunks préfixés) + branchement `IngestionService.chunk_text` (source md/markdown ou `_looks_like_markdown`), refactor `_make_chunk` partagé
 - [x] R2.2 **P2 — Tests** : `tests/test_structural_chunker.py` (22 tests) + intégration ingestion — ruff/mypy OK
-- [ ] R3.1 **P3 — Cycle de vie chunks** : VectorService.delete_source, IngestionService.replace=True, endpoints DELETE/GET sources
+- [x] R3.1 **P3 — Cycle de vie chunks** : VectorService.delete_source, IngestionService.replace=True, endpoints DELETE/GET sources
 - [x] R3.2 **P3 — Tests** : ré-ingestion, delete, endpoints
-- [ ] R4.1 **P4 — Éval retrieval** : retrieval_eval.py (precision@k, recall@k, MRR, nDCG), dataset, script run_retrieval_eval.py
-- [ ] R4.2 **P4 — Tests** : métriques unitaires
-- [ ] R5.1 **P5 — Cache sémantique** : SemanticCache (Redis, cosinus numpy, off par défaut)
-- [ ] R5.2 **P5 — Branchement /query** + settings
-- [ ] R5.3 **P5 — Tests** : stub storage dict
-- [ ] R6.1 **P6 — Contrôle d'accès** : AccessPolicy protocol, NoAuthPolicy/ScopePolicy, payload access_scope/owner
-- [ ] R6.2 **P6 — Branchement pipeline** : PipelineState.user_filter, rag.py policy par requête
-- [ ] R6.3 **P6 — Tests** : policies, passthrough filtre
-- [ ] R7.1 **P7 — E2E** : test_pipeline_e2e.py (contrats fakes), scripts/e2e_pipeline.py
-- [ ] R7.2 **P7 — README** mise à jour post-contrats
+- [x] R4.1 **P4 — Éval retrieval** : retrieval_eval.py (precision@k, recall@k, MRR, nDCG), dataset, script run_retrieval_eval.py
+- [x] R4.2 **P4 — Tests** : métriques unitaires (18 tests, `tests/test_retrieval_eval.py`)
+- [x] R5.1 **P5 — Cache sémantique** : SemanticCache (Redis, cosinus numpy, off par défaut)
+- [x] R5.2 **P5 — Branchement /query** + settings (`SEMANTIC_CACHE_ENABLED/THRESHOLD/TTL_SECONDS` — ajoutées à `.env.example` le 04/08)
+- [x] R5.3 **P5 — Tests** : stub storage dict (16 tests, `tests/test_semantic_cache.py`)
+- [x] R6.1 **P6 — Contrôle d'accès** : AccessPolicy protocol, NoAuthPolicy/ScopePolicy, payload access_scope/owner
+- [x] R6.2 **P6 — Branchement pipeline** : PipelineState.user_filter, rag.py policy par requête
+- [x] R6.3 **P6 — Tests** : policies, passthrough filtre (8 tests, `tests/test_access_policy.py`)
+- [x] R7.1 **P7 — E2E** : test_pipeline_e2e.py (contrats fakes), scripts/e2e_pipeline.py (3 tests)
+- [x] R7.2 **P7 — README** mise à jour post-contrats
 - [ ] 3.5 **Évaluateur écrit `verified: human-reviewed` dans frontmatter pages validées (OKF trust tier)**
-- [ ] 3.6 **Ollama model unload séquentiel** : `ollama unload` + vérif VRAM libérée entre Judge → Avocat
+- [x] 3.6 **Ollama model unload séquentiel** : `ollama unload` + vérif VRAM libérée entre Judge → Avocat
 
 ## Phase 4 — Wiki Persistant (Pattern Karpathy + OKF v0.2)
 - [ ] 4.1 WikiTools (read/write/append/index/log via vault Obsidian)
@@ -740,9 +742,13 @@ Wiki Agent (LXC 100)
     └── Evaluator → http://10.10.0.1:11434 (Ollama M1 CPU Granite 4.1 8B)
 ```
 
-### 5. Schema CLAUDE.md / AGENTS.md — Template pour `/data/wiki/CLAUDE.md`
+### 5. Schema CLAUDE.md / AGENTS.md — Template pour `/data/wiki/AGENTS.md`
 
-**Fichier à créer** : `docs/claude-md-template.md` → copié vers `/data/wiki/CLAUDE.md` au premier boot LXC 100.
+> **04/08/2026** : renommé CLAUDE.md → **AGENTS.md** — le nom ne dépend pas d'un
+> modèle Claude, il n'a de sens que pour opencode qui utilise déjà cette
+> convention côté dépôt de code. Template créé : `docs/vault-agents-template.md`.
+
+**Fichier créé** : `docs/vault-agents-template.md` → à copier vers `/data/wiki/AGENTS.md` au premier boot LXC 100.
 
 Contenu structuré (voir README.md section ajoutée) avec :
 - Architecture cluster pour le LLM (tableau M1/M2/M3 + modèles + endpoints)
@@ -2108,3 +2114,57 @@ Suite directe de la session nettoyage : élimination des 5 dernières violations
 
 
 
+
+## Session 04/08/2026 — Correction du batch R4-R7 + 0.6-0.8
+
+Suite à un audit go/nogo + pré-déploiement (2 blocages identifiés) et à la
+reprise d'une session interrompue en plan mode (rien n'avait été exécuté
+après « Je lance l'exécution ? ») :
+
+- [x] `.env.example` : ajout `SEMANTIC_CACHE_ENABLED` / `SEMANTIC_CACHE_THRESHOLD` / `SEMANTIC_CACHE_TTL_SECONDS` (R5.2, manquantes malgré le code déjà branché dans `settings.py`)
+- [x] `infrastructure/proxmox/create-lxc-{master,gpu,omv}.sh` : suppression du mot de passe root par défaut faible (`PASSWORD:-root`, régression depuis `PASSWORD:-ctos`) — le script refuse maintenant de s'exécuter sans `PASSWORD` positionnée explicitement
+- [x] `docs/vault-agents-template.md` créé (item 0.6, renommé CLAUDE.md → AGENTS.md)
+- [x] Cases à cocher mises à jour pour 0.7, 0.8, R3.1, 3.6, R4.1, R4.2, R5.1, R5.2, R5.3, R6.1, R6.2, R6.3, R7.1, R7.2 — vérifiées par lecture de code + exécution des tests (45/45 passés sur retrieval_eval/semantic_cache/access_policy/pipeline_e2e), pas seulement par confiance dans le message de commit
+- Crash-loop C1 (Dockerfile.langgraph / Dockerfile.wiki-agent) : déjà corrigé dans le commit `3bd9f31` (worker Redis + boucle de maintenance) — confirmé par lecture de `main()`, pas de régression
+- Reste à faire : `git add` + commit + push (rien n'était committé pour R4-R7 avant cette session), re-vérifier `ruff`/`mypy`/suite complète après les modifs ci-dessus
+
+## Session 04/08/2026 (2) — Revue clean-code (refactor > patch), 3 bugs corrigés
+
+Note d'audit : **9/10** (538/538 → 545/545 tests, ruff 0, mypy 0, couverture 90%).
+Seul point retenu : CI GitHub Actions toujours absente (`.github/workflows/` vide,
+Phase D non démarrée).
+
+Au-delà de ruff/mypy/pytest (qui ne voient que ce qu'on leur demande de voir),
+revue manuelle des zones à faible couverture pour des bugs de logique métier :
+
+- [x] **`langgraph_orchestrator.run_worker`** : `job_id` perdu (`None`) sur tout
+  échec de `process_job`, même quand le JSON était valide et le job_id
+  connaissable — casse la corrélation résultat/requête côté producteur.
+  Refactor : extraction de `_handle_raw_job()`, qui distingue JSON illisible
+  (job_id réellement inconnu) de job structurellement invalide (pas un objet)
+  de pipeline en échec (job_id préservé). 4 tests ajoutés.
+- [x] **`ocr_sidecar._process_pdf`** : note vault écrite avant l'indexation
+  Qdrant, sans rollback si `ingest()` échoue — laissait une page
+  `verified: machine-confirmed` sans chunk indexé derrière en cas de panne
+  Qdrant. Refactor : note et indexation traitées comme une unité, rollback
+  (`note_path.unlink`) si l'indexation échoue. 3 tests ajoutés.
+- [x] **`ocr_sidecar._pdf_to_images`** : `tmp_dir` non nettoyé sur PDF sans
+  page (dérivé de `image_paths[0].parent`, jamais atteint si la liste est
+  vide) + `fitz.Document` non fermé si une page lève une exception en cours
+  de rendu. Refactor : `tmp_dir` retourné explicitement par la fonction et
+  nettoyé inconditionnellement ; `doc.close()` dans un `finally`.
+
+## Session 04/08/2026 (3) — Correction doc : convention de lien du vault erronée
+
+Ré-audit sur upload identique à la v2 déjà corrigée (538/538→545/545, ruff 0,
+mypy 0, couverture 91%, note **9/10** inchangée — seul point restant : CI
+GitHub Actions absente). Revue clean-code complémentaire (wiki_agent.py,
+settings.py, ssh_client.py) :
+
+- [x] `docs/vault-agents-template.md` documentait `[[nom-de-page]]` (syntaxe
+  Obsidian standard) alors que `WikiAgent.update_index()`/`lint()` comparent
+  en réalité `[[chemin/relatif/page.md]]` (chemin complet + extension,
+  confirmé par `tests/test_wiki_agent.py::test_lint_detects_orphans`). Un
+  agent suivant l'ancienne doc aurait écrit des liens jamais reconnus par le
+  détecteur d'orphelins — page signalée orpheline malgré un lien valide.
+  Corrigé (doc uniquement, aucun changement de code).

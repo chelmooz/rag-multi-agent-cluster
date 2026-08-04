@@ -4,7 +4,6 @@
 # À exécuter sur l'hôte Proxmox M2 APRÈS create-lxc-gpu.sh (même nœud).
 set -euo pipefail
 
-PASSWORD="${PASSWORD:-root}"
 TEMPLATE="debian-12-standard_12.7-1_amd64.tar.zst"
 BRIDGE="vmbr10"
 GATEWAY="10.10.0.1"
@@ -14,6 +13,10 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()   { echo -e "${RED}[ERR]${NC} $*"; }
+
+# Pas de mot de passe root faible par défaut (ancien défaut "ctos"/"root" prévisible
+# et présent en clair dans un repo public) : PASSWORD doit être positionnée explicitement.
+[[ -n "${PASSWORD:-}" ]] || { err "Variable PASSWORD non définie. Exécuter : PASSWORD='<mot-de-passe-fort>' $0"; exit 1; }
 
 # === 0. Vérifications
 [[ $EUID -eq 0 ]] || { err "Root requis."; exit 1; }
