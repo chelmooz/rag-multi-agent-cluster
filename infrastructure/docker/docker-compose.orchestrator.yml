@@ -9,6 +9,8 @@ services:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile.api
     restart: unless-stopped
+    cpus: 2.0
+    mem_limit: 1g
     env_file:
       - ../../.env
     expose:
@@ -22,6 +24,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+    volumes:
+      - /data/shared:/data/shared:rw
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/api/v1/health"]
       interval: 30s
@@ -34,6 +39,8 @@ services:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile.langgraph
     restart: unless-stopped
+    cpus: 2.0
+    mem_limit: 2g
     env_file:
       - ../../.env
     depends_on:
@@ -45,18 +52,24 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+    volumes:
+      - /data/shared:/data/shared:rw
 
   wiki-agent:
     build:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile.wiki-agent
     restart: unless-stopped
+    cpus: 1.0
+    mem_limit: 512m
     env_file:
       - ../../.env
     volumes:
       - wiki-data:/data/wiki
       - raw-data:/data/raw
       - index-data:/data/index
+      - /data/shared:/data/shared:rw
     depends_on:
       redis:
         condition: service_healthy
@@ -66,12 +79,15 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
       - WIKI_ROOT=/data/wiki
       - RAW_ROOT=/data/raw
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    cpus: 1.0
+    mem_limit: 256m
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis-data:/data
@@ -85,6 +101,8 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    cpus: 1.0
+    mem_limit: 1g
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}

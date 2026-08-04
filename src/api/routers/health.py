@@ -40,7 +40,7 @@ async def _check_ollama(url: str) -> dict[str, Any]:
 async def _check_qdrant(url: str) -> dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-            r = await c.get(f"{url.rstrip('/')}/health")
+            r = await c.get(f"{url.rstrip('/')}/healthz")
             return {"status": "ok" if r.status_code == 200 else "error", "detail": r.status_code}
     except Exception as e:
         return {"status": "error", "detail": type(e).__name__}

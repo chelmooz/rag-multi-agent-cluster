@@ -280,7 +280,7 @@ class MonitoringService:
             except Exception:
                 return False
 
-        qdrant = check(f"{self._settings.qdrant_url}/health")
+        qdrant = check(f"{self._settings.qdrant_url}/healthz")
         ollama_m1 = check(f"{self._settings.ollama_m1_url}/api/tags")
         ollama_m2 = check(f"{self._settings.ollama_m2_url}/api/tags")
         ollama_m3 = check(f"{self._settings.ollama_m3_url}/api/tags")
