@@ -420,6 +420,23 @@ version: 1
 | `GET /api/v1/lint` | Health check wiki : pages orphelines, contradictions, gaps |
 | `GET /api/v1/embed` | Embedding texte → vecteur dense 1024d + sparse appris (bge-m3) + fallback histogramme |
 
+Payload `POST /api/v1/query` (options R5/R6) :
+
+| Champ | Rôle |
+|---|---|
+| `access_scope` / `user` | Filtre retrieval par payload (`access_scope`, `owner`) via `ScopePolicy` — défaut : aucun filtre (`NoAuthPolicy`) |
+| `evaluation_enabled` | Bascule la boucle Judge → Advocate → Evaluator (D12) |
+
+Cache sémantique (R5) : **OFF par défaut** (`SEMANTIC_CACHE_ENABLED=false`). Activé, il sert les réponses sémantiquement proches (cosinus ≥ `SEMANTIC_CACHE_THRESHOLD`, TTL `SEMANTIC_CACHE_TTL_SECONDS`) hors boucle d'évaluation ; la réponse indique `cache_hit: true`.
+
+### Évaluation du retrieval (R4)
+
+`python scripts/run_retrieval_eval.py --dataset chemin.json` — précision@k, recall@k, MRR, nDCG sur dataset `{"query", "relevant", "retrieved"}` (métriques pures dans `src/services/retrieval_eval.py`).
+
+### E2E pipeline (R7)
+
+`python scripts/e2e_pipeline.py --query "..." --evaluation` — pipeline réel post-déploiement ; contrats fakes testés dans `tests/test_pipeline_e2e.py`.
+
 ### Workflow Web Clipper
 
 1. Obsidian Web Clipper (extension navigateur) convertit les articles web en markdown

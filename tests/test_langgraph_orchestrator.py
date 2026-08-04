@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 from src.agents.langgraph_orchestrator import (
     PipelineServices,
+    _handle_raw_job,
     _job_result,
     build_graph,
     process_job,
@@ -286,3 +287,43 @@ def test_job_result_drops_non_json_fields() -> None:
     assert set(payload) == {"job_id", "query", "answer", "sources", "wiki_note"}
     assert payload["sources"] == [{"source_id": "s1", "score": 0.9}]
     json.dumps(payload, ensure_ascii=False)
+
+
+class TestHandleRawJobPreservesJobId:
+    """_handle_raw_job : régression sur la perte du job_id en cas d'échec.
+
+    Avant correction, tout échec après un json.loads réussi renvoyait
+    job_id=None, rendant le résultat impossible à recorréler côté
+    producteur pour un worker traitant plusieurs jobs.
+    """
+
+    async def test_job_id_preserved_when_process_job_fails(self, monkeypatch) -> None:
+        raw = json.dumps({"job_id": "job-42", "query": "Question ?"})
+
+        async def _boom(_job, _services):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(
+            "src.agents.langgraph_orchestrator.process_job", _boom
+        )
+
+        result = await _handle_raw_job(raw, PipelineServices())
+
+        assert result["ok"] is False
+        assert result["job_id"] == "job-42"
+
+    async def test_job_id_none_when_json_is_unreadable(self) -> None:
+        result = await _handle_raw_job("{ceci n'est pas du json", PipelineServices())
+        assert result["ok"] is False
+        assert result["job_id"] is None
+
+    async def test_job_id_none_when_json_is_not_an_object(self) -> None:
+        result = await _handle_raw_job("[1, 2, 3]", PipelineServices())
+        assert result["ok"] is False
+        assert result["job_id"] is None
+
+    async def test_ok_result_on_success(self) -> None:
+        raw = json.dumps({"job_id": "job-2", "query": "Question ?"})
+        result = await _handle_raw_job(raw, PipelineServices())
+        assert result["ok"] is True
+        assert result["job_id"] == "job-2"

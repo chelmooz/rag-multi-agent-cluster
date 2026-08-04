@@ -20,6 +20,8 @@ class QueryRequest(BaseModel):
     use_reranker: bool = True
     evaluation_enabled: bool | None = None  # Override settings
     messages: list[ChatMessage] | None = None
+    user: str | None = None  # R6 : propriétaire de la requête (filtre payload)
+    access_scope: str | None = None  # R6 : portée d'accès (filtre payload)
 
 
 class QueryResponse(BaseModel):
@@ -27,6 +29,7 @@ class QueryResponse(BaseModel):
     sources: list[str] = []
     confidence: float | None = None
     chunks_used: int = 0
+    cache_hit: bool = False  # R5 : réponse servie depuis le cache sémantique
 
 
 class IngestRequest(BaseModel):

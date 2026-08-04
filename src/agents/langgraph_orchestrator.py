@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 from langgraph.graph import END, StateGraph
+from qdrant_client import models
 from redis.asyncio import Redis
 
 from src.agents.advocate import AdvocateAgent
@@ -55,6 +56,7 @@ class PipelineState:
     top_k: int = 8
     use_reranker: bool = True
     score_threshold: float | None = None
+    user_filter: models.Filter | None = None
 
     # Sorties des nœuds
     plan: PlannerOutput | None = None
@@ -136,6 +138,7 @@ async def node_retrieve(state: PipelineState, services: PipelineServices) -> dic
         query_text=query_text,
         top_k=top_k * 3 if use_reranker else top_k,
         score_threshold=state.score_threshold,
+        filter_=state.user_filter,
     )
     reranker = services.reranker
     if use_reranker and reranker is not None and len(results) > 1:
@@ -311,11 +314,13 @@ async def run_pipeline(
     top_k: int = 8,
     use_reranker: bool = True,
     score_threshold: float | None = None,
+    user_filter: models.Filter | None = None,
 ) -> PipelineState:
     """Exécute le pipeline complet (B7) et retourne l'état final.
 
     ``evaluation_enabled`` active la boucle Judge → Avocat → Évaluateur
     (D12 : défaut OFF, 1 itération max).
+    ``user_filter`` restreint le retrieval aux chunks autorisés (R6).
     """
     graph = build_graph(services)
     app = graph.compile()
@@ -326,6 +331,7 @@ async def run_pipeline(
         top_k=top_k,
         use_reranker=use_reranker,
         score_threshold=score_threshold,
+        user_filter=user_filter,
     )
     result = await app.ainvoke(state)
     if isinstance(result, PipelineState):
@@ -386,8 +392,39 @@ async def process_job(job: dict[str, Any], services: PipelineServices) -> dict[s
         top_k=int(job.get("top_k", 8)),
         use_reranker=bool(job.get("use_reranker", True)),
         score_threshold=job.get("score_threshold"),
+        user_filter=job.get("user_filter"),
     )
     return _job_result(state, job.get("job_id"))
+
+
+async def _handle_raw_job(raw: str, services: PipelineServices) -> dict[str, Any]:
+    """Traite un message brut de la file et retourne toujours un résultat exploitable.
+
+    Distingue deux échecs bien différents pour le consommateur du côté
+    ``_RESULTS_NAME`` :
+    - JSON illisible : le job_id n'existe pas, impossible à corréler (rare —
+      corruption ou bug côté producteur).
+    - JSON valide mais pipeline en échec (Qdrant down, timeout Ollama, etc.) :
+      le job_id EST connu et doit être renvoyé, sinon l'appelant reçoit une
+      erreur anonyme qu'il ne peut pas rattacher à sa requête.
+    """
+    try:
+        job = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as exc:
+        logger.exception("Message de file illisible (JSON invalide)")
+        return {"ok": False, "error": str(exc), "job_id": None}
+    if not isinstance(job, dict):
+        logger.error("Message de file invalide (attendu un objet JSON) : %r", job)
+        return {"ok": False, "error": "job doit être un objet JSON", "job_id": None}
+
+    try:
+        result = await process_job(job, services)
+        result["ok"] = True
+    except Exception as exc:
+        logger.exception("Job en échec")
+        return {"ok": False, "error": str(exc), "job_id": job.get("job_id")}
+    else:
+        return result
 
 
 async def run_worker(redis_url: str) -> None:
@@ -405,13 +442,7 @@ async def run_worker(redis_url: str) -> None:
             if item is None:
                 continue
             _queue, raw = item
-            try:
-                job = json.loads(raw)
-                result = await process_job(job, services)
-                result["ok"] = True
-            except Exception as exc:
-                logger.exception("Job en échec")
-                result = {"ok": False, "error": str(exc), "job_id": None}
+            result = await _handle_raw_job(raw, services)
             payload = json.dumps(result, ensure_ascii=False)
             await cast(Awaitable[int], client.lpush(_RESULTS_NAME, payload))
     finally:

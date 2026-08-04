@@ -476,6 +476,24 @@ class RagSettings(BaseSettings):
         ),
         validation_alias="EVALUATION_ENABLED",
     )
+    semantic_cache_enabled: bool = Field(
+        default=False,
+        description=(
+            "Cache sémantique Redis (R5) — OFF par défaut : aucune latence ajoutée "
+            "tant que la fonctionnalité n'est pas validée sur cluster."
+        ),
+        validation_alias="SEMANTIC_CACHE_ENABLED",
+    )
+    semantic_cache_threshold: float = Field(
+        default=0.95,
+        description="Seuil de similarité cosinus (embedding) pour servir le cache.",
+        validation_alias="SEMANTIC_CACHE_THRESHOLD",
+    )
+    semantic_cache_ttl_seconds: int = Field(
+        default=3600,
+        description="Durée de vie d'une entrée du cache sémantique.",
+        validation_alias="SEMANTIC_CACHE_TTL_SECONDS",
+    )
 
 
 class Bc250Settings(BaseSettings):

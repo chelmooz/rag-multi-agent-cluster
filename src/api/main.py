@@ -48,6 +48,7 @@ __all__ = [
     "_STATIC_DIR",
     "PipelineServices",
     "Redis",
+    "_cache_redis",
     "_check_ollama",
     "_check_postgres",
     "_check_qdrant",
@@ -67,6 +68,11 @@ __all__ = [
 settings = get_settings()
 
 logger = logging.getLogger(__name__)
+
+
+def _cache_redis() -> Redis:
+    """Client Redis du cache sémantique (R5) — jetable, fermé par l'appelant."""
+    return Redis.from_url(settings.redis.url, decode_responses=True)
 
 
 @asynccontextmanager
