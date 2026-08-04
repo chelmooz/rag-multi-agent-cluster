@@ -2068,6 +2068,32 @@ Suite directe de la session nettoyage : élimination des 5 dernières violations
 - Le `__init__.py` de `routers/` est présent (indispensable setuptools `find_packages`, sinon l'API ne serait pas embarquée dans le wheel).
 - Roadmap restante : **3)** settings.py, **4)** mypy no-untyped-def, **5)** trous couverture, **6)** stratégie hardware absent, **7)** cosmétique docs.
 
+---
+
+## 04/08/2026 — Audit Go/No-Go pré-déploiement : trous d'installation LXC
+
+**Score audit** : 16/20 — GO conditionnel pour Phase C.
+
+**Constats (audit croisé scripts ↔ deployment-guide)** :
+1. **LXC 105 (OMV Backup)** : aucun script de création Proxmox existant (le grep `105` sur `infrastructure/` ne retournait rien).
+2. **LXC 201 (Workers Agents)** : aucune section post-installation (seulement §5 modèles + commentaire dans `create-lxc-gpu.sh`), alors que LXC 200 (2.4) et LXC 105 (2.5) en avaient une.
+3. **VM 104 (pfSense)** : création limitée à un `warn` + commande suggérée, et §4.3 réduit à 2 règles firewall.
+
+**Corrections livrées** :
+- **`infrastructure/proxmox/create-lxc-omv.sh`** (NOUVEAU) : crée LXC 105 `rag-omv` (2 vCPU/4GB/20GB, lié `vmbr10`), détection auto HDD ~2TB (`lsblk` → awk) + passthrough `mp0 → /srv/backup` (avec `|| true` anti-piège `set -euo pipefail`).
+- **`create-lxc-master.sh` / `create-lxc-gpu.sh`** : `PASSWORD` par défaut `ctos` → `root` (exigence `root/root`).
+- **`deployment-guide.md`** :
+  - §2.2 : ajout `bash create-lxc-omv.sh`
+  - **§2.6 (nouveau)** : Post-installation LXC 201 (Ollama CPU + override `OLLAMA_HOST`/`MAX_LOADED_MODELS`/`KEEP_ALIVE`, pulls Ministral-8B + bge-m3 via `hf.co/gpustack/bge-m3-GGUF:Q4_K_M`, mount NFS relay, vérifs curl/df)
+  - §2.6 Cron → **§2.7** (renumérotation)
+  - §4.3 pfSense enrichi : création VM `qm create 104`, NAT sortant, DNAT 443→100:8000, règles inter-VLAN (rule de cloisonnement 80/443 seul accès cluster), TLS (CA interne CTOS / Let's Encrypt), HAProxy, validation curl bidirectionnelle
+  - §5 LXC 201 : ref vers §2.6 + modèle bge-m3 corrigé (`hf.co/gpustack/bge-m3-GGUF:Q4_K_M`)
+  - Sommaire : sous-sections M2 ajoutées
+
+**Couverture résultante** (chaque LXC : création ✅ → post-install ✅ → modèles ✅ → vérif ✅) :
+- 100 ✅ (master.sh + §1.3 + §5 + §6) · 101 ✅ · 104 ✅ (qm command + §4.3 enrichi)
+- 105 ✅ (omv.sh + §2.5 + §4.4 + §6) · 200 ✅ · 201 ✅ (gpu.sh + §2.6 nouveau + §5 + §6)
+
 
 
 

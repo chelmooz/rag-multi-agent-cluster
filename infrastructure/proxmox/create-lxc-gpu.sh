@@ -5,7 +5,7 @@
 # Note : LXC 103 Monitoring retiré (décision D9) — graphs natifs Proxmox + Glances BC-250.
 set -euo pipefail
 
-PASSWORD="${PASSWORD:-ctos}"
+PASSWORD="${PASSWORD:-root}"
 TEMPLATE="debian-12-standard_12.7-1_amd64.tar.zst"
 BRIDGE="vmbr10"
 GATEWAY="10.10.0.1"

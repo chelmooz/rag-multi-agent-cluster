@@ -15,6 +15,12 @@ Plan d'installation pas-à-pas pour les 3 machines du cluster.
 
 ---
 
+Sous-section M2 :
+- [2.4 Post-installation LXC 200 (Inference GPU)](#24-post-installation-lxc-200-inference-gpu)
+- [2.5 Post-installation LXC 105 (OMV Backup)](#25-post-installation-lxc-105-omv-backup)
+- [2.6 Post-installation LXC 201 (Workers Agents)](#26-post-installation-lxc-201-workers-agents--avocat--backup-embedding)
+- [2.7 Cron OMV Backup (heures creuses IA)](#27-cron-omv-backup-heures-creuses-ia)
+
 Sous-section M3 :
 - [3.8 Ollama Vulkan](#38-ollama-vulkan)
 - [3.8.1 llama.cpp Vulkan (alternative directe à Ollama)](#381-llamacpp-vulkan-alternative-directe-à-ollama)
@@ -140,7 +146,8 @@ reboot
 
 ```bash
 cd infrastructure/proxmox
-bash create-lxc-gpu.sh
+bash create-lxc-gpu.sh     # LXC 200 (GPU) + LXC 201 (Workers)
+bash create-lxc-omv.sh     # LXC 105 (OMV Backup, HDD 2TB passthrough)
 ```
 
 ### 2.3 Monitoring — graphs natifs Proxmox uniquement
@@ -224,7 +231,38 @@ ssh-keygen -t ed25519 -f /root/.ssh/omb_backup -N ""
 borg init --encryption=repokey /srv/backup/borg-repo
 ```
 
-### 2.6 Cron OMV Backup (heures creuses IA)
+### 2.6 Post-installation LXC 201 (Workers Agents — Avocat + Backup Embedding)
+
+```bash
+pct enter 201
+
+# Ollama CPU (pas de GPU — fallback embedding + avocat)
+curl -fsSL https://ollama.com/install.sh | sh
+mkdir -p /etc/systemd/system/ollama.service.d
+cat > /etc/systemd/system/ollama.service.d/override.conf << 'EOF'
+[Service]
+Environment=OLLAMA_HOST=0.0.0.0
+Environment=OLLAMA_MAX_LOADED_MODELS=2
+Environment=OLLAMA_KEEP_ALIVE=5m
+EOF
+systemctl daemon-reload && systemctl restart ollama
+systemctl enable ollama
+
+# Modèles LXC 201 (Avocat + Backup Embedding CPU)
+ollama pull hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M   # Avocat (~4.91 Go)
+ollama pull hf.co/gpustack/bge-m3-GGUF:Q4_K_M                        # Backup Embedding
+
+# NFS mount relay (évaluation séquentielle via relay.json)
+mkdir -p /data/shared
+echo "10.10.0.1:/data/shared /data/shared nfs rw,hard,intr,noatime 0 0" >> /etc/fstab
+mount -a
+
+# Vérification
+curl http://localhost:11434/api/tags   # liste les 2 modèles
+df -h /data/shared                     # NFS monté depuis M1
+```
+
+### 2.7 Cron OMV Backup (heures creuses IA)
 
 ```bash
 # Edit crontab on OMV (via SSH or WebGUI > Scheduled Jobs)
@@ -617,12 +655,55 @@ docker compose -f docker-compose.orchestrator.yml up -d
 
 ### 4.3 Reverse Proxy & TLS (pfSense VM 104)
 
-pfSense (VM 104 sur M1) gère le reverse proxy, la terminaison TLS et le NAT. Configurez-le via l'interface web :
+pfSense (VM 104 sur M1, hostname `rag-pfsense`) gère le reverse proxy, la terminaison TLS, le NAT et le firewall inter-VLAN. Configuration via l'interface web (`https://192.168.1.1` ou `10.10.0.254`).
 
-1. **Interface LAN (VLAN 10)** : IP `10.10.0.254/24`
-2. **Firewall rule** : Autoriser `TCP 80/443` depuis VLAN 40 (Client) → DNAT vers `10.10.0.100:8000` (LXC 100)
-3. **TLS** : Générer ou importer un certificat (Let's Encrypt pour LAN, ou auto-signé via pfSense CA)
-4. **NAT outbound** : Autoriser M1/M2/M3 à sortir vers Internet (VLAN 20) pour updates/modèles
+**Préparation** : créer la VM depuis l'hôte Proxmox M1 (cf. §1.2) :
+
+```bash
+# Depuis l'hôte Proxmox M1
+qm create 104 --name rag-pfsense --cores 1 --memory 512 \
+  --net0 virtio,bridge=vmbr10 --net1 virtio,bridge=vmbr1 \
+  --cdrom local:iso/pfSense-CE-2.7.2-RELEASE-amd64.iso --ostype other
+qm start 104
+```
+
+**Configuration pas-à-pas (WebUI)** :
+
+1. **Interfaces**
+   - WAN (net1/vmbr1) : IP via DHCP ou statique `192.168.1.1/24` (VLAN 20)
+   - LAN (net0/vmbr10) : IP `10.10.0.254/24` (VLAN 10 — cluster)
+   - Ajouter une interface VLAN 40 si le Client est routé : IP `10.10.10.254/24`
+
+2. **NAT sortant (VLAN 10 → Internet)**
+   - `Firewall → NAT → Outbound` : Mode "Hybrid" (ou Auto)
+   - Règle : interface WAN, source `10.10.0.0/24` → tout, NAT vers IP WAN
+   - Permet à M1/M2/M3 de tirer les updates et modèles
+
+3. **DNAT entrant (VLAN 40 Client → LXC 100)**
+   - `Firewall → NAT → Port Forward`
+   - Proto TCP, dest WAN `192.168.1.1:443` → redirect `10.10.0.100:8000` (LXC 100 FastAPI)
+   - Même règle pour `80` → `10.10.0.100:8000` (redirection 80→443)
+
+4. **Règles firewall inter-VLAN**
+   - `Firewall → Rules → LAN (VLAN 10)` : Autoriser `TCP 80/443` de VLAN 40 (Client) vers `10.10.0.100` (LXC 100) — **seule entrée** autorisée vers le cluster
+   - Bloquer tout autre accès depuis VLAN 40 (défaut pfSense : deny)
+   - Autoriser `TCP 22` (SSH) depuis VLAN 30 (Admin/Mgmt) vers M1/M2 (provisioning)
+   - Autoriser `TCP 11434`, `TCP 6333`, `TCP 61208`, `TCP 2049` **uniquement** depuis VLAN 10 (cluster) — jamais depuis WAN/VLAN 40
+
+5. **TLS**
+   - `System → Cert. Manager` : générer un CA interne CTOS + cert serveur `rag.pfsense.local` (ou import Let's Encrypt si domaine public)
+   - `System → Advanced → Admin Access` : HTTPS forcé
+   - Reverse proxy HTTP→HTTPS : `Services → HAProxy` ou règle NAT 80→443 (recommandé : HAProxy terminate TLS → backend `10.10.0.100:8000`)
+
+6. **Validation**
+   ```bash
+   # Depuis le Client (VLAN 40) :
+   curl -k https://192.168.1.1/api/v1/health          # réponse LXC 100 via TLS
+   # Depuis M3 (VLAN 10) :
+   curl http://10.10.0.254/api/v1/health               # réponse via LAN (no TLS)
+   ```
+
+7. **Export config** (versionnée) :
 
 ```bash
 # Sur M1 hôte : exporter la configuration pfSense
@@ -653,9 +734,11 @@ ollama pull hf.co/gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M@sha256:...
 
 ### Machine 2 — LXC 201 (CPU, fallback)
 
+> Installation complète (Ollama + NFS + override systemd) : cf. §2.6.
+
 ```bash
 ollama pull hf.co/bartowski/Ministral-8B-Instruct-2410-GGUF:Q4_K_M@sha256:...
-ollama pull bge-m3@sha256:...
+ollama pull hf.co/gpustack/bge-m3-GGUF:Q4_K_M@sha256:...
 ```
 
 ### Machine 3 — BC-250 (Vulkan)
