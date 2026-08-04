@@ -12,10 +12,11 @@
 - [x] **§5.5** Trous de couverture (settings 87 %, memory_manager, wiki_agent) — tests branche par branche
 - [x] **§5.8** Fix régression R1 (03/08/2026) : `LexicalSearch` migré vers full-text natif Qdrant — deux callers legacy non mis à jour (`dashboard.py::_retrieve`, `embedding.py::embed`) causant `AttributeError` masqués par mocks non contraints (`MagicMock()` sans `spec=`). Corrections : `_retrieve` → `lexical.build_query()` + `query_text=` ; `embed` → `sparse_vectors=None` (BM25 natif calculé à la requête) ; durcissement mocks `spec=LexicalSearch`/`spec=VectorService` + test intégration réel `TestRealLexicalSearch` ; ruff/mypy 0, 422 tests passent.
 - [x] **§5.6** Interface (Protocol) pour CUDA OCR et SSH async — test de logique métier sans matériel, AVANT Phase C — **03/08/2026** : créés `SSHClientProtocol` (execute/close) et `OcrEngineProtocol` (ocr_pdf). `MemoryManager.__init__` accepte `ssh_m2`/`ssh_m3` injectables via Protocol (factory `_create_ssh_client` par défaut). `PdfOcrSidecar` implémente `OcrEngineProtocol` (`ocr_pdf` délègue à `_ocr_pdf`), injectable pour tests sans CUDA. Tests : `TestRealSSHInjection` (3 tests, mock `spec=SSHClientProtocol` injecté via constructeur) + `TestOcrEngineProtocol`/`TestWriteVaultNote` (3 tests, moteur mocké). 465/465 tests passent, ruff/mypy 0.
-- [x] **§5.7** Cosmétique README (mypy "4 erreurs" → 0) + ROADMAP item 1.16 à re-vérifier
+- [x] **§5.7** Cosmétique README + ROADMAP hygiène — **04/08/2026** : mypy "4 erreurs → 0" (§5.4), smoke count 32/33 → **35/35** (README + ROADMAP + backlog), ROADMAP item 1.16 = ✅ FAIT (fichiers commités).
 - [x] **§5.9** Tests R3.2 : branches d'erreur `ingestion.py` routeur (DELETE /sources, GET /sources/{id}/chunks) → 100 % — **04/08/2026** : 5 tests ajoutés dans `TestIngest` via `TestClient` (mock service). 470/470 tests passent, ruff/mypy 0.
 - [x] **§5.10** Exploiter §5.6 : tests implémentations `ssh_client.py`/`ocr_sidecar.py` — **04/08/2026** : `tests/test_ssh_client.py` (11 tests : connect/execute/timeout/erreur/close/context-manager via mock asyncssh) + `TestCleanDetTags` (3 tests `_clean_det_tags`). 484/484 tests passent, ruff/mypy 0.
 - [x] **§5.11** Tests R3.2 routeur `ingestion.py` (branched 86-108) → 100 % — **04/08/2026** : `tests/test_ingestion_router.py` (6 tests : DELETE success/500/503, GET chunks success/500/503 via TestClient). 490/490 tests passent, ruff/mypy 0.
+- [x] **§5.12 Hygiène backlog** — **04/08/2026** : correction incohérences pré-déploiement — 0.13 mTLS marqué RETIRÉ (cf. D3), 0.29 coché (agents existants, `query_rewriter.py` fusionné dans `rewriter.py`), 0.22 runbook créé (`docs/runbook.md` 5 scénarios), smoke count 32/33 → **35/35** partout (README + ROADMAP + backlog).
 
 ## Phase 0 — Squelette & Config (FONDATIONS — à faire AVANT tout code métier)
 - [x] 0.1 Structure `src/` complète (agents, tools, core, api, services) — **+ `src/{api` corrompu supprimé, `src/models/` mort supprimé (31/07/2026)**
@@ -30,23 +31,23 @@
 - [x] 0.10 Créer `infrastructure/docker/orchestrator.yml` + `nginx.conf` (pour dev) + 3 Dockerfiles (api, wiki-agent, langgraph) — **fix Poetry→pip install .** — **nginx.conf supprimé (D4/D9, 31/07/2026), pfSense gère le reverse proxy**
 - [x] 0.11 Intégrer healthchecks Ollama M1/M2/M3 dans wiki-agent (retry + fallback) — **implémenté dans l'API : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé (`/health` + `/ready`)**
 - [ ] 0.12 Test d'ingestion bout-en-bout : source → embed M1 → index Qdrant → wiki pages → index.md/log.md
-- [ ] 0.13 **Configurer mTLS pour API interne (certs auto-signés via pfSense CA) — BLOQUANT PROD**
+- [x] ~~0.13~~ **mTLS interne** — RETIRÉ (cf. D3 §997 : pfSense gère inter-VLAN, aucune API exposée → mTLS optionnel futur) — **pas bloquant prod pour la v1**
 - [x] ~~0.14 **Prometheus exporter custom wiki-agent**~~ **RETIRÉ** (cf. D9, 31/07/2026) — pas de Prometheus déployé en v1, metrics consultables via logs applicatifs
-- [ ] 0.15 **Git sidecar auto-commit dans LXC 100** (cron 1h) pour versioning wiki hors OMV
+- [ ] 0.15 **Git sidecar auto-commit dans LXC 100** (cron 1h) pour versioning wiki — lien avec 0.20
 - [ ] 0.16 **Secrets management** : `sops` + `.env.encrypted` ou HashiCorp Vault (Phase 7) — **pas de CHANGE_ME en prod**
 - [x] 0.17 **Health checks obligatoires** : `/health` + `/ready` sur CHAQUE service Docker — **implémenté : checks Qdrant/Ollama M1-M3/PostgreSQL/Redis + 503 si dégradé** — ~~Prometheus scrape~~ retiré (cf. D9), consultation directe `curl`/Glances
-- [x] 0.18 **Script `scripts/smoke_test_frontend_api.py`** (32 scénarios) — **32/32 PASSED**
+- [x] 0.18 **Script `scripts/smoke_test_frontend_api.py`** (35 scénarios) — ✅ **35/35 PASSED**
 - [x] 0.19 **API Versioning** : stratégie URL path `/api/v1/` + header `Accept` — **prefix `/api/v1/` en place via `settings.api_prefix` (31/07/2026) ; header `Accept` à compléter lors de l'implémentation des endpoints (A7)**
 - [ ] 0.20 **Concurrency lock vault Obsidian** : NFS `no_root_squash` + `fcntl` locking OU git sidecar (voir 0.15)
 - [ ] 0.21 **Backup Qdrant** : `qdrant snapshot create` cron quotidien → stocké sur OMV M2 (HDD 2TB)
-- [ ] 0.22 **Runbooks incidents** : "BC250 ne boot plus", "RTX 4000 OOM", "NFS stale handle", "Qdrant corruption", "OMV HDD failure"
+- [x] 0.22 **Runbooks incidents créés** (`docs/runbook.md`) : BC250 ne boot plus, RTX 4000 OOM, NFS stale handle, Qdrant corruption, OMV HDD failure — 5 scénarios avec diagnostic + action
 - [ ] 0.23 **Kernel upgrade hook BC250** : script `rebuild-cu-unlock.sh` déclenché par `apt` hook `kernel-postinst` + `dracut -f`
 - [x] 0.24 **BC250 config centralisée** : 15 variables dans `settings.py` + `.env.example` (CU count, core unlock, TTM, governor, GRUB triplet, Mesa, kernel, scripts paths)
 - [ ] 0.25 **Créer `infrastructure/proxmox/create-lxc-omv.sh`** (LXC 105 OMV Backup avec passthrough HDD 2TB)
 - [ ] 0.26 **Créer `infrastructure/docker/docker-compose.omv.yml`** (stack OMV via Docker)
 - [ ] 0.27 **Documenter passage HDD 2TB en passthrough vers LXC 105** (`pct set 105 -mp0 /dev/disk/by-id/...,mp=/srv/backup`)
 - [ ] 0.28 **Configurer secrets OMV** : clés SSH, borg repo, variables d'environnement dans `.env`
-- [ ] 0.29 **Créer fichiers agents manquants** : `src/agents/planner.py`, `src/agents/query_rewriter.py`, `src/agents/context_assembler.py` (stubs avec NotImplementedError)
+- [x] 0.29 **Agents créés** : `planner.py`, `rewriter.py` (inclut query rewriting — `query_rewriter.py` fusionné dans `rewriter.py`, nom obsolète retiré du backlog), `context_assembler.py`, `judge`, `advocate`, `evaluator`, `generator`, `wiki_agent.py` — tous importables, `planner` et `rewriter` testés (suite 6/6)
 
 ## Analyse post-audit (30/07/2026)
 
@@ -54,11 +55,11 @@
 1. **0.3** ✅ Qdrant + restart policies
 2. **0.10** ✅ Dockerfiles fixés (Poetry→pip) + build.context orchestrator
 3. **0.17** ✅ `/ready` avec checks réels (Qdrant/Ollama×3/PostgreSQL/Redis)
-4. **0.18** ✅ Smoke tests 32 scénarios (46/46 tests suite complète)
+4. **0.18** ✅ Smoke tests 35 scénarios (490/490 tests suite complète)
 5. **0.5** → Scripts Proxmox LXC (master + GPU passthrough)
-6. **0.1** Implémenter les corps d'agents manquants (Judge, Avocat, Evaluator, Generator, Wiki)
+6. **0.1** Implémenter les corps d'agents manquants (Judge, Avocat, Evaluator, Generator, Wiki) — ✅ (cf §5.6-5.11 : implémentés + tests)
 7. **0.16** Secrets management (sops / Vault)
-8. **0.13** mTLS interne (bloquant prod)
+8. **0.13** mTLS interne — RETIRÉ (cf. D3 §997 : pfSense inter-VLAN suffit, rien exposé à Internet)
 9. **0.19** API Versioning dans le routeur FastAPI
 
 ### Incohérences résolues (build 31/07/2026)
@@ -71,7 +72,7 @@
 | `src/core/settings.py` | `postgres_password = "CHANGE_ME"` en dur | **✅ Validator prod** lève `InsecurePasswordConfigError` déjà en place |
 | `.env.example` / `src/core/settings.py` | `ADVOCATE_MODEL=mistral-small-3.2:7b` — modèle inexistant à cette taille (Mistral Small 3.2 = 24B/14.3 Go, incompatible RTX 4000 8 Go) | **✅ remplacé par Ministral-8B-Instruct-2410 Q4_K_M (4.91 Go), résolu via hf.co/bartowski/...** |
 | `tests/test_api.py` | ~~`test_ready` attend 200 fixe~~ | **✅ accepte 200 ou 503** |
-| `scripts/smoke_test_frontend_api.py` | ~~`NotImplementedError` stub~~ | **✅ 32 scénarios passent** |
+| `scripts/smoke_test_frontend_api.py` | ~~`NotImplementedError` stub~~ | **✅ 35 scénarios, 35/35 PASSED** |
 
 ## Phase 1 — Pipeline RAG Core (Master LXC 100-101) — **À FAIRE — AUCUNE TÂCHE LIVRÉE (audit 31/07/2026)**
 
@@ -558,7 +559,7 @@ Fichier JSON unique partagé M1↔M2 (via **NFS mount** `/data/shared` entre Mac
 | **Secrets management absent** | `.env.example` a des `CHANGE_ME` — pas de solution prod | → Phase 7 : `sops` + `.env.encrypted` ou HashiCorp Vault |
 | **VectorDB incohérence** | `docker-compose.vector-db.yml` = Chroma, README = Qdrant | → **Corriger maintenant** : Qdrant (hybrid search natif) |
 | **Health checks = 0** | Pas d'observabilité avant Phase 7 | → Ajouter `/health` + `/ready` sur chaque service dès Phase 0 *(déjà fait, cf. 0.17)* — ~~Prometheus scrape~~ retiré, consultation directe possible via `curl`/Glances |
-| **Tests d'intégration = 0** | `scripts/test_frontend_api.py` référencé mais absent | → ✅ Écrire `smoke_test_frontend_api.py` (32 scénarios) — **32/32 PASSED**, nom corrigé dans README |
+| **Tests d'intégration = 0** | `scripts/test_frontend_api.py` référencé mais absent | → ✅ Écrire `smoke_test_frontend_api.py` (35 scénarios) — **35/35 PASSED**, nom corrigé dans README |
 | **API Versioning absent** | `/api/v1/` dans README mais pas dans code | → Définir stratégie (URL path `/api/v1/` + header `Accept`) dès Phase 1.5 |
 | **BC250 Kernel upgrade = CU unlock cassé** | Documenté mais pas d'automatisation | → Script `rebuild-cu-unlock.sh` déclenché par `apt` hook `kernel-postinst` |
 | **Ollama unload séquentiel non implémenté** | Point critique pipeline Judge→Avocat | → Implémenter dans `services/agents/judge.py` + `advocate.py` avec healthcheck VRAM |
@@ -631,7 +632,7 @@ Prêt pour Phase 0 (squelette + config + Docker Compose).
 
 **Limite connue** : détection heuristique regex Niveau 1 uniquement — contournable par paraphrase, encodage, ou langue autre que l'anglais. Pas de blocage de l'ingestion, seulement un score `injection_risk` en métadonnée (voir docstring du module) : la quarantaine reste à faire via le trust tier OKF.
 
-**Contexte** : plan utilisateur (MCP + anti-injection). Le filtre est prioritaire car le risque existe dès que l'ingestion tourne. Le MCP reste différé (dépend de WikiAgent concret + mTLS Phase 0.13) — voir ROADMAP.md section Sécurité.
+**Contexte** : plan utilisateur (MCP + anti-injection). Le filtre est prioritaire car le risque existe dès que l'ingestion tourne. Le MCP reste différé (dépend de WikiAgent concret) — le mTLS est noté optionnel (D3), voir ROADMAP.md section Sécurité.
 
 **Fichiers touchés** : `src/tools/injection_filter.py` (pattern `forget` corrigé), `tests/test_injection_filter.py` (créé)
 
@@ -1089,8 +1090,8 @@ Le cluster est **100% offline** : les IA (Ollama) tournent en local sur les 3 ma
 
 - `scripts/excalidraw_to_svg.py`, `scripts/smoke_test_frontend_api.py`, `src/core/settings.py`, `src/services/reranker.py`, `src/services/vector.py` : 19 → 0 erreur ruff (E501, F401, Q000, TRY300).
 - `src/services/vector.py` : refactor initial avait cassé le *type narrowing* mypy sur `upsert()` — corrigé en `if/else` explicite (aucune régression mypy introduite).
-- `scripts/smoke_test_frontend_api.py` : `test_22` scindé en `test_22` (stubs réels `/lint` `/okf/*` → 500) et `test_22b` (`/query` `/embed` implémentés mais non initialisés → 503) ; `test_26` passé en `POST` avec body valide. 32 → 33 scénarios, **33/33 PASSED** (vérifié par exécution).
-- `README.md` : ligne Sprint 1 (mypy 4 résiduelles, pas 0), tests squelette 14/14 → 16/16, note `/api/embed` mise à jour (implémenté Phase A, plus un stub), 32/32 → 33/33.
+- `scripts/smoke_test_frontend_api.py` : `test_22` scindé en `test_22` (stubs réels `/lint` `/okf/*` → 500) et `test_22b` (`/query` `/embed` implémentés mais non initialisés → 503) ; `test_26` passé en `POST` avec body valide. 32 → 33 scénarios, **33/33 PASSED** (vérifié par exécution) — *au 04/08/2026 la suite compte 35 tests, **35/35 PASSED*** (3 tests supplémentaires ajoutés : test_31 concurrent health, test_32 OpenAPI tags, test_29 health shape).*
+- `README.md` : ligne Sprint 1 (mypy 4 résiduelles, pas 0) → ✅ mypy 0 ; tests squelette 14/14 → 16/16 → 490/490 ; note `/api/embed` mise à jour (implémenté Phase A, plus un stub) ; 32/32 → 33/33 → **35/35 PASSED** actuel.
 - `ROADMAP.md` : lignes 1.7 (ruff, corrigé) / 1.8 (mypy, 4 résiduelles) + titre section Sprint 1 passé de "TERMINÉ" à "QUASI TERMINÉ".
 
 ### Reste hors périmètre de cette session
@@ -1310,8 +1311,7 @@ Real-time Analytics (déjà écarté, D9) : rien de neuf. Un point neuf :
   manuellement pour détecter une panne. Seul élément planifié et non
   fait : "SMART NVMe : alertes usure (mail/webhook simple)" — un seul
   cas précis, pas un mécanisme général.
-- Runbooks déjà écrits (0.22 : BC250 ne boot plus, RTX 4000 OOM, NFS
-  stale handle, Qdrant corruption, OMV HDD failure) mais rien ne
+- Runbooks créés 04/08/2026 (`docs/runbook.md`) mais rien ne
   déclenche leur consultation — seul un check manuel régulier les
   rendrait utiles en pratique.
 
@@ -1785,7 +1785,7 @@ Accord : Option B, ordre 1→2→3→4(a→e), un commit vérifiable par étape.
 - `test_vector.py` / `test_ingestion.py` : 9 warnings (UserWarning qdrant
   check_compatibility, inoffensifs — option `check_compatibility=False` à
   considérer)
-- `smoke_test_frontend_api.py` : toujours hors pytest (33 scénarios manuels,
+- `smoke_test_frontend_api.py` : toujours hors pytest (35 scénarios manuels,
   documenté dans README)
 
 ---

@@ -41,7 +41,7 @@ Phase A (RAG core, mock-first) ──► Phase B (multi-agents, mock-first) ─�
 | B6 | Boucle d'évaluation **optionnelle** : flag `evaluation_enabled` (défaut OFF, D12) — 1 itération max de feedback Évaluateur → Planner | `src/core/settings.py`, `src/agents/langgraph_orchestrator.py` |
 | B7 | `build_graph()` complet dans LangGraph (Planner → Rewriter → HybridSearch → Reranker → ContextAssembler → Generator → [Éval] → WikiUpdate) | `src/agents/langgraph_orchestrator.py` |
 | B8 | Endpoints OKF : `/api/v1/okf/validate`, `/list`, `/show` + `/api/v1/lint` + `okf-lint.py` | `src/api/main.py`, `scripts/okf_lint.py` |
-| B9 | Tests d'intégration séquentiels (relay mocké, LLM mocké) + smoke 32 scénarios mis à jour (plus de 500 NIE) | `tests/`, `scripts/smoke_test_frontend_api.py` |
+| B9 | Tests d'intégration séquentiels (relay mocké, LLM mocké) + smoke 35 scénarios mis à jour (plus de 500 NIE) | `tests/`, `scripts/smoke_test_frontend_api.py` |
 | B10 | Audit mémoire : vérifier si `log.md` (vault) suffit comme mémoire court-terme pour `QueryRewriterAgent` avant d'ajouter de l'infra (D14) | `docs/b10-memory-audit.md` (✅ fait, YAGNI confirmé — B12 différé) |
 | B11 | Spike `QueryRewriterAgent` lisant les N dernières entrées conversationnelles (in-memory `ChatMemory`) — mesurer latence/pertinence | `src/services/chat_memory.py` (✅ fait — L1 sliding window, tronqué `chat_history_max*2` + `max_chars`) |
 | B12 | Si B11 insuffisant : buffer session chaud Redis sur M1 (mémoire court-terme), vault = mémoire froide durable | `src/services/memory.py` (différé — YAGNI, B11 in-memory suffit) |
@@ -112,6 +112,6 @@ Phase A (RAG core) ──bloquant──► Phase B (multi-agents) ──► Phas
 | 1.13 | Passthrough HDD 2TB → LXC 105 | ⏳ déplacé en C3 |
 | 1.14 | Configurer borg repo HDD + clés SSH OMV→M1/M3 | ⏳ déplacé en C3 |
 | 1.15 | Ajouter `python-multipart` aux dépendances (`pyproject.toml`) — requis par `/ingest/file` (`UploadFile`) | ✅ fait |
-| 1.16 | Committer les fichiers en attente (`src/services/{ingestion,lexical,reranker}.py` untracked ; `main.py`, `vector.py`, `ollama.py`, `pyproject.toml`, `tests/test_api.py` modifiés non commités) | ⏳ **à faire** — `git status` (01/08/2026) |
+| 1.16 | Committer les fichiers en attente (`src/services/{ingestion,lexical,reranker}.py` untracked ; `main.py`, `vector.py`, `ollama.py`, `pyproject.toml`, `tests/test_api.py` modifiés non commités) | ✅ **FAIT (01/08/2026)** — tout commité, working tree clean sauf modifications courantes |
 
 **Bonus nettoyage (session 31/07/2026)** : suppression nginx.conf/certs/ + LXC 102-103 des scripts Proxmox ; `.env.example` réécrit aligné sur `settings.py` (bug `parents[3]` → `parents[2]` corrigé : le `.env` n'était jamais lu) ; doc README/diagrams purgée (D9) ; backlog Phase 1 décocher (rien n'était livré) ; README `/api/embed` statut corrigé (stub, pas "OK").
