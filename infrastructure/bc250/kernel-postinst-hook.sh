@@ -12,10 +12,14 @@ if [ ! -d "$CU_DIR" ]; then
     exit 0
 fi
 
+if [ ! -x "$CU_SCRIPT" ]; then
+    echo "bc250-40cu-unlock: script absent ou non exécutable ($CU_SCRIPT) — skip rebuild"
+    exit 0
+fi
+
 echo "=== bc250-40cu-unlock: rebuild pour kernel $1 ==="
 
-cd "$CU_DIR"
-./scripts/bc250-enable-40cu.sh build || {
+"$CU_SCRIPT" build || {
     echo "ÉCHEC build patch 40 CU pour kernel $1"
     exit 1
 }
