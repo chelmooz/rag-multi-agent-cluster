@@ -15,6 +15,14 @@ Plan d'installation pas-à-pas pour les 3 machines du cluster.
 
 ---
 
+Sous-section M3 :
+- [3.8 Ollama Vulkan](#38-ollama-vulkan)
+- [3.8.1 llama.cpp Vulkan (alternative directe à Ollama)](#381-llamacpp-vulkan-alternative-directe-à-ollama)
+- [3.9 Glances](#39-glances)
+- [3.10 NFS mount](#310-nfs-mount)
+
+---
+
 ## Machine 1 — Control Plane (Master)
 
 **Matériel** : Dual Xeon E5-2699 v3 (36c/72t), 32 GB DDR4 ECC, 1 TB NVMe, Proxmox VE 9.3
@@ -452,6 +460,48 @@ ollama pull hf.co/cjpais/llava-v1.6-vicuna-13b-gguf:Q4_K_M@sha256:...        # V
 ollama pull hf.co/ibm-granite/granite-4.0-h-tiny-GGUF:Q4_K_M@sha256:...      # Fast-check
 ```
 
+### 3.8.1 llama.cpp Vulkan (alternative directe à Ollama)
+
+Sur le BC-250 (AMD GPU), **llama.cpp natif Vulkan** offre un meilleur contrôle fin
+du GPU (gestion VRAM, fréquence, CU unlock) qu'Ollama. Utiliser cette méthode
+**à la place de la section 3.8** si vous préférez la compilation native.
+
+> ⚠️ Le patch 40 CU (§3.6) et le gouverneur GPU (§3.7) sont **requis** pour maximiser
+> le débit sur BC-250.
+
+```bash
+# 1. Dépendances de compilation Vulkan
+sudo apt update
+sudo apt install -y git cmake build-essential libssl-dev spirv-headers glslc vulkan-tools libvulkan-dev
+
+# 2. Utilisateur dédié (sécurité / isolation)
+sudo useradd -m llamacpp
+sudo usermod -aG render llamacpp
+sudo mkdir -p /opt/llamacpp/{bin,models}
+sudo chown -R llamacpp:llamacpp /opt/llamacpp
+
+# 3. Compilation avec support Vulkan (GFX1013)
+sudo -u llamacpp -H bash -c '
+  cd /opt/llamacpp
+  git clone https://github.com/ggerganov/llama.cpp.git
+  cd llama.cpp
+  cmake -B build -DGGML_VULKAN=ON -DCMAKE_BUILD_TYPE=Release
+  cmake --build build --config Release -j$(nproc)
+  cp build/bin/* /opt/llamacpp/bin/
+'
+
+# 4. PATH & cache (en tant que llamacpp)
+sudo -u llamacpp -H bash -c '
+  echo "export PATH=\$PATH:/opt/llamacpp/bin" >> ~/.bashrc
+  echo "export LD_LIBRARY_PATH=/opt/llamacpp/bin" >> ~/.bashrc
+  echo "export LLAMA_CACHE=/opt/llamacpp/models/" >> ~/.bashrc
+  echo "export HF_HUB_CACHE=/opt/llamacpp/models/" >> ~/.bashrc
+'
+
+# 5. Vérification de la compilation
+sudo -u llamacpp -H /opt/llamacpp/bin/llama-cli --version
+# Attendu : support Vulkan dans le backend list
+
 ### 3.9 Glances — monitoring BC-250 (décision D9)
 
 ```bash
@@ -473,11 +523,56 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl daemon-reload && sudo systemctl enable --now glances-web.service
-# Vérifier : curl http://10.10.0.3:61208
-```
+    sudo systemctl daemon-reload && sudo systemctl enable --now glances-web.service
+    # Vérifier : curl http://10.10.0.3:61208
+    ```
 
-### 3.10 NFS mount (relay évaluation + vault en lecture)
+    ### 3.9.1 Service systemd llama.cpp (démarrage auto au boot)
+
+    > ⚠️ Utiliser **soit Ollama (§3.8)**, **soit llama.cpp (§3.9.1)** — pas les deux
+    > en même temps sur un port (conflicte sur le GPU).
+
+    ```bash
+    sudo tee /etc/systemd/system/llamacpp.service > /dev/null << 'EOF'
+    [Unit]
+    Description=llama.cpp Server (Vulkan — BC-250)
+    After=network.target
+
+    [Service]
+    User=llamacpp
+    WorkingDirectory=/opt/llamacpp/bin/
+    Environment=LD_LIBRARY_PATH=/opt/llamacpp/bin
+    Environment=LLAMA_CACHE=/opt/llamacpp/models/
+    Environment=HF_HUB_CACHE=/opt/llamacpp/models/
+    # BC-250 : 40 CU débloquées + GPU governor à 1500 MHz
+    ExecStart=/opt/llamacpp/bin/llama-server -hf Qwen/Qwen3-14B-GGUF:Q4_K_M \
+      --n-gpu-layers 999 \
+      --ctx-size 65536 \
+      --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0 \
+      --host 0.0.0.0 --port 8080
+    Restart=always
+    RestartSec=10
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now llamacpp
+    # Vérifier : curl http://localhost:8080/health
+    ```
+
+    **Modèles M3 (digests SHA256 lockés dans `.env`**) — compatibles Vulkan + 40 CU :
+
+    | Nom | Source HF | Quant | Taille | Usage |
+    |---|---|---|---|---|
+    | Qwen3-14B | `Qwen/Qwen3-14B-GGUF` | `Q4_K_M` | ~9 GB | Générateur principal |
+    | Qwen3-30B-A3B MoE | `Qwen/Qwen3-30B-A3B-GGUF` | `Q2_K` | ~11.3 GB | Alternative qualité |
+    | Qwen3-Coder-30B-A3B-Instruct | `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF` | `Q2_K` | ~11 GB | Text-to-SQL |
+    | Llama-3.2-Vision | `llama-3-vision` | `Q4_K_M` | ~8 GB | Vision |
+    | Granite-4.0-h-tiny | `ibm-granite/granite-4.0-h-tiny-GGUF` | `Q4_K_M` | ~1 GB | Fast-check |
+
+    ### 3.10 NFS mount (relay évaluation + vault en lecture)
 
 ```bash
 sudo apt install -y nfs-common

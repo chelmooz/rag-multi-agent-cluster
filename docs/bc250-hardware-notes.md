@@ -15,6 +15,7 @@ Sources faisant autorité (à consulter avant toute modification des scripts `in
   - `ttm.pages_limit=3959290` (~15 GiB) — sinon plafond silencieux ~7.4 GiB et échecs HTTP 500 en cours d'inférence
   - Vérifier la valeur **après reboot**, pas seulement après l'avoir posée (piège `systemd-tmpfiles` documenté)
 - Ollama : `OLLAMA_VULKAN=1`, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q4_0` (KV cache 4-bit, quasi aucune perte de vitesse, 2x plus de contexte utilisable), `OLLAMA_CONTEXT_LENGTH=65536` comme plafond raisonnable pour de l'interactif.
+- **llama.cpp Vulkan (alternative)** : compilation native (`-DGGML_VULKAN=ON`) supporte pleinement GFX1013 + 40 CU. Voir §3.8.1 du deployment-guide.md pour le setup complet (utilisateur `llamacpp`, service systemd, modèles SHA256 lockés).
 - Swap NVMe recommandé (~16 Go) : les modèles 11+ Go sur une machine à 16 Go RAM unifiée ont besoin de cette marge.
 - Gouverneur GPU obligatoire (`cyan-skillfish-governor-smu`) pour le scaling de fréquence — sans lui, pas de contrôle de clock fiable sur cette puce.
 - OS : **Debian 12 (bookworm) stable** (décision 03/08/2026, revu) — Mesa 25.1+ via bookworm-backports, kernel 6.18.18 LTS pinner (apt-mark hold). Fedora 43 abandonné : nécessitait COPR pour le gouverneur GPU et `dnf versionlock` non natif.
