@@ -11,7 +11,9 @@ Le Wiki Agent est le boucle de maintenance continue du vault :
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -293,11 +295,68 @@ class WikiAgent:
         }
 
 
-def main() -> None:
-    """Point d'entrée pour le conteneur Docker wiki-agent."""
+def maintenance_cycle() -> dict:
+    """Exécute une passe de maintenance du vault : index + lint + trace log.
+
+    Retourne le rapport de lint pour la journalisation/observabilité.
+    """
     import asyncio
 
-    asyncio.run(WikiAgent().lint())
+    agent = WikiAgent()
+
+    async def _run() -> dict:
+        await agent.update_index()
+        report = await agent.lint()
+        await agent.append_log(
+            {
+                "event": "maintenance",
+                "pages": len(
+                    [
+                        p
+                        for p in agent.vault.rglob("*.md")
+                        if p.name not in (_INDEX_FILENAME, _LOG_FILENAME)
+                    ]
+                ),
+                "orphans": len(report["orphans"]),
+                "stale": len(report["stale"]),
+                "frontmatter_issues": len(report["frontmatter_issues"]),
+            }
+        )
+        return report
+
+    return asyncio.run(_run())
+
+
+def maintenance_interval() -> float:
+    """Intervalle de maintenance (secondes), env ``WIKI_MAINTENANCE_INTERVAL``."""
+    raw = os.getenv("WIKI_MAINTENANCE_INTERVAL", "3600")
+    try:
+        return max(1.0, float(raw))
+    except ValueError:
+        return 3600.0
+
+
+async def run_service() -> None:
+    """Boucle de service : maintenance continue du vault (pas de crash-loop)."""
+    while True:
+        try:
+            report = maintenance_cycle()
+            logger.info(
+                "Wiki: maintenance OK (orphans=%d, stale=%d)",
+                len(report["orphans"]),
+                len(report["stale"]),
+            )
+        except Exception:
+            logger.exception("Wiki: maintenance en échec, nouvel essai à l'intervalle")
+        await asyncio.sleep(maintenance_interval())
+
+
+def main() -> None:
+    """Point d'entrée pour le conteneur Docker wiki-agent (service long-running)."""
+    try:
+        asyncio.run(run_service())
+    except KeyboardInterrupt:
+        logger.info("Wiki Agent arrêté (signal).")
 
 
 if __name__ == "__main__":

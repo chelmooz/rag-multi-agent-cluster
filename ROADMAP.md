@@ -54,7 +54,7 @@ Phase A (RAG core, mock-first) ──► Phase B (multi-agents, mock-first) ─�
 
 | # | Tâche | Fichiers |
 |---|-------|----------|
-| C1 | Dockerfiles/CMD idempotents (fin du crash-loop : plus d'appel à des stubs NIE au boot) | `infrastructure/docker/*.yml`, `Dockerfile.*` |
+| C1 | Dockerfiles/CMD idempotents (fin du crash-loop : plus d'appel à des stubs NIE au boot) | `infrastructure/docker/*.yml`, `Dockerfile.*` — **✅ FAIT (04/08/2026)** : `langgraph_orchestrator.main()` = worker Redis BRPOP `rag:pipeline:queue` (+ résultats `rag:pipeline:results`), `wiki_agent.main()` = boucle maintenance périodique (`WIKI_MAINTENANCE_INTERVAL`, défaut 3600s) — cf. §5.15 backlog |
 | C2 | Volume NFS `/data/shared` dans `docker-compose.orchestrator.yml` | `infrastructure/docker/` |
 | C3 | Déployer OMV dans LXC 105 (docker-compose.omv.yml + passthrough HDD 2TB + borg) | `infrastructure/docker/`, `infrastructure/proxmox/` |
 | C4 | Pull des modèles (Ollama M1/M2/M3) + lock digests SHA256 dans `.env` | `.env`, docs |

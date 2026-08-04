@@ -15,10 +15,15 @@ Le graphe est construit par ``build_graph`` et exécuté par ``run_pipeline``
 """
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from langgraph.graph import END, StateGraph
+from redis.asyncio import Redis
 
 from src.agents.advocate import AdvocateAgent
 from src.agents.context_assembler import AssembledContext, ContextAssembler
@@ -33,6 +38,11 @@ from src.services.lexical import LexicalSearch
 from src.services.ollama import OllamaClientPool
 from src.services.reranker import RerankerService
 from src.services.vector import VectorService
+
+logger = logging.getLogger(__name__)
+
+_QUEUE_NAME = "rag:pipeline:queue"
+_RESULTS_NAME = "rag:pipeline:results"
 
 
 @dataclass
@@ -326,10 +336,100 @@ async def run_pipeline(
     return state
 
 
+def build_pipeline_services() -> PipelineServices:
+    """Construit les services réels du pipeline (worker Docker, hors API).
+
+    Miroir de ``src.api.routers.rag.query`` — évite de dépendre du state
+    FastAPI quand le conteneur tourne comme worker autonome.
+    """
+    pool = OllamaClientPool()
+    return PipelineServices(
+        pool=pool,
+        vector=VectorService(),
+        lexical=LexicalSearch(),
+        reranker=RerankerService(ollama_pool=pool),
+        wiki=WikiAgent(),
+        planner=PlannerAgent(pool),
+        rewriter=RewriterAgent(pool),
+        generator=GeneratorAgent(pool),
+        judge=JudgeAgent(pool),
+        advocate=AdvocateAgent(pool),
+        evaluator=EvaluatorAgent(pool),
+    )
+
+
+def _job_result(state: PipelineState, job_id: str | None) -> dict[str, Any]:
+    """Réduit un état final en payload JSON publiable (résultat du worker)."""
+    sources = [
+        {
+            "source_id": r.get("payload", {}).get("source_id", "doc"),
+            "score": r.get("rerank_score", r.get("score", 0.0)),
+        }
+        for r in state.search_results
+    ]
+    return {
+        "job_id": job_id,
+        "query": state.query,
+        "answer": state.generated.answer if state.generated else None,
+        "sources": sources,
+        "wiki_note": state.wiki_note,
+    }
+
+
+async def process_job(job: dict[str, Any], services: PipelineServices) -> dict[str, Any]:
+    """Exécute un job de la file Redis → retourne le résultat du pipeline."""
+    state = await run_pipeline(
+        query=str(job.get("query", "")),
+        services=services,
+        conversation_history=job.get("conversation_history"),
+        evaluation_enabled=bool(job.get("evaluation_enabled", False)),
+        top_k=int(job.get("top_k", 8)),
+        use_reranker=bool(job.get("use_reranker", True)),
+        score_threshold=job.get("score_threshold"),
+    )
+    return _job_result(state, job.get("job_id"))
+
+
+async def run_worker(redis_url: str) -> None:
+    """Consommateur de la file ``rag:pipeline:queue`` (boucle long-running).
+
+    Ni stub, ni exit immédiat : le conteneur reste vivant tant que la file
+    est consommée — résout le crash-loop C1 de la ROADMAP.
+    """
+    services = build_pipeline_services()
+    client = Redis.from_url(redis_url)
+    logger.info("Worker orchestrateur démarré (queue=%s)", _QUEUE_NAME)
+    try:
+        while True:
+            item = await cast(Awaitable[list[str] | None], client.brpop(_QUEUE_NAME, timeout=5))
+            if item is None:
+                continue
+            _queue, raw = item
+            try:
+                job = json.loads(raw)
+                result = await process_job(job, services)
+                result["ok"] = True
+            except Exception as exc:
+                logger.exception("Job en échec")
+                result = {"ok": False, "error": str(exc), "job_id": None}
+            payload = json.dumps(result, ensure_ascii=False)
+            await cast(Awaitable[int], client.lpush(_RESULTS_NAME, payload))
+    finally:
+        await client.aclose()
+
+
 def main() -> None:
-    """Point d'entrée pour le conteneur Docker langgraph-orchestrator."""
-    build_graph()
-    print("Graphe LangGraph construit.")  # noqa: T201
+    """Point d'entrée pour le conteneur Docker langgraph-orchestrator.
+
+    Consomme la file Redis des pipelines : service long-running idempotent
+    (fin du crash-loop C1).
+    """
+    from src.core.settings import get_settings
+
+    try:
+        asyncio.run(run_worker(get_settings().redis.url))
+    except KeyboardInterrupt:
+        logger.info("Worker orchestrateur arrêté (signal).")
 
 
 if __name__ == "__main__":

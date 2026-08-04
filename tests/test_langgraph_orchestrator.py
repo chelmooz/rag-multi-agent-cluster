@@ -7,7 +7,9 @@ from unittest.mock import AsyncMock
 
 from src.agents.langgraph_orchestrator import (
     PipelineServices,
+    _job_result,
     build_graph,
+    process_job,
     run_pipeline,
 )
 
@@ -246,3 +248,41 @@ async def test_run_pipeline_without_conversation_history() -> None:
     rewrite_mock.assert_awaited_with("Question ?", [])
     _, kwargs = generate_mock.await_args
     assert kwargs.get("conversation_history") == []
+
+
+async def test_process_job_returns_serializable_result() -> None:
+    """Worker C1 : un job de la file Redis produit un résultat JSON publiable."""
+    services = _full_services()
+    result = await process_job(
+        {"job_id": "job-1", "query": "Question ?", "evaluation_enabled": False},
+        services,
+    )
+    assert result["job_id"] == "job-1"
+    assert result["query"] == "Question ?"
+    assert "Réponse générée" in result["answer"]
+    assert result["sources"] == [{"source_id": "s1", "score": 0.9}]
+    assert result["wiki_note"] == "synthesis/question.md"
+    json.dumps(result, ensure_ascii=False)  # sérialisable pour LPUSH
+
+
+async def test_process_job_with_minimal_services() -> None:
+    """Worker sans services : pas d'exception, résultat vide mais publiable."""
+    result = await process_job({"job_id": "job-2", "query": "Question ?"}, PipelineServices())
+    assert result["job_id"] == "job-2"
+    assert result["answer"] is None
+    assert result["sources"] == []
+    json.dumps(result, ensure_ascii=False)
+
+
+def test_job_result_drops_non_json_fields() -> None:
+    """_job_result réduit l'état final (objets Python) à un dict JSON-safe."""
+    from src.agents.langgraph_orchestrator import PipelineState
+
+    state = PipelineState(
+        query="Question ?",
+        search_results=[{"payload": {"source_id": "s1"}, "score": 0.9}],
+    )
+    payload = _job_result(state, job_id="job-3")
+    assert set(payload) == {"job_id", "query", "answer", "sources", "wiki_note"}
+    assert payload["sources"] == [{"source_id": "s1", "score": 0.9}]
+    json.dumps(payload, ensure_ascii=False)
